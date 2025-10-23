@@ -54,6 +54,8 @@ const getExplanation = async (num1: number, num2: number, operation: string, ans
     const prompt = `You are a math tutor for middle school students. Explain how to solve the problem "${num1} ${operationSymbol} ${num2}" step-by-step. The correct answer is ${answer}.
 For multiplication, explain the standard algorithm or relevant properties of numbers.
 For division, explain long division or how to handle remainders/decimals if applicable.
+For squares, explain what squaring a number means (multiplying it by itself).
+For square roots, explain the concept of finding a number that, when multiplied by itself, equals the given number.
 Keep the explanation clear, concise, and focused on the mathematical concepts.`;
 
     try {
@@ -192,8 +194,14 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({ questions, userAns
     return timeParts.length > 0 ? timeParts.join(' and ') : '0 seconds';
   };
   
-  const getOperationSymbol = (op: 'multiplication' | 'division') => {
-    return op === 'multiplication' ? '×' : '÷';
+  const getOperationSymbol = (op: Operation) => {
+    switch (op) {
+      case 'multiplication': return '×';
+      case 'division': return '÷';
+      case 'squares': return '²';
+      case 'square-roots': return '√';
+      default: return '?';
+    }
   };
 
   return (
@@ -222,7 +230,10 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({ questions, userAns
                       <div className="flex items-center gap-3">
                           <span className="text-slate-600 dark:text-slate-400 font-bold">{index + 1}.</span>
                           <p className="text-xl font-bold text-slate-800 dark:text-slate-200">
-                              {result.question.num1} {getOperationSymbol(result.question.operation)} {result.question.num2} = <span className="text-blue-600 dark:text-blue-400">{result.question.answer}</span>
+                              {result.question.operation === 'square-roots' && getOperationSymbol(result.question.operation)}
+                              {result.question.num1}
+                              {result.question.operation === 'squares' ? <sup>2</sup> : (result.question.operation !== 'square-roots' && getOperationSymbol(result.question.operation))}
+                              {result.question.num2 && ` ${result.question.num2}`} = <span className="text-blue-600 dark:text-blue-400">{result.question.answer}</span>
                           </p>
                       </div>
                       <div className="flex items-center gap-3">

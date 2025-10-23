@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import type { Question } from '../types';
+import type { Question, Operation } from '../types';
 import { ClockIcon } from './icons';
 
 interface QuizScreenProps {
@@ -114,8 +114,14 @@ export const QuizScreen: React.FC<QuizScreenProps> = ({ questions, timeLimit, on
     onFinishQuiz(answers, elapsedTime);
   };
   
-  const getOperationSymbol = (op: 'multiplication' | 'division') => {
-    return op === 'multiplication' ? '×' : '÷';
+  const getOperationSymbol = (op: Operation) => {
+    switch (op) {
+      case 'multiplication': return '×';
+      case 'division': return '÷';
+      case 'squares': return '²';
+      case 'square-roots': return '√';
+      default: return '?';
+    }
   };
 
   const remainingTime = timeLimit > 0 ? timeLimit - elapsedTime : Infinity;
@@ -148,9 +154,10 @@ export const QuizScreen: React.FC<QuizScreenProps> = ({ questions, timeLimit, on
                         <div key={index} className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
                             <span className="text-slate-500 dark:text-slate-400 font-bold w-6 text-right">{index + 1}.</span>
                             <div className="flex items-center gap-2 text-2xl font-bold text-slate-700 dark:text-slate-200 w-full">
+                               {q.operation === 'square-roots' && <span>{getOperationSymbol(q.operation)}</span>}
                                <span className="w-10 text-right">{q.num1}</span>
-                               <span>{getOperationSymbol(q.operation)}</span>
-                               <span className="w-10 text-left">{q.num2}</span>
+                               {q.operation === 'squares' ? <sup>2</sup> : (q.operation !== 'square-roots' && <span>{getOperationSymbol(q.operation)}</span>)}
+                               {q.num2 && <span className="w-10 text-left">{q.num2}</span>}
                                <span>=</span>
                                <input
                                     ref={el => { inputRefs.current[index] = el; }}

@@ -279,7 +279,15 @@ export const SelectionScreen: React.FC<SelectionScreenProps> = ({ onStartQuiz, i
   const [customSeconds, setCustomSeconds] = useState(initialCustom.seconds);
 
 
-  const numbers = Array.from({ length: 12 }, (_, i) => i + 1);
+  const numbers = operation === 'squares' || operation === 'square-roots'
+    ? Array.from({ length: 20 }, (_, i) => i + 1)
+    : Array.from({ length: 12 }, (_, i) => i + 1);
+
+  useEffect(() => {
+    setSelectedNumbers([]);
+  }, [operation]);
+
+  const needsAtLeastTen = (operation === 'squares' || operation === 'square-roots') && selectedNumbers.length > 0 && selectedNumbers.length < 10;
 
   const toggleNumber = (num: number) => {
     setSelectedNumbers(prev =>
@@ -340,24 +348,35 @@ export const SelectionScreen: React.FC<SelectionScreenProps> = ({ onStartQuiz, i
 
         <div className="space-y-8">
             <Section title="Pick Your Operation" step={1}>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     <button onClick={() => setOperation('multiplication')} className={`px-6 py-3 text-lg font-semibold rounded-lg transition-all duration-200 border-2 ${operation === 'multiplication' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700 hover:border-blue-500 dark:hover:border-blue-500'}`}>
                         Multiplication (×)
                     </button>
                     <button onClick={() => setOperation('division')} className={`px-6 py-3 text-lg font-semibold rounded-lg transition-all duration-200 border-2 ${operation === 'division' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700 hover:border-blue-500 dark:hover:border-blue-500'}`}>
                         Division (÷)
                     </button>
+                    <button onClick={() => setOperation('squares')} className={`px-6 py-3 text-lg font-semibold rounded-lg transition-all duration-200 border-2 ${operation === 'squares' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700 hover:border-blue-500 dark:hover:border-blue-500'}`}>
+                        Squares (x<sup>2</sup>)
+                    </button>
+                    <button onClick={() => setOperation('square-roots')} className={`px-6 py-3 text-lg font-semibold rounded-lg transition-all duration-200 border-2 ${operation === 'square-roots' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700 hover:border-blue-500 dark:hover:border-blue-500'}`}>
+                        Square Roots (√)
+                    </button>
                 </div>
             </Section>
 
             <Section title="Select Numbers" step={2}>
-                <div className="grid grid-cols-4 sm:grid-cols-6 gap-3 text-center">
+                <div className={`grid ${operation === 'squares' || operation === 'square-roots' ? 'grid-cols-5 sm:grid-cols-10' : 'grid-cols-4 sm:grid-cols-6'} gap-3 text-center`}>
                     {numbers.map(num => (
                         <button key={num} onClick={() => toggleNumber(num)} className={`p-3 text-lg font-bold rounded-lg transition-transform duration-200 transform ease-bouncy border-2 ${selectedNumbers.includes(num) ? 'bg-blue-600 text-white border-blue-600 scale-105' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-300 dark:border-slate-700 hover:border-blue-500 dark:hover:border-blue-500'}`}>
                             {num}
                         </button>
                     ))}
                 </div>
+                {needsAtLeastTen && (
+                    <p className="text-center text-red-500 dark:text-red-400 mt-4 font-semibold animate-fade-in">
+                        Please select at least 10 numbers for this operation.
+                    </p>
+                )}
                  <div className="mt-4 flex justify-center">
                     <button onClick={selectAll} className="px-6 py-2 font-semibold text-white bg-slate-600 dark:bg-slate-700 rounded-full hover:bg-slate-700 dark:hover:bg-slate-600 transition-colors shadow-sm">
                         {selectedNumbers.length === numbers.length ? 'Deselect All' : 'Select All'}
@@ -407,7 +426,7 @@ export const SelectionScreen: React.FC<SelectionScreenProps> = ({ onStartQuiz, i
         <div className="mt-12 text-center">
             <button
                 onClick={handleStart}
-                disabled={selectedNumbers.length === 0}
+                disabled={selectedNumbers.length === 0 || needsAtLeastTen}
                 className="w-full sm:w-auto px-16 py-4 text-xl font-bold text-white bg-blue-600 rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100 disabled:bg-slate-400 dark:disabled:bg-slate-600"
             >
                 Start Quiz
