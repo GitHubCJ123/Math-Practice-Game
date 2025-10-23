@@ -155,6 +155,7 @@ export const QuizScreen: React.FC<QuizScreenProps> = ({ questions, timeLimit, on
                                <input
                                     ref={el => { inputRefs.current[index] = el; }}
                                     type="text"
+                                    inputMode="numeric"
                                     value={answers[index]}
                                     onChange={(e) => handleAnswerChange(index, e.target.value)}
                                     onKeyDown={(e) => handleKeyDown(e, index)}
