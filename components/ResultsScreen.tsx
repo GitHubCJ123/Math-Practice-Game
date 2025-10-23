@@ -1,38 +1,45 @@
 import React, { useState, useEffect } from 'react';
-import type { GoogleGenAI } from '@google/genai';
+import { OpenAIClient, AzureKeyCredential } from '@azure/openai';
 import type { Operation, Question, HighScores, AllQuizStats } from '../types';
 import { CheckCircleIcon, XCircleIcon, StarIcon } from './icons';
 
-let ai: GoogleGenAI | null = null;
+let ai: OpenAIClient | null = null;
 
-async function getAiInstance(): Promise<GoogleGenAI | null> {
+async function getAiInstance(): Promise<OpenAIClient | null> {
   if (ai) {
     return ai;
   }
   try {
-    // Dynamically import the SDK only when needed to prevent load-time errors.
-    const { GoogleGenAI } = await import('@google/genai');
-    ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
+    const apiKey = import.meta.env.VITE_AZURE_API_KEY;
+    const apiEndpoint = import.meta.env.VITE_AZURE_ENDPOINT;
+
+    if (!apiKey || !apiEndpoint) {
+      console.error("Azure API key or endpoint is not configured. AI features will be disabled.");
+      return null;
+    }
+    
+    ai = new OpenAIClient(apiEndpoint, new AzureKeyCredential(apiKey));
     return ai;
   } catch (error) {
-    console.error("Failed to initialize GoogleGenAI. AI features will be disabled.", error);
+    console.error("Failed to initialize Azure OpenAI Client. AI features will be disabled.", error);
     return null;
   }
 }
 
 const getFeedbackMessage = async (correctCount: number, totalQuestions: number, timeTaken: number, operation: string): Promise<string> => {
-    const genAI = await getAiInstance();
-    if (!genAI) return "Great effort! Keep practicing to become a math superstar!";
+    const client = await getAiInstance();
+    if (!client) return "Great effort! Keep practicing to become a math superstar!";
     try {
-        const model = 'gemini-2.5-flash';
-        const prompt = `You are a friendly and encouraging teacher for young children. A child just finished a ${operation} quiz. They got ${correctCount} out of ${totalQuestions} correct in ${timeTaken} seconds. Write a short, positive, and encouraging message for them (2-3 sentences). If they struggled (less than 5 correct), gently encourage them to keep practicing. If they did okay (5-8 correct), praise their effort. If they did great (9-10 correct), celebrate their success and speed. Address the child directly as 'you'.`;
+        const deploymentName = import.meta.env.VITE_AZURE_DEPLOYMENT_NAME;
+        if (!deploymentName) {
+            console.error("Azure deployment name is not configured.");
+            return "Great effort! Keep practicing to become a math superstar!";
+        }
+        const prompt = `You are a helpful and motivating math tutor for middle school students. A student just finished a ${operation} quiz. They got ${correctCount} out of ${totalQuestions} correct in ${timeTaken} seconds. Write a short, encouraging message for them (2-3 sentences). If their score is low, offer constructive encouragement about improving. If they did well, acknowledge their good performance and perhaps suggest a next step or challenge. Address the student directly.`;
 
-        const response = await genAI.models.generateContent({
-            model,
-            contents: prompt,
-        });
-
-        return response.text;
+        const { choices } = await client.getChatCompletions(deploymentName, [{ role: "user", content: prompt }]);
+        
+        return choices[0].message?.content || "Great effort! Keep practicing to become a math superstar!";
     } catch (error) {
         console.error("Error generating feedback:", error);
         return "Great effort! Keep practicing to become a math superstar!";
@@ -41,22 +48,23 @@ const getFeedbackMessage = async (correctCount: number, totalQuestions: number, 
 
 const getExplanation = async (num1: number, num2: number, operation: string, answer: number): Promise<string> => {
     const operationSymbol = operation === 'multiplication' ? '×' : '÷';
-    const genAI = await getAiInstance();
-    if (!genAI) return `To solve ${num1} ${operationSymbol} ${num2}, the answer is ${answer}. Keep trying!`;
+    const client = await getAiInstance();
+    if (!client) return `To solve ${num1} ${operationSymbol} ${num2}, the answer is ${answer}. Keep trying!`;
 
-    const prompt = `You are a math tutor for elementary school kids. Explain how to solve the problem "${num1} ${operationSymbol} ${num2}" step-by-step in a very simple and easy-to-understand way for a 7-year-old. The correct answer is ${answer}.
-For multiplication, you can use concepts like "groups of" or repeated addition.
-For division, you can use concepts like "sharing equally" or "how many groups".
-Keep the explanation short, friendly, and clear.`;
+    const prompt = `You are a math tutor for middle school students. Explain how to solve the problem "${num1} ${operationSymbol} ${num2}" step-by-step. The correct answer is ${answer}.
+For multiplication, explain the standard algorithm or relevant properties of numbers.
+For division, explain long division or how to handle remainders/decimals if applicable.
+Keep the explanation clear, concise, and focused on the mathematical concepts.`;
 
     try {
-        const model = 'gemini-2.5-flash';
-        const response = await genAI.models.generateContent({
-            model,
-            contents: prompt,
-        });
+        const deploymentName = import.meta.env.VITE_AZURE_DEPLOYMENT_NAME;
+        if (!deploymentName) {
+            console.error("Azure deployment name is not configured.");
+            return `To solve ${num1} ${operationSymbol} ${num2}, the answer is ${answer}. Keep trying!`;
+        }
+        const { choices } = await client.getChatCompletions(deploymentName, [{ role: "user", content: prompt }]);
         
-        return response.text;
+        return choices[0].message?.content || `To solve ${num1} ${operationSymbol} ${num2}, the answer is ${answer}. Keep trying!`;
     } catch (error) {
         console.error("Error generating explanation:", error);
         return `To solve ${num1} ${operationSymbol} ${num2}, the answer is ${answer}. Keep trying!`;

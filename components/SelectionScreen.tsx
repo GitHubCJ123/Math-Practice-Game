@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import type { Operation, HighScores, AllQuizStats, QuizStats } from '../types';
+import type { Operation, HighScores, HighScore, AllQuizStats, QuizStats } from '../types';
 import { StarIcon, SunIcon, MoonIcon, ChartBarIcon, BullseyeIcon, ListBulletIcon, ClockIcon, TrashIcon } from './icons';
 
 interface SelectionScreenProps {
@@ -150,7 +150,7 @@ const StatisticsDisplay: React.FC = () => {
         <div className="mt-6 p-6 bg-slate-100 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700 animate-fade-in">
             <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-4 text-center">📊 Your Progress</h2>
             <div className="space-y-6">
-                 {Object.entries(stats).map(([op, data]) => renderStatSection(op as Operation, data))}
+                 {Object.entries(stats).map(([op, data]) => renderStatSection(op as Operation, data as QuizStats))}
             </div>
         </div>
     );
@@ -221,6 +221,7 @@ const HighScoresDisplay: React.FC = () => {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {sortedScores.map(([key, score]) => {
           const operation = key;
+          const highScore = score as HighScore;
           return (
             <div key={key} className="p-3 bg-white dark:bg-slate-900 rounded-lg flex justify-between items-center border border-slate-200 dark:border-slate-700">
               <div>
@@ -228,9 +229,9 @@ const HighScoresDisplay: React.FC = () => {
               </div>
               <div className="text-right">
                  <p className="font-bold text-lg text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
-                   {score.score} / 10
+                   {highScore.score} / 10
                  </p>
-                 <p className="text-sm text-slate-500 dark:text-slate-400">{score.time}s</p>
+                 <p className="text-sm text-slate-500 dark:text-slate-400">{highScore.time}s</p>
               </div>
             </div>
           );
