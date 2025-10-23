@@ -1,0 +1,426 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import type { Operation, HighScores, AllQuizStats, QuizStats } from '../types';
+import { StarIcon, SunIcon, MoonIcon, ChartBarIcon, BullseyeIcon, ListBulletIcon, ClockIcon, TrashIcon } from './icons';
+
+interface SelectionScreenProps {
+  onStartQuiz: (operation: Operation, selectedNumbers: number[], timeLimit: number) => void;
+  initialSettings?: {
+    operation: Operation;
+    selectedNumbers: number[];
+    timeLimit: number;
+  } | null;
+  isDarkMode: boolean;
+  toggleDarkMode: () => void;
+}
+
+const timeOptions = [
+    { label: '30 Seconds', value: 30 },
+    { label: '1 Minute', value: 60 },
+    { label: '2 Minutes', value: 120 },
+    { label: '5 Minutes', value: 300 },
+    { label: 'No Limit', value: 0 },
+];
+
+const StatisticsDisplay: React.FC = () => {
+    const [stats, setStats] = useState<AllQuizStats | null>(null);
+    const [confirmingClear, setConfirmingClear] = useState<Operation | null>(null);
+
+    const refreshStats = useCallback(() => {
+        try {
+            const storedStatsRaw = localStorage.getItem('mathWhizStats');
+            if (storedStatsRaw) {
+                const parsedStats = JSON.parse(storedStatsRaw);
+                setStats(parsedStats);
+            } else {
+                setStats(null);
+            }
+        } catch (error) {
+            console.error("Failed to load stats:", error);
+            setStats(null);
+        }
+    }, []);
+
+    useEffect(() => {
+        refreshStats();
+    }, [refreshStats]);
+    
+    const StatCard: React.FC<{ icon: React.ReactNode, title: string, value: string | React.ReactNode, footer: string }> = ({ icon, title, value, footer }) => (
+        <div className="flex flex-col justify-between p-4 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700">
+            <div>
+                <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400">
+                    {icon}
+                    <h4 className="font-semibold">{title}</h4>
+                </div>
+                <p className="text-3xl font-bold text-slate-800 dark:text-slate-100 my-2">{value}</p>
+            </div>
+            <p className="text-sm text-slate-500 dark:text-slate-400">{footer}</p>
+        </div>
+    );
+
+    const renderStatSection = (operation: Operation, data: QuizStats) => {
+        const accuracy = data.totalQuizzes > 0 ? ((data.totalCorrect / (data.totalQuizzes * 10)) * 100).toFixed(1) : '0.0';
+        const avgTime = data.totalQuizzes > 0 ? (data.totalTime / data.totalQuizzes).toFixed(1) : '0.0';
+        const topNumbers = Object.entries(data.numberFrequency)
+            .sort(([, a], [, b]) => b - a)
+            .slice(0, 3)
+            .map(([num]) => num);
+        
+        const isConfirming = confirmingClear === operation;
+
+        const handleClearClick = () => {
+            if (isConfirming) {
+                const storedStatsRaw = localStorage.getItem('mathWhizStats');
+                const currentStats: AllQuizStats = storedStatsRaw ? JSON.parse(storedStatsRaw) : {};
+                
+                if (!currentStats || !currentStats[operation]) return;
+
+                const newStats = { ...currentStats };
+                delete newStats[operation];
+
+                if (Object.keys(newStats).length === 0) {
+                    localStorage.removeItem('mathWhizStats');
+                } else {
+                    localStorage.setItem('mathWhizStats', JSON.stringify(newStats));
+                }
+                
+                refreshStats();
+                setConfirmingClear(null); // Reset confirmation state
+            } else {
+                setConfirmingClear(operation);
+                // Reset after 3 seconds if not confirmed
+                setTimeout(() => {
+                    setConfirmingClear(currentOp => (currentOp === operation ? null : currentOp));
+                }, 3000);
+            }
+        };
+
+        return (
+            <div key={operation}>
+                <div className="flex justify-between items-center mb-3">
+                    <h3 className="text-lg font-bold text-slate-700 dark:text-slate-200 capitalize">{operation}</h3>
+                    <button 
+                        onClick={handleClearClick}
+                        className={`flex items-center gap-1.5 px-3 py-1 text-sm font-semibold rounded-full transition-colors ${
+                            isConfirming 
+                                ? 'bg-red-600 text-white' 
+                                : 'text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-500/10 hover:bg-red-200 dark:hover:bg-red-500/20'
+                        }`}
+                    >
+                        <TrashIcon className="w-4 h-4" />
+                        {isConfirming ? "Confirm Clear" : "Clear Progress"}
+                    </button>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <StatCard 
+                        icon={<BullseyeIcon className="w-5 h-5" />}
+                        title="Accuracy"
+                        value={`${accuracy}%`}
+                        footer={`${data.totalCorrect} correct answers`}
+                    />
+                    <StatCard 
+                        icon={<ClockIcon className="w-5 h-5" />}
+                        title="Avg. Time"
+                        value={`${avgTime}s`}
+                        footer={`Across ${data.totalQuizzes} quiz${data.totalQuizzes !== 1 ? 'zes' : ''}`}
+                    />
+                    <StatCard 
+                        icon={<ListBulletIcon className="w-5 h-5" />}
+                        title="Top Numbers"
+                        value={
+                            topNumbers.length > 0 ? (
+                                <div className="flex gap-2">
+                                    {topNumbers.map(num => (
+                                        <span key={num} className="flex items-center justify-center h-10 w-10 bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300 rounded-full font-bold text-xl">{num}</span>
+                                    ))}
+                                </div>
+                            ) : '-'
+                        }
+                        footer={topNumbers.length > 0 ? "Most practiced" : "No data yet"}
+                    />
+                </div>
+            </div>
+        );
+    }
+    
+    if (!stats || Object.keys(stats).length === 0) {
+        return null; // Don't show anything if there are no stats
+    }
+
+    return (
+        <div className="mt-6 p-6 bg-slate-100 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700 animate-fade-in">
+            <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-4 text-center">📊 Your Progress</h2>
+            <div className="space-y-6">
+                 {Object.entries(stats).map(([op, data]) => renderStatSection(op as Operation, data))}
+            </div>
+        </div>
+    );
+};
+
+const HighScoresDisplay: React.FC = () => {
+  const [highScores, setHighScores] = useState<HighScores | null>(null);
+  const [confirmingClear, setConfirmingClear] = useState(false);
+
+  const refreshHighScores = useCallback(() => {
+    try {
+        const storedScoresRaw = localStorage.getItem('mathWhizHighScores');
+        if (storedScoresRaw) {
+            const parsedScores = JSON.parse(storedScoresRaw);
+            setHighScores(parsedScores);
+        } else {
+            setHighScores(null);
+        }
+    } catch (error) {
+        console.error("Failed to load high scores:", error);
+        setHighScores(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshHighScores();
+  }, [refreshHighScores]);
+
+  const handleClearHighScores = () => {
+    if (confirmingClear) {
+        localStorage.removeItem('mathWhizHighScores');
+        refreshHighScores();
+        setConfirmingClear(false); // Reset confirmation state
+    } else {
+        setConfirmingClear(true);
+        // Reset after 3 seconds if not confirmed
+        setTimeout(() => setConfirmingClear(false), 3000);
+    }
+  };
+
+  if (!highScores || Object.keys(highScores).length === 0) {
+    return (
+        <div className="mt-10 p-6 bg-slate-100 dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 animate-fade-in">
+            <h2 className="text-xl font-bold text-slate-700 dark:text-slate-200 mb-4 text-center">🏆 Hall of Fame</h2>
+            <p className="text-center text-slate-500 dark:text-slate-400">No high scores yet. Be the first to set one!</p>
+        </div>
+    );
+  }
+
+  const sortedScores = Object.entries(highScores).sort(([keyA], [keyB]) => keyA.localeCompare(keyB));
+
+  return (
+    <div className="mt-10 p-6 bg-slate-100 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700 animate-fade-in">
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100">🏆 Hall of Fame</h2>
+        <button 
+            onClick={handleClearHighScores}
+            className={`flex items-center gap-1.5 px-3 py-1 text-sm font-semibold rounded-full transition-colors ${
+                confirmingClear 
+                    ? 'bg-red-600 text-white' 
+                    : 'text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-500/10 hover:bg-red-200 dark:hover:bg-red-500/20'
+            }`}
+        >
+            <TrashIcon className="w-4 h-4" />
+            {confirmingClear ? "Confirm Clear" : "Clear All"}
+        </button>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {sortedScores.map(([key, score]) => {
+          const operation = key;
+          return (
+            <div key={key} className="p-3 bg-white dark:bg-slate-900 rounded-lg flex justify-between items-center border border-slate-200 dark:border-slate-700">
+              <div>
+                <p className="font-semibold text-md text-blue-600 dark:text-blue-400 capitalize">{operation}</p>
+              </div>
+              <div className="text-right">
+                 <p className="font-bold text-lg text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
+                   {score.score} / 10
+                 </p>
+                 <p className="text-sm text-slate-500 dark:text-slate-400">{score.time}s</p>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+const Section: React.FC<{ title: string; step: number; children: React.ReactNode }> = ({ title, step, children }) => (
+    <div className="space-y-4">
+      <div className="flex items-center gap-3">
+        <div className="flex items-center justify-center w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 text-blue-600 dark:text-blue-400 font-bold">{step}</div>
+        <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100">{title}</h2>
+      </div>
+      {children}
+    </div>
+);
+
+export const SelectionScreen: React.FC<SelectionScreenProps> = ({ onStartQuiz, initialSettings, isDarkMode, toggleDarkMode }) => {
+  const [operation, setOperation] = useState<Operation>(initialSettings?.operation || 'multiplication');
+  const [selectedNumbers, setSelectedNumbers] = useState<number[]>(initialSettings?.selectedNumbers || []);
+  const [timeLimit, setTimeLimit] = useState<number>(initialSettings?.timeLimit ?? 60);
+  const [showStats, setShowStats] = useState(false);
+
+  const standardTimeValues = timeOptions.map(o => o.value);
+  const isInitialTimeCustom = initialSettings && !standardTimeValues.includes(initialSettings.timeLimit);
+  
+  const [showCustomTimeInput, setShowCustomTimeInput] = useState(!!isInitialTimeCustom);
+
+  const getInitialCustomTime = () => {
+    if (isInitialTimeCustom && initialSettings) {
+        const minutes = Math.floor(initialSettings.timeLimit / 60);
+        const seconds = initialSettings.timeLimit % 60;
+        return {
+            minutes: minutes > 0 ? String(minutes) : '',
+            seconds: seconds > 0 ? String(seconds) : ''
+        };
+    }
+    return { minutes: '', seconds: '' };
+  };
+
+  const initialCustom = getInitialCustomTime();
+  const [customMinutes, setCustomMinutes] = useState(initialCustom.minutes);
+  const [customSeconds, setCustomSeconds] = useState(initialCustom.seconds);
+
+
+  const numbers = Array.from({ length: 12 }, (_, i) => i + 1);
+
+  const toggleNumber = (num: number) => {
+    setSelectedNumbers(prev =>
+      prev.includes(num) ? prev.filter(n => n !== num) : [...prev, num]
+    );
+  };
+
+  const selectAll = () => {
+    if (selectedNumbers.length === numbers.length) {
+      setSelectedNumbers([]);
+    } else {
+      setSelectedNumbers(numbers);
+    }
+  };
+
+  const handleTimeSelection = (value: number) => {
+    setTimeLimit(value);
+    setShowCustomTimeInput(false);
+    setCustomMinutes('');
+    setCustomSeconds('');
+  };
+
+  const handleCustomTimeToggle = () => {
+    setShowCustomTimeInput(true);
+  };
+
+  const handleCustomTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    // Only allow numeric input, max 2 digits
+    const numericValue = value.replace(/[^0-9]/g, '').slice(0, 2);
+    if (name === 'minutes') {
+        setCustomMinutes(numericValue);
+    } else if (name === 'seconds') {
+        setCustomSeconds(numericValue);
+    }
+  };
+  
+  const handleStart = () => {
+      if (selectedNumbers.length === 0) return;
+      
+      let finalTimeLimit = timeLimit;
+      if (showCustomTimeInput) {
+          const mins = parseInt(customMinutes, 10) || 0;
+          const secs = parseInt(customSeconds, 10) || 0;
+          finalTimeLimit = (mins * 60) + secs;
+      }
+      onStartQuiz(operation, selectedNumbers, finalTimeLimit);
+  }
+
+  return (
+    <div className="max-w-4xl mx-auto p-4 sm:p-6 lg:p-8 bg-white dark:bg-slate-900 rounded-3xl shadow-xl border border-slate-200 dark:border-slate-800 relative">
+      <button onClick={toggleDarkMode} className="absolute top-4 right-4 p-2 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+        {isDarkMode ? <SunIcon className="w-6 h-6" /> : <MoonIcon className="w-6 h-6" />}
+      </button>
+
+        <h1 className="text-4xl sm:text-5xl font-extrabold text-center text-slate-800 dark:text-white mb-2">Math Practice</h1>
+        <p className="text-center text-slate-500 dark:text-slate-400 mb-10">Sharpen your skills. Select your challenge below.</p>
+
+        <div className="space-y-8">
+            <Section title="Pick Your Operation" step={1}>
+                <div className="grid grid-cols-2 gap-3">
+                    <button onClick={() => setOperation('multiplication')} className={`px-6 py-3 text-lg font-semibold rounded-lg transition-all duration-200 border-2 ${operation === 'multiplication' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700 hover:border-blue-500 dark:hover:border-blue-500'}`}>
+                        Multiplication (×)
+                    </button>
+                    <button onClick={() => setOperation('division')} className={`px-6 py-3 text-lg font-semibold rounded-lg transition-all duration-200 border-2 ${operation === 'division' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700 hover:border-blue-500 dark:hover:border-blue-500'}`}>
+                        Division (÷)
+                    </button>
+                </div>
+            </Section>
+
+            <Section title="Select Numbers" step={2}>
+                <div className="grid grid-cols-4 sm:grid-cols-6 gap-3 text-center">
+                    {numbers.map(num => (
+                        <button key={num} onClick={() => toggleNumber(num)} className={`p-3 text-lg font-bold rounded-lg transition-transform duration-200 transform ease-bouncy border-2 ${selectedNumbers.includes(num) ? 'bg-blue-600 text-white border-blue-600 scale-105' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-300 dark:border-slate-700 hover:border-blue-500 dark:hover:border-blue-500'}`}>
+                            {num}
+                        </button>
+                    ))}
+                </div>
+                 <div className="mt-4 flex justify-center">
+                    <button onClick={selectAll} className="px-6 py-2 font-semibold text-white bg-slate-600 dark:bg-slate-700 rounded-full hover:bg-slate-700 dark:hover:bg-slate-600 transition-colors shadow-sm">
+                        {selectedNumbers.length === numbers.length ? 'Deselect All' : 'Select All'}
+                    </button>
+                </div>
+            </Section>
+
+            <Section title="Set a Time Limit" step={3}>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {timeOptions.map(option => (
+                        <button key={option.value} onClick={() => handleTimeSelection(option.value)} className={`px-4 py-2 font-semibold rounded-lg transition-all duration-200 border-2 ${timeLimit === option.value && !showCustomTimeInput ? 'bg-blue-600 text-white border-blue-600' : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700 hover:border-blue-500 dark:hover:border-blue-500'}`}>
+                            {option.label}
+                        </button>
+                    ))}
+                     <button onClick={handleCustomTimeToggle} className={`px-4 py-2 font-semibold rounded-lg transition-all duration-200 border-2 ${showCustomTimeInput ? 'bg-blue-600 text-white border-blue-600' : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700 hover:border-blue-500 dark:hover:border-blue-500'}`}>
+                        Custom
+                    </button>
+                </div>
+                <div className={`transition-all duration-300 ease-in-out overflow-hidden ${showCustomTimeInput ? 'max-h-24 opacity-100 mt-4' : 'max-h-0 opacity-0 mt-0'}`}>
+                    <div className="flex justify-center items-center gap-2">
+                        <input
+                            type="text"
+                            name="minutes"
+                            value={customMinutes}
+                            onChange={handleCustomTimeChange}
+                            placeholder="MM"
+                            className="w-20 p-2 text-center text-xl font-bold border-2 border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
+                            maxLength={2}
+                            inputMode="numeric"
+                        />
+                        <span className="text-2xl font-bold text-slate-500">:</span>
+                         <input
+                            type="text"
+                            name="seconds"
+                            value={customSeconds}
+                            onChange={handleCustomTimeChange}
+                            placeholder="SS"
+                            className="w-20 p-2 text-center text-xl font-bold border-2 border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
+                            maxLength={2}
+                            inputMode="numeric"
+                        />
+                    </div>
+                </div>
+            </Section>
+        </div>
+
+        <div className="mt-12 text-center">
+            <button
+                onClick={handleStart}
+                disabled={selectedNumbers.length === 0}
+                className="w-full sm:w-auto px-16 py-4 text-xl font-bold text-white bg-blue-600 rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100 disabled:bg-slate-400 dark:disabled:bg-slate-600"
+            >
+                Start Quiz
+            </button>
+        </div>
+        <div className="mt-10 border-t border-slate-200 dark:border-slate-800 pt-6 flex justify-center">
+             <button onClick={() => setShowStats(prev => !prev)} className="px-6 py-2 font-semibold text-white bg-slate-600 dark:bg-slate-700 rounded-full hover:bg-slate-700 dark:hover:bg-slate-600 transition-colors shadow-sm flex items-center gap-2">
+                 <ChartBarIcon className="w-5 h-5"/>
+                {showStats ? 'Hide Progress' : 'View Progress'}
+            </button>
+        </div>
+        
+        {showStats && <StatisticsDisplay />}
+        <HighScoresDisplay />
+    </div>
+  );
+};

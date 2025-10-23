@@ -1,0 +1,180 @@
+import React, { useState, useEffect, useRef } from 'react';
+import type { Question } from '../types';
+import { ClockIcon } from './icons';
+
+interface QuizScreenProps {
+  questions: Question[];
+  timeLimit: number;
+  onFinishQuiz: (answers: string[], timeTaken: number) => void;
+}
+
+const playTimeUpSound = () => {
+    // Use a try-catch block to handle browsers that might block audio context creation
+    try {
+        const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+        if (!audioContext) return;
+
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+
+        oscillator.type = 'sine';
+        oscillator.frequency.setValueAtTime(523.25, audioContext.currentTime); // C5 note
+        gainNode.gain.setValueAtTime(0.5, audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 0.3);
+
+
+        oscillator.start(audioContext.currentTime);
+        oscillator.stop(audioContext.currentTime + 0.3);
+    } catch (error) {
+        console.error("Could not play sound:", error);
+    }
+};
+
+export const QuizScreen: React.FC<QuizScreenProps> = ({ questions, timeLimit, onFinishQuiz }) => {
+  const [answers, setAnswers] = useState<string[]>(Array(10).fill(''));
+  const [elapsedTime, setElapsedTime] = useState(0);
+  const [timerRunning, setTimerRunning] = useState(false);
+  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const [introStage, setIntroStage] = useState<'ready' | 'set' | 'go' | 'finished'>('ready');
+
+  // Create a ref to hold the latest answers to avoid stale closures in setInterval
+  const answersRef = useRef(answers);
+  useEffect(() => {
+    answersRef.current = answers;
+  }, [answers]);
+
+  useEffect(() => {
+    if (introStage === 'ready') {
+      setTimeout(() => setIntroStage('set'), 1000);
+    } else if (introStage === 'set') {
+      setTimeout(() => setIntroStage('go'), 1000);
+    } else if (introStage === 'go') {
+      setTimeout(() => {
+        setIntroStage('finished');
+        setTimerRunning(true); // Start the timer automatically
+      }, 1000);
+    }
+  }, [introStage]);
+
+  useEffect(() => {
+    if (introStage === 'finished' && inputRefs.current[0]) {
+      inputRefs.current[0].focus();
+    }
+  }, [introStage]);
+
+
+  useEffect(() => {
+    if (!timerRunning) {
+      return;
+    }
+    const intervalId = setInterval(() => {
+      setElapsedTime(prev => {
+        const newElapsedTime = prev + 1;
+        if (timeLimit > 0 && newElapsedTime >= timeLimit) {
+          clearInterval(intervalId);
+          setTimerRunning(false);
+          playTimeUpSound();
+          setTimeout(() => {
+            onFinishQuiz(answersRef.current, timeLimit);
+          }, 300); // Delay to allow sound to play
+          return timeLimit;
+        }
+        return newElapsedTime;
+      });
+    }, 1000);
+    return () => clearInterval(intervalId);
+     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timerRunning, timeLimit, onFinishQuiz]);
+
+  const handleAnswerChange = (index: number, value: string) => {
+    const newAnswers = [...answers];
+    newAnswers[index] = value.replace(/[^0-9]/g, '');
+    setAnswers(newAnswers);
+  };
+  
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, index: number) => {
+    if (e.key === 'Enter' && index < questions.length - 1 && inputRefs.current[index + 1]) {
+        e.preventDefault();
+        inputRefs.current[index + 1]?.focus();
+    }
+  };
+
+  const formatTime = (seconds: number) => {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setTimerRunning(false);
+    onFinishQuiz(answers, elapsedTime);
+  };
+  
+  const getOperationSymbol = (op: 'multiplication' | 'division') => {
+    return op === 'multiplication' ? '×' : '÷';
+  };
+
+  const remainingTime = timeLimit > 0 ? timeLimit - elapsedTime : Infinity;
+  const isTimeLow = remainingTime <= 10;
+
+  return (
+    <div className="max-w-4xl mx-auto p-6 bg-white dark:bg-slate-900 rounded-3xl shadow-xl border border-slate-200 dark:border-slate-800 relative" style={{ minHeight: '600px'}}>
+        {/* Intro animation element */}
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ visibility: introStage !== 'finished' ? 'visible' : 'hidden' }}>
+            <p key={introStage} className="text-8xl font-extrabold text-slate-800 dark:text-white animate-word-pulse capitalize">
+              {introStage}...
+            </p>
+        </div>
+
+
+        {/* Actual quiz content, which fades in with a delay */}
+        <div className={introStage === 'finished' ? 'animate-fade-in' : 'opacity-0'}>
+            <div className="flex justify-between items-center mb-6">
+                <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-800 dark:text-white">Quiz in Progress</h1>
+                <div className={`flex items-center gap-2 text-lg font-bold p-3 rounded-full bg-slate-100 dark:bg-slate-800 transition-colors duration-300 ${isTimeLow ? 'text-red-600 dark:text-red-500 animate-pulse' : 'text-slate-800 dark:text-slate-200'}`}>
+                    <ClockIcon className="w-6 h-6"/>
+                    <span>{formatTime(elapsedTime)}</span>
+                    {timeLimit > 0 && <span className="text-slate-500 dark:text-slate-400"> / {formatTime(timeLimit)}</span>}
+                </div>
+            </div>
+            
+            <form onSubmit={handleSubmit}>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-5">
+                    {questions.map((q, index) => (
+                        <div key={index} className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
+                            <span className="text-slate-500 dark:text-slate-400 font-bold w-6 text-right">{index + 1}.</span>
+                            <div className="flex items-center gap-2 text-2xl font-bold text-slate-700 dark:text-slate-200 w-full">
+                               <span className="w-10 text-right">{q.num1}</span>
+                               <span>{getOperationSymbol(q.operation)}</span>
+                               <span className="w-10 text-left">{q.num2}</span>
+                               <span>=</span>
+                               <input
+                                    ref={el => { inputRefs.current[index] = el; }}
+                                    type="text"
+                                    value={answers[index]}
+                                    onChange={(e) => handleAnswerChange(index, e.target.value)}
+                                    onKeyDown={(e) => handleKeyDown(e, index)}
+                                    className="w-24 p-2 text-center text-2xl font-bold border-2 border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-white dark:bg-slate-900"
+                                    maxLength={4}
+                               />
+                            </div>
+                        </div>
+                    ))}
+                </div>
+                <div className="mt-8 text-center">
+                    <button
+                        type="submit"
+                        className="w-full sm:w-auto px-16 py-4 text-xl font-bold text-white bg-blue-600 rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300"
+                    >
+                        Grade My Quiz
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+  );
+};
