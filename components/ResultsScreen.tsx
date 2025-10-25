@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { OpenAIClient, AzureKeyCredential } from '@azure/openai';
 import type { Operation, Question, HighScores, AllQuizStats } from '../types';
 import { CheckCircleIcon, XCircleIcon, StarIcon } from './icons';
+import { feedbackMessages } from '../lib/feedbackMessages';
 
 let ai: OpenAIClient | null = null;
 
@@ -24,26 +25,6 @@ async function getAiInstance(): Promise<OpenAIClient | null> {
     console.error("Failed to initialize Azure OpenAI Client. AI features will be disabled.", error);
     return null;
   }
-}
-
-const getFeedbackMessage = async (correctCount: number, totalQuestions: number, timeTaken: number, operation: string): Promise<string> => {
-    const client = await getAiInstance();
-    if (!client) return "Great effort! Keep practicing to become a math superstar!";
-    try {
-        const deploymentName = import.meta.env.VITE_AZURE_DEPLOYMENT_NAME;
-        if (!deploymentName) {
-            console.error("Azure deployment name is not configured.");
-            return "Great effort! Keep practicing to become a math superstar!";
-        }
-        const prompt = `You are a helpful and motivating math tutor for middle school students. A student just finished a ${operation} quiz. They got ${correctCount} out of ${totalQuestions} correct in ${timeTaken} seconds. Write a short, encouraging message for them (2-3 sentences). If their score is low, offer constructive encouragement about improving. If they did well, acknowledge their good performance and perhaps suggest a next step or challenge. Address the student directly.`;
-
-        const { choices } = await client.getChatCompletions(deploymentName, [{ role: "user", content: prompt }]);
-        
-        return choices[0].message?.content || "Great effort! Keep practicing to become a math superstar!";
-    } catch (error) {
-        console.error("Error generating feedback:", error);
-        return "Great effort! Keep practicing to become a math superstar!";
-    }
 }
 
 const getExplanation = async (num1: number, num2: number | undefined, operation: string, answer: string | number): Promise<string> => {
@@ -94,6 +75,35 @@ Keep the explanation clear, concise, and focused on the mathematical concepts.`;
     }
 }
 
+const getFeedbackMessage = (correctCount: number, totalQuestions: number, timeTaken: number): string => {
+    const score = correctCount / totalQuestions;
+    const averageTimePerQuestion = timeTaken / totalQuestions;
+
+    let category: keyof typeof feedbackMessages;
+
+    if (score === 1) { // Perfect
+        if (averageTimePerQuestion <= 3) category = 'perfect_rapid';
+        else if (averageTimePerQuestion <= 6) category = 'perfect_fast';
+        else if (averageTimePerQuestion <= 10) category = 'perfect_methodical';
+        else category = 'perfect_deliberate';
+    } else if (score >= 0.8) { // Great
+        if (averageTimePerQuestion <= 4) category = 'great_rapid';
+        else if (averageTimePerQuestion <= 7) category = 'great_fast';
+        else if (averageTimePerQuestion <= 12) category = 'great_methodical';
+        else category = 'great_deliberate';
+    } else if (score >= 0.5) { // Good
+        if (averageTimePerQuestion <= 5) category = 'good_rapid';
+        else if (averageTimePerQuestion <= 8) category = 'good_fast';
+        else if (averageTimePerQuestion <= 15) category = 'good_methodical';
+        else category = 'good_deliberate';
+    } else { // Practice
+        category = 'practice';
+    }
+
+    const messages = feedbackMessages[category];
+    return messages[Math.floor(Math.random() * messages.length)];
+};
+
 
 interface ResultsScreenProps {
   questions: Question[];
@@ -109,7 +119,6 @@ interface ResultsScreenProps {
 
 export const ResultsScreen: React.FC<ResultsScreenProps> = ({ questions, userAnswers, timeTaken, onRestart, quizSettings }) => {
   const [feedback, setFeedback] = useState('');
-  const [isFeedbackLoading, setIsFeedbackLoading] = useState(true);
   const [isNewHighScore, setIsNewHighScore] = useState(false);
 
   const { operation, selectedNumbers } = quizSettings;
@@ -138,14 +147,9 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({ questions, userAns
   const correctCount = results.filter(r => r.isCorrect).length;
 
   useEffect(() => {
-    const fetchFeedback = async () => {
-      setIsFeedbackLoading(true);
-      const message = await getFeedbackMessage(correctCount, questions.length, timeTaken, operation);
-      setFeedback(message);
-      setIsFeedbackLoading(false);
-    };
-    fetchFeedback();
-  }, [correctCount, questions.length, timeTaken, operation]);
+    const message = getFeedbackMessage(correctCount, questions.length, timeTaken);
+    setFeedback(message);
+  }, [correctCount, questions.length, timeTaken]);
 
   useEffect(() => {
     // High Score Logic
@@ -242,11 +246,7 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({ questions, userAns
                     <span className="text-xl font-bold text-yellow-700 dark:text-yellow-400">New High Score!</span>
                 </div>
             )}
-            {isFeedbackLoading ? (
-              <div className="h-12 bg-slate-200 dark:bg-slate-700 rounded-md animate-pulse w-3/4 mx-auto my-4"></div>
-            ) : (
-              <p className="text-lg text-slate-600 dark:text-slate-300 my-4 p-3 bg-slate-100 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 italic">"{feedback}"</p>
-            )}
+            <p className="text-lg text-slate-600 dark:text-slate-300 my-4 p-3 bg-slate-100 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 italic">"{feedback}"</p>
             <p className="text-2xl font-bold text-slate-700 dark:text-slate-200">You scored <span className="text-green-600 dark:text-green-400">{correctCount} / {questions.length}</span></p>
             <p className="text-lg text-slate-500 dark:text-slate-400 mt-1">Total time taken: <span className="font-semibold">{formatTime(timeTaken)}</span></p>
         </div>
