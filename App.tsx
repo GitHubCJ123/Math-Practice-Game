@@ -1,10 +1,11 @@
 
 import React, { useState, useCallback, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
 import type { Operation, Question } from './types';
 import { SelectionScreen } from './components/SelectionScreen';
 import { QuizScreen } from './components/QuizScreen';
 import { ResultsScreen } from './components/ResultsScreen';
+import { conversions } from './lib/conversions';
 
 const App: React.FC = () => {
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -40,6 +41,31 @@ const App: React.FC = () => {
   const generateQuestions = useCallback((operation: Operation, selectedNumbers: number[]): Question[] => {
     const newQuestions: Question[] = [];
     const questionSet = new Set<string>();
+
+    if (operation === 'fraction-to-decimal' || operation === 'decimal-to-fraction') {
+        const shuffledConversions = [...conversions].sort(() => 0.5 - Math.random());
+        const selectedConversions = shuffledConversions.slice(0, 10);
+
+        selectedConversions.forEach(conv => {
+            if (operation === 'fraction-to-decimal') {
+                newQuestions.push({
+                    operation,
+                    display: conv.fractionString,
+                    answer: conv.decimalString,
+                    num1: conv.numerator,
+                    num2: conv.denominator,
+                });
+            } else { // decimal-to-fraction
+                newQuestions.push({
+                    operation,
+                    display: conv.decimalString,
+                    answer: conv.fractionString,
+                    num1: conv.decimal,
+                });
+            }
+        });
+        return newQuestions;
+    }
 
     while (newQuestions.length < 10) {
       const baseNum = selectedNumbers[Math.floor(Math.random() * selectedNumbers.length)];

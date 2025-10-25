@@ -46,12 +46,33 @@ const getFeedbackMessage = async (correctCount: number, totalQuestions: number, 
     }
 }
 
-const getExplanation = async (num1: number, num2: number, operation: string, answer: number): Promise<string> => {
-    const operationSymbol = operation === 'multiplication' ? '×' : '÷';
-    const client = await getAiInstance();
-    if (!client) return `To solve ${num1} ${operationSymbol} ${num2}, the answer is ${answer}. Keep trying!`;
+const getExplanation = async (num1: number, num2: number | undefined, operation: string, answer: string | number): Promise<string> => {
+    if (operation === 'fraction-to-decimal' || operation === 'decimal-to-fraction') {
+        return "Explanations for conversion problems are not yet available.";
+    }
 
-    const prompt = `You are a math tutor for middle school students. Explain how to solve the problem "${num1} ${operationSymbol} ${num2}" step-by-step. The correct answer is ${answer}.
+    let problemString = '';
+    switch(operation) {
+        case 'multiplication':
+            problemString = `${num1} × ${num2}`;
+            break;
+        case 'division':
+            problemString = `${num1} ÷ ${num2}`;
+            break;
+        case 'squares':
+            problemString = `${num1}²`;
+            break;
+        case 'square-roots':
+            problemString = `√${num1}`;
+            break;
+        default:
+            return "Sorry, an explanation could not be generated for this problem.";
+    }
+    
+    const client = await getAiInstance();
+    if (!client) return `To solve ${problemString}, the answer is ${answer}. Keep trying!`;
+
+    const prompt = `You are a math tutor for middle school students. Explain how to solve the problem "${problemString}" step-by-step. The correct answer is ${answer}.
 For multiplication, explain the standard algorithm or relevant properties of numbers.
 For division, explain long division or how to handle remainders/decimals if applicable.
 For squares, explain what squaring a number means (multiplying it by itself).
@@ -62,14 +83,14 @@ Keep the explanation clear, concise, and focused on the mathematical concepts.`;
         const deploymentName = import.meta.env.VITE_AZURE_DEPLOYMENT_NAME;
         if (!deploymentName) {
             console.error("Azure deployment name is not configured.");
-            return `To solve ${num1} ${operationSymbol} ${num2}, the answer is ${answer}. Keep trying!`;
+            return `To solve ${problemString}, the answer is ${answer}. Keep trying!`;
         }
         const { choices } = await client.getChatCompletions(deploymentName, [{ role: "user", content: prompt }]);
         
-        return choices[0].message?.content || `To solve ${num1} ${operationSymbol} ${num2}, the answer is ${answer}. Keep trying!`;
+        return choices[0].message?.content || `To solve ${problemString}, the answer is ${answer}. Keep trying!`;
     } catch (error) {
         console.error("Error generating explanation:", error);
-        return `To solve ${num1} ${operationSymbol} ${num2}, the answer is ${answer}. Keep trying!`;
+        return `To solve ${problemString}, the answer is ${answer}. Keep trying!`;
     }
 }
 
@@ -101,11 +122,18 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({ questions, userAns
   };
   const [explanations, setExplanations] = useState<ExplanationState>({});
   
-  const results = questions.map((q, i) => ({
-    question: q,
-    userAnswer: userAnswers[i],
-    isCorrect: parseInt(userAnswers[i], 10) === q.answer
-  }));
+  const results = questions.map((q, i) => {
+    let userAnswer = userAnswers[i]?.trim();
+    if (q.operation === 'fraction-to-decimal' && userAnswer?.startsWith('.')) {
+        userAnswer = '0' + userAnswer;
+    }
+    const isCorrect = userAnswer === String(q.answer);
+    return {
+        question: q,
+        userAnswer: userAnswers[i],
+        isCorrect: isCorrect
+    };
+  });
 
   const correctCount = results.filter(r => r.isCorrect).length;
 
@@ -230,10 +258,17 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({ questions, userAns
                       <div className="flex items-center gap-3">
                           <span className="text-slate-600 dark:text-slate-400 font-bold">{index + 1}.</span>
                           <p className="text-xl font-bold text-slate-800 dark:text-slate-200">
-                              {result.question.operation === 'square-roots' && getOperationSymbol(result.question.operation)}
-                              {result.question.num1}
-                              {result.question.operation === 'squares' ? <sup>2</sup> : (result.question.operation !== 'square-roots' && getOperationSymbol(result.question.operation))}
-                              {result.question.num2 && ` ${result.question.num2}`} = <span className="text-blue-600 dark:text-blue-400">{result.question.answer}</span>
+                              {result.question.display ? (
+                                <span>{result.question.display}</span>
+                              ) : (
+                                <>
+                                  {result.question.operation === 'square-roots' && getOperationSymbol(result.question.operation)}
+                                  {result.question.num1}
+                                  {result.question.operation === 'squares' ? <sup>2</sup> : (result.question.operation !== 'square-roots' && getOperationSymbol(result.question.operation))}
+                                  {result.question.num2 && ` ${result.question.num2}`}
+                                </>
+                              )}
+                               = <span className="text-blue-600 dark:text-blue-400">{String(result.question.answer)}</span>
                           </p>
                       </div>
                       <div className="flex items-center gap-3">

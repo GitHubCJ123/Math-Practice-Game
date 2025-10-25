@@ -1,11 +1,12 @@
 
-export type Operation = 'multiplication' | 'division' | 'squares' | 'square-roots';
+export type Operation = 'multiplication' | 'division' | 'squares' | 'square-roots' | 'fraction-to-decimal' | 'decimal-to-fraction';
 
 export interface Question {
   num1: number;
   num2?: number; // num2 is optional for unary operations like squares/roots
   operation: Operation;
-  answer: number;
+  answer: number | string;
+  display?: string;
 }
 
 export interface QuizResult {

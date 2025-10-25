@@ -91,7 +91,26 @@ export const QuizScreen: React.FC<QuizScreenProps> = ({ questions, timeLimit, on
 
   const handleAnswerChange = (index: number, value: string) => {
     const newAnswers = [...answers];
-    newAnswers[index] = value.replace(/[^0-9]/g, '');
+    const operation = questions[index].operation;
+    
+    let filteredValue = value;
+    if (operation === 'decimal-to-fraction') {
+        // Allow numbers and a single '/'
+        filteredValue = value.replace(/[^0-9/]/g, '');
+        const parts = filteredValue.split('/');
+        if (parts.length > 2) {
+            filteredValue = `${parts[0]}/${parts.slice(1).join('')}`;
+        }
+    } else {
+        // Allow numbers and a single '.' for other modes (including fraction-to-decimal)
+        filteredValue = value.replace(/[^0-9.]/g, '');
+        const parts = filteredValue.split('.');
+        if (parts.length > 2) {
+            filteredValue = `${parts[0]}.${parts.slice(1).join('')}`;
+        }
+    }
+    
+    newAnswers[index] = filteredValue;
     setAnswers(newAnswers);
   };
   
@@ -127,6 +146,9 @@ export const QuizScreen: React.FC<QuizScreenProps> = ({ questions, timeLimit, on
   const remainingTime = timeLimit > 0 ? timeLimit - elapsedTime : Infinity;
   const isTimeLow = remainingTime <= 10;
 
+  const isConversionMode = questions[0]?.operation === 'fraction-to-decimal' || questions[0]?.operation === 'decimal-to-fraction';
+
+
   return (
     <div className="max-w-4xl mx-auto p-6 bg-white dark:bg-slate-900 rounded-3xl shadow-xl border border-slate-200 dark:border-slate-800 relative" style={{ minHeight: '600px'}}>
         {/* Intro animation element */}
@@ -147,6 +169,16 @@ export const QuizScreen: React.FC<QuizScreenProps> = ({ questions, timeLimit, on
                     {timeLimit > 0 && <span className="text-slate-500 dark:text-slate-400"> / {formatTime(timeLimit)}</span>}
                 </div>
             </div>
+            {questions[0]?.operation === 'fraction-to-decimal' && (
+                <p className="text-center text-slate-500 dark:text-slate-400 mb-6 -mt-2">
+                    Note: For repeating decimals, please enter the first three decimal places (e.g., for 1/3, enter 0.333).
+                </p>
+            )}
+            {questions[0]?.operation === 'decimal-to-fraction' && (
+                <p className="text-center text-slate-500 dark:text-slate-400 mb-6 -mt-2">
+                    Note: All fractions must be in simplest form.
+                </p>
+            )}
             
             <form onSubmit={handleSubmit}>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-5">
@@ -154,20 +186,26 @@ export const QuizScreen: React.FC<QuizScreenProps> = ({ questions, timeLimit, on
                         <div key={index} className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
                             <span className="text-slate-500 dark:text-slate-400 font-bold w-6 text-right">{index + 1}.</span>
                             <div className="flex items-center gap-2 text-2xl font-bold text-slate-700 dark:text-slate-200 w-full">
-                               {q.operation === 'square-roots' && <span>{getOperationSymbol(q.operation)}</span>}
-                               <span className="w-10 text-right">{q.num1}</span>
-                               {q.operation === 'squares' ? <sup>2</sup> : (q.operation !== 'square-roots' && <span>{getOperationSymbol(q.operation)}</span>)}
-                               {q.num2 && <span className="w-10 text-left">{q.num2}</span>}
+                               {isConversionMode ? (
+                                    <span className="w-24 text-center">{q.display}</span>
+                                ) : (
+                                    <>
+                                        {q.operation === 'square-roots' && <span>{getOperationSymbol(q.operation)}</span>}
+                                        <span className="w-10 text-right">{q.num1}</span>
+                                        {q.operation === 'squares' ? <sup>2</sup> : (q.operation !== 'square-roots' && <span>{getOperationSymbol(q.operation)}</span>)}
+                                        {q.num2 && <span className="w-10 text-left">{q.num2}</span>}
+                                    </>
+                                )}
                                <span>=</span>
                                <input
                                     ref={el => { inputRefs.current[index] = el; }}
                                     type="text"
-                                    inputMode="numeric"
+                                    inputMode={q.operation === 'decimal-to-fraction' ? 'text' : 'numeric'}
                                     value={answers[index]}
                                     onChange={(e) => handleAnswerChange(index, e.target.value)}
                                     onKeyDown={(e) => handleKeyDown(e, index)}
                                     className="w-24 p-2 text-center text-2xl font-bold border-2 border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-white dark:bg-slate-900"
-                                    maxLength={4}
+                                    maxLength={7}
                                />
                             </div>
                         </div>
