@@ -28,50 +28,55 @@ async function getAiInstance(): Promise<OpenAIClient | null> {
 }
 
 const getExplanation = async (num1: number, num2: number | undefined, operation: string, answer: string | number): Promise<string> => {
-    if (operation === 'fraction-to-decimal' || operation === 'decimal-to-fraction') {
-        return "Explanations for conversion problems are not yet available.";
-    }
+    let prompt = '';
 
-    let problemString = '';
     switch(operation) {
         case 'multiplication':
-            problemString = `${num1} × ${num2}`;
-            break;
         case 'division':
-            problemString = `${num1} ÷ ${num2}`;
-            break;
         case 'squares':
-            problemString = `${num1}²`;
-            break;
         case 'square-roots':
-            problemString = `√${num1}`;
+            const problemString = operation === 'multiplication' ? `${num1} × ${num2}` :
+                                  operation === 'division' ? `${num1} ÷ ${num2}` :
+                                  operation === 'squares' ? `${num1}²` : `√${num1}`;
+            prompt = `You are a math speed coach. A student needs to solve "${problemString}" quickly. 
+            1. Briefly explain the standard method.
+            2. Provide a mental math trick or shortcut to solve it faster. For example, for 99÷9, you could explain that 9*10=90, and one more 9 makes 99, so the answer is 11.
+            Keep the entire explanation concise and encouraging. The correct answer is ${answer}.`;
             break;
+
+        case 'fraction-to-decimal':
+            prompt = `You are a math speed coach. A student needs to convert the fraction ${num1}/${num2} to a decimal.
+            1. Briefly explain the long division method (numerator divided by denominator).
+            2. Explain how to handle repeating decimals by rounding to three decimal places.
+            Keep the explanation concise and clear. The correct answer is ${answer}.`;
+            break;
+
+        case 'decimal-to-fraction':
+            prompt = `You are a math speed coach. A student needs to convert the decimal ${num1} to a fraction in simplest form.
+            1. Explain how to convert the decimal to a fraction based on its place value (e.g., 0.75 = 75/100).
+            2. Explain how to simplify the fraction to its lowest terms by finding the greatest common divisor.
+            Keep the explanation concise and clear. The correct answer is ${answer}.`;
+            break;
+            
         default:
             return "Sorry, an explanation could not be generated for this problem.";
     }
     
     const client = await getAiInstance();
-    if (!client) return `To solve ${problemString}, the answer is ${answer}. Keep trying!`;
-
-    const prompt = `You are a math tutor for middle school students. Explain how to solve the problem "${problemString}" step-by-step. The correct answer is ${answer}.
-For multiplication, explain the standard algorithm or relevant properties of numbers.
-For division, explain long division or how to handle remainders/decimals if applicable.
-For squares, explain what squaring a number means (multiplying it by itself).
-For square roots, explain the concept of finding a number that, when multiplied by itself, equals the given number.
-Keep the explanation clear, concise, and focused on the mathematical concepts.`;
+    if (!client) return `The correct answer is ${answer}. Keep trying!`;
 
     try {
         const deploymentName = import.meta.env.VITE_AZURE_DEPLOYMENT_NAME;
         if (!deploymentName) {
             console.error("Azure deployment name is not configured.");
-            return `To solve ${problemString}, the answer is ${answer}. Keep trying!`;
+            return `The correct answer is ${answer}. Keep trying!`;
         }
         const { choices } = await client.getChatCompletions(deploymentName, [{ role: "user", content: prompt }]);
         
-        return choices[0].message?.content || `To solve ${problemString}, the answer is ${answer}. Keep trying!`;
+        return choices[0].message?.content || `The correct answer is ${answer}. Keep trying!`;
     } catch (error) {
         console.error("Error generating explanation:", error);
-        return `To solve ${problemString}, the answer is ${answer}. Keep trying!`;
+        return `The correct answer is ${answer}. Keep trying!`;
     }
 }
 
