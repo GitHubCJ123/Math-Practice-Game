@@ -447,66 +447,67 @@ export const SelectionScreen: React.FC<SelectionScreenProps> = ({ onStartQuiz, i
             </Section>
 
             {!isConversionMode && (
-                <>
-                    <Section title="Select Numbers" step={2}>
-                        <div className={`grid ${operation === 'squares' || operation === 'square-roots' ? 'grid-cols-5 sm:grid-cols-10' : 'grid-cols-4 sm:grid-cols-6'} gap-3 text-center`}>
-                            {numbers.map(num => (
-                                <button key={num} onClick={() => toggleNumber(num)} className={`p-3 text-lg font-bold rounded-lg transition-transform duration-200 transform ease-bouncy border-2 ${selectedNumbers.includes(num) ? 'bg-blue-600 text-white border-blue-600 scale-105' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-300 dark:border-slate-700 hover:border-blue-500 dark:hover:border-blue-500'}`}>
-                                    {num}
-                                </button>
-                            ))}
-                        </div>
-                        {needsAtLeastTen && (
-                            <p className="text-center text-red-500 dark:text-red-400 mt-4 font-semibold animate-fade-in">
-                                Please select at least 10 numbers for this operation.
-                            </p>
-                        )}
-                        <div className="mt-4 flex justify-center">
-                            <button onClick={selectAll} className="px-6 py-2 font-semibold text-white bg-slate-600 dark:bg-slate-700 rounded-full hover:bg-slate-700 dark:hover:bg-slate-600 transition-colors shadow-sm">
-                                {selectedNumbers.length === numbers.length ? 'Deselect All' : 'Select All'}
+                <Section title="Select Numbers" step={2}>
+                    <div className={`grid ${operation === 'squares' || operation === 'square-roots' ? 'grid-cols-5 sm:grid-cols-10' : 'grid-cols-4 sm:grid-cols-6'} gap-3 text-center`}>
+                        {numbers.map(num => (
+                            <button key={num} onClick={() => toggleNumber(num)} className={`p-3 text-lg font-bold rounded-lg transition-transform duration-200 transform ease-bouncy border-2 ${selectedNumbers.includes(num) ? 'bg-blue-600 text-white border-blue-600 scale-105' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-300 dark:border-slate-700 hover:border-blue-500 dark:hover:border-blue-500'}`}>
+                                {num}
                             </button>
-                        </div>
-                    </Section>
-
-                    <Section title="Set a Time Limit" step={3}>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                            {timeOptions.map(option => (
-                                <button key={option.value} onClick={() => handleTimeSelection(option.value)} className={`px-4 py-2 font-semibold rounded-lg transition-all duration-200 border-2 ${timeLimit === option.value && !showCustomTimeInput ? 'bg-blue-600 text-white border-blue-600' : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700 hover:border-blue-500 dark:hover:border-blue-500'}`}>
-                                    {option.label}
-                                </button>
-                            ))}
-                            <button onClick={handleCustomTimeToggle} className={`px-4 py-2 font-semibold rounded-lg transition-all duration-200 border-2 ${showCustomTimeInput ? 'bg-blue-600 text-white border-blue-600' : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700 hover:border-blue-500 dark:hover:border-blue-500'}`}>
-                                Custom
-                            </button>
-                        </div>
-                        <div className={`transition-all duration-300 ease-in-out overflow-hidden ${showCustomTimeInput ? 'max-h-24 opacity-100 mt-4' : 'max-h-0 opacity-0 mt-0'}`}>
-                            <div className="flex justify-center items-center gap-2">
-                                <input
-                                    type="text"
-                                    name="minutes"
-                                    value={customMinutes}
-                                    onChange={handleCustomTimeChange}
-                                    placeholder="MM"
-                                    className="w-20 p-2 text-center text-xl font-bold border-2 border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
-                                    maxLength={2}
-                                    inputMode="numeric"
-                                />
-                                <span className="text-2xl font-bold text-slate-500">:</span>
-                                <input
-                                    type="text"
-                                    name="seconds"
-                                    value={customSeconds}
-                                    onChange={handleCustomTimeChange}
-                                    placeholder="SS"
-                                    className="w-20 p-2 text-center text-xl font-bold border-2 border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
-                                    maxLength={2}
-                                    inputMode="numeric"
-                                />
-                            </div>
-                        </div>
-                    </Section>
-                </>
+                        ))}
+                    </div>
+                    <p className="text-center text-slate-500 dark:text-slate-400 mt-4 italic text-sm">
+                        Note: To be eligible for the leaderboard, you must select all numbers.
+                    </p>
+                    {needsAtLeastTen && (
+                        <p className="text-center text-red-500 dark:text-red-400 mt-4 font-semibold animate-fade-in">
+                            Please select at least 10 numbers for this operation.
+                        </p>
+                    )}
+                    <div className="mt-4 flex justify-center">
+                        <button onClick={selectAll} className="px-6 py-2 font-semibold text-white bg-slate-600 dark:bg-slate-700 rounded-full hover:bg-slate-700 dark:hover:bg-slate-600 transition-colors shadow-sm">
+                            {selectedNumbers.length === numbers.length ? 'Deselect All' : 'Select All'}
+                        </button>
+                    </div>
+                </Section>
             )}
+
+            <Section title="Set a Time Limit" step={isConversionMode ? 2 : 3}>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {timeOptions.map(option => (
+                        <button key={option.value} onClick={() => handleTimeSelection(option.value)} className={`px-4 py-2 font-semibold rounded-lg transition-all duration-200 border-2 ${timeLimit === option.value && !showCustomTimeInput ? 'bg-blue-600 text-white border-blue-600' : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700 hover:border-blue-500 dark:hover:border-blue-500'}`}>
+                            {option.label}
+                        </button>
+                    ))}
+                    <button onClick={handleCustomTimeToggle} className={`px-4 py-2 font-semibold rounded-lg transition-all duration-200 border-2 ${showCustomTimeInput ? 'bg-blue-600 text-white border-blue-600' : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700 hover:border-blue-500 dark:hover:border-blue-500'}`}>
+                        Custom
+                    </button>
+                </div>
+                <div className={`transition-all duration-300 ease-in-out overflow-hidden ${showCustomTimeInput ? 'max-h-24 opacity-100 mt-4' : 'max-h-0 opacity-0 mt-0'}`}>
+                    <div className="flex justify-center items-center gap-2">
+                        <input
+                            type="text"
+                            name="minutes"
+                            value={customMinutes}
+                            onChange={handleCustomTimeChange}
+                            placeholder="MM"
+                            className="w-20 p-2 text-center text-xl font-bold border-2 border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
+                            maxLength={2}
+                            inputMode="numeric"
+                        />
+                        <span className="text-2xl font-bold text-slate-500">:</span>
+                        <input
+                            type="text"
+                            name="seconds"
+                            value={customSeconds}
+                            onChange={handleCustomTimeChange}
+                            placeholder="SS"
+                            className="w-20 p-2 text-center text-xl font-bold border-2 border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
+                            maxLength={2}
+                            inputMode="numeric"
+                        />
+                    </div>
+                </div>
+            </Section>
         </div>
 
         <div className="mt-12 text-center">
