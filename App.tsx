@@ -6,6 +6,8 @@ import { SelectionScreen } from './components/SelectionScreen';
 import { QuizScreen } from './components/QuizScreen';
 import { ResultsScreen } from './components/ResultsScreen';
 import { conversions } from './lib/conversions';
+import { Analytics } from "@vercel/analytics/react";
+import { SpeedInsights } from "@vercel/speed-insights/react";
 
 const App: React.FC = () => {
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -116,9 +118,32 @@ const App: React.FC = () => {
     return newQuestions;
   }, []);
 
+  const handleStartQuiz = useCallback(
+    (operation: Operation, selectedNumbers: number[], timeLimit: number) => {
+      setQuizSettings({ operation, selectedNumbers, timeLimit });
+      const generated = generateQuestions(operation, selectedNumbers);
+      setQuestions(generated);
+      setUserAnswers(Array(10).fill(''));
+      setTimeTaken(0);
+      // navigate('/quiz'); // This is handled by the wrapper component
+    },
+    [generateQuestions, /*navigate,*/ setQuestions, setQuizSettings, setTimeTaken, setUserAnswers]
+  );
+
+  const handleShowResults = (answers: string[], time: number) => {
+    setUserAnswers(answers);
+    setTimeTaken(time);
+    // navigate('/results'); // This is handled by the wrapper component
+  };
+
+  const handleRestart = () => {
+    // navigate('/'); // This is handled by the wrapper component
+    // This function can be used to reset state if needed in the future
+  };
+
   return (
     <BrowserRouter>
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center p-4 transition-colors duration-300">
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col items-center justify-center p-4 transition-colors duration-300">
         <main>
           <Routes>
             <Route
@@ -133,6 +158,7 @@ const App: React.FC = () => {
                   setUserAnswers={setUserAnswers}
                   setTimeTaken={setTimeTaken}
                   setQuizSettings={setQuizSettings}
+                  handleStartQuiz={handleStartQuiz}
                 />
               }
             />
@@ -144,6 +170,7 @@ const App: React.FC = () => {
                   quizSettings={quizSettings}
                   setUserAnswers={setUserAnswers}
                   setTimeTaken={setTimeTaken}
+                  handleShowResults={handleShowResults}
                 />
               }
             />
@@ -155,11 +182,14 @@ const App: React.FC = () => {
                   userAnswers={userAnswers}
                   timeTaken={timeTaken}
                   quizSettings={quizSettings}
+                  handleRestart={handleRestart}
                 />
               }
             />
           </Routes>
         </main>
+        <Analytics />
+        <SpeedInsights />
       </div>
     </BrowserRouter>
   );
@@ -174,6 +204,7 @@ interface SelectionScreenWrapperProps {
   setUserAnswers: (answers: string[]) => void;
   setTimeTaken: (time: number) => void;
   setQuizSettings: (settings: any) => void;
+  handleStartQuiz: (operation: Operation, selectedNumbers: number[], timeLimit: number) => void;
 }
 
 const SelectionScreenWrapper: React.FC<SelectionScreenWrapperProps> = ({
@@ -185,10 +216,11 @@ const SelectionScreenWrapper: React.FC<SelectionScreenWrapperProps> = ({
   setUserAnswers,
   setTimeTaken,
   setQuizSettings,
+  handleStartQuiz,
 }) => {
   const navigate = useNavigate();
 
-  const handleStartQuiz = useCallback(
+  const handleStartQuizClick = useCallback(
     (operation: Operation, selectedNumbers: number[], timeLimit: number) => {
       setQuizSettings({ operation, selectedNumbers, timeLimit });
       const generated = generateQuestions(operation, selectedNumbers);
@@ -202,7 +234,7 @@ const SelectionScreenWrapper: React.FC<SelectionScreenWrapperProps> = ({
 
   return (
     <SelectionScreen
-      onStartQuiz={handleStartQuiz}
+      onStartQuiz={handleStartQuizClick}
       initialSettings={initialSettings}
       isDarkMode={isDarkMode}
       toggleDarkMode={toggleDarkMode}
@@ -215,6 +247,7 @@ interface QuizScreenWrapperProps {
   quizSettings: { timeLimit: number } | null;
   setUserAnswers: (answers: string[]) => void;
   setTimeTaken: (time: number) => void;
+  handleShowResults: (answers: string[], time: number) => void;
 }
 
 const QuizScreenWrapper: React.FC<QuizScreenWrapperProps> = ({
@@ -222,6 +255,7 @@ const QuizScreenWrapper: React.FC<QuizScreenWrapperProps> = ({
   quizSettings,
   setUserAnswers,
   setTimeTaken,
+  handleShowResults,
 }) => {
   const navigate = useNavigate();
 
@@ -236,6 +270,7 @@ const QuizScreenWrapper: React.FC<QuizScreenWrapperProps> = ({
   const handleFinishQuiz = (answers: string[], time: number) => {
     setUserAnswers(answers);
     setTimeTaken(time);
+    handleShowResults(answers, time);
     navigate('/results');
   };
 
@@ -258,10 +293,12 @@ const ResultsScreenWrapper: React.FC<{
     userAnswers: string[];
     timeTaken: number;
     quizSettings: any;
-}> = ({ questions, userAnswers, timeTaken, quizSettings }) => {
+    handleRestart: () => void;
+}> = ({ questions, userAnswers, timeTaken, quizSettings, handleRestart }) => {
     const navigate = useNavigate();
 
-    const handleRestart = () => {
+    const handleRestartClick = () => {
+        handleRestart();
         navigate('/');
     };
     
@@ -281,7 +318,7 @@ const ResultsScreenWrapper: React.FC<{
             questions={questions}
             userAnswers={userAnswers}
             timeTaken={timeTaken}
-            onRestart={handleRestart}
+            onRestart={handleRestartClick}
             quizSettings={quizSettings}
         />
     );

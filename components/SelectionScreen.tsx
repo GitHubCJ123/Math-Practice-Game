@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import type { Operation, HighScores, HighScore, AllQuizStats, QuizStats } from '../types';
 import { StarIcon, SunIcon, MoonIcon, ChartBarIcon, BullseyeIcon, ListBulletIcon, ClockIcon, TrashIcon } from './icons';
+import { Leaderboard } from './Leaderboard';
 
 interface SelectionScreenProps {
   onStartQuiz: (operation: Operation, selectedNumbers: number[], timeLimit: number) => void;
@@ -155,6 +156,79 @@ const StatisticsDisplay: React.FC = () => {
         </div>
     );
 };
+
+const GlobalLeaderboard: React.FC = () => {
+  const [activeTab, setActiveTab] = useState<Operation>('multiplication');
+  const [scores, setScores] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const operations: Operation[] = [
+    'multiplication', 'division', 'squares', 'square-roots', 
+    'fraction-to-decimal', 'decimal-to-fraction'
+  ];
+
+  useEffect(() => {
+    const fetchScores = async () => {
+      setIsLoading(true);
+      try {
+        const response = await fetch(`/api/get-leaderboard?operationType=${activeTab}`);
+        if (!response.ok) {
+          throw new Error('Failed to fetch scores');
+        }
+        const data = await response.json();
+        setScores(data);
+      } catch (error) {
+        console.error("Error fetching leaderboard:", error);
+        setScores([]); // Clear scores on error
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchScores();
+  }, [activeTab]);
+
+  const getOperationDisplayName = (op: Operation) => {
+    switch (op) {
+      case 'multiplication': return 'Multiplication';
+      case 'division': return 'Division';
+      case 'squares': return 'Squares';
+      case 'square-roots': return 'Square Roots';
+      case 'fraction-to-decimal': return 'Fraction → Decimal';
+      case 'decimal-to-fraction': return 'Decimal → Fraction';
+      default: return '';
+    }
+  };
+
+  return (
+    <div className="mt-10 p-6 bg-slate-100 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700 animate-fade-in">
+      <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-4 text-center">🏆 Global Leaderboards</h2>
+      <div className="flex justify-center mb-4 border-b border-gray-200 dark:border-gray-700">
+        <div className="-mb-px flex flex-wrap justify-center gap-x-4" aria-label="Tabs">
+          {operations.map((op) => (
+            <button
+              key={op}
+              onClick={() => setActiveTab(op)}
+              className={`${
+                activeTab === op
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+              } whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm transition-colors`}
+            >
+              {getOperationDisplayName(op)}
+            </button>
+          ))}
+        </div>
+      </div>
+      <Leaderboard 
+        title={getOperationDisplayName(activeTab)} 
+        scores={scores} 
+        isLoading={isLoading} 
+      />
+    </div>
+  );
+};
+
 
 const HighScoresDisplay: React.FC = () => {
   const [highScores, setHighScores] = useState<HighScores | null>(null);
@@ -452,7 +526,7 @@ export const SelectionScreen: React.FC<SelectionScreenProps> = ({ onStartQuiz, i
         </div>
         
         {showStats && <StatisticsDisplay />}
-        <HighScoresDisplay />
+        <GlobalLeaderboard />
     </div>
   );
 };

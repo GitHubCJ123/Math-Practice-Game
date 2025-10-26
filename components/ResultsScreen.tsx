@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { OpenAIClient, AzureKeyCredential } from '@azure/openai';
 import type { Operation, Question, HighScores, AllQuizStats } from '../types';
-import { CheckCircleIcon, XCircleIcon, StarIcon } from './icons';
+import { CheckCircleIcon, XCircleIcon, StarIcon, TrophyIcon } from './icons';
 import { feedbackMessages } from '../lib/feedbackMessages';
 
 let ai: OpenAIClient | null = null;
@@ -126,6 +126,11 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({ questions, userAns
   const [feedback, setFeedback] = useState('');
   const [isNewHighScore, setIsNewHighScore] = useState(false);
 
+  const [isTopScore, setIsTopScore] = useState<boolean | null>(null);
+  const [playerName, setPlayerName] = useState('');
+  const [submissionStatus, setSubmissionStatus] = useState<'idle' | 'submitting' | 'submitted' | 'error'>('idle');
+  const [errorMessage, setErrorMessage] = useState('');
+
   const { operation, selectedNumbers } = quizSettings;
 
   type ExplanationState = {
@@ -150,6 +155,39 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({ questions, userAns
   });
 
   const correctCount = results.filter(r => r.isCorrect).length;
+
+  useEffect(() => {
+    // Check if score is a top score
+    const checkScore = async () => {
+      const isConversionMode = operation === 'fraction-to-decimal' || operation === 'decimal-to-fraction';
+      
+      const numbersForOperation = operation === 'squares' || operation === 'square-roots'
+        ? Array.from({ length: 20 }, (_, i) => i + 1)
+        : Array.from({ length: 12 }, (_, i) => i + 1);
+
+      const allNumbersSelected = selectedNumbers.length === numbersForOperation.length;
+      
+      // Eligibility for leaderboard: perfect score and all numbers selected (for non-conversion modes)
+      const isEligible = correctCount === questions.length && 
+                         questions.length > 0 && 
+                         (isConversionMode || allNumbersSelected);
+
+      if (isEligible) {
+        const scoreInMs = Math.round(timeTaken * 1000);
+        try {
+          const response = await fetch(`/api/check-score?operationType=${operation}&score=${scoreInMs}`);
+          const data = await response.json();
+          setIsTopScore(data.isTopScore);
+        } catch (error) {
+          console.error("Failed to check score:", error);
+          setIsTopScore(false);
+        }
+      } else {
+        setIsTopScore(false);
+      }
+    };
+    checkScore();
+  }, [correctCount, questions.length, timeTaken, operation, selectedNumbers]);
 
   useEffect(() => {
     const message = getFeedbackMessage(correctCount, questions.length, timeTaken);
@@ -213,6 +251,38 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({ questions, userAns
 
   }, [correctCount, timeTaken, operation, selectedNumbers]);
 
+  const handleSubmitScore = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!playerName.trim() || submissionStatus === 'submitting') return;
+
+    setSubmissionStatus('submitting');
+    setErrorMessage('');
+    const scoreInMs = Math.round(timeTaken * 1000);
+
+    try {
+      const response = await fetch('/api/submit-score', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          playerName: playerName.trim(),
+          score: scoreInMs,
+          operationType: operation,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'An error occurred.');
+      }
+
+      setSubmissionStatus('submitted');
+    } catch (error) {
+      setSubmissionStatus('error');
+      setErrorMessage(error.message);
+    }
+  };
+
   const handleExplain = async (index: number) => {
     const question = questions[index];
     if (!question || explanations[index]?.isLoading || explanations[index]?.text) return;
@@ -255,7 +325,53 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({ questions, userAns
             <p className="text-2xl font-bold text-slate-700 dark:text-slate-200">You scored <span className="text-green-600 dark:text-green-400">{correctCount} / {questions.length}</span></p>
             <p className="text-lg text-slate-500 dark:text-slate-400 mt-1">Total time taken: <span className="font-semibold">{formatTime(timeTaken)}</span></p>
         </div>
+
+        {isTopScore && submissionStatus !== 'submitted' && (
+          <div className="my-6 p-6 bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-500 rounded-2xl animate-fade-in text-center relative">
+            <button 
+              onClick={() => setIsTopScore(false)}
+              className="absolute top-3 right-3 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
+              aria-label="Close submission form"
+            >
+              <XCircleIcon className="w-6 h-6" />
+            </button>
+            <div className="flex items-center justify-center gap-3 mb-3">
+              <TrophyIcon className="w-8 h-8 text-blue-500" />
+              <h2 className="text-2xl font-bold text-blue-800 dark:text-blue-300">You're in the Top 10!</h2>
+            </div>
+            <p className="text-blue-700 dark:text-blue-400 mb-1">Enter your name to be added to the global leaderboard.</p>
+            <p className="text-sm text-blue-600 dark:text-blue-500 mb-4">(First name or nickname recommended)</p>
+            <form onSubmit={handleSubmitScore} className="flex flex-col sm:flex-row items-center justify-center gap-3">
+              <input 
+                type="text"
+                value={playerName}
+                onChange={(e) => setPlayerName(e.target.value)}
+                placeholder="Enter your name"
+                maxLength={50}
+                required
+                className="w-full sm:w-64 px-4 py-2 text-lg border-2 border-slate-300 dark:border-slate-600 rounded-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
+              />
+              <button 
+                type="submit"
+                disabled={submissionStatus === 'submitting'}
+                className="w-full sm:w-auto px-8 py-2 text-lg font-bold text-white bg-blue-600 rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {submissionStatus === 'submitting' ? 'Submitting...' : 'Submit Score'}
+              </button>
+            </form>
+            {submissionStatus === 'error' && <p className="text-red-500 mt-3">{errorMessage}</p>}
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-4 italic">
+              Note: No bad words. If you're already on the leaderboard, use the same name to replace your old score (only if this one is better).
+            </p>
+          </div>
+        )}
         
+        {submissionStatus === 'submitted' && (
+          <div className="my-6 p-4 bg-green-100 dark:bg-green-500/10 border-2 border-green-500 rounded-lg text-center animate-fade-in">
+            <p className="font-bold text-green-700 dark:text-green-300">Your score has been submitted to the leaderboard!</p>
+          </div>
+        )}
+
         <div className="space-y-3">
             {results.map((result, index) => (
                 <div key={index} className={`p-4 rounded-lg border-l-4 ${result.isCorrect ? 'bg-green-50 dark:bg-green-500/10 border-green-500' : 'bg-red-50 dark:bg-red-500/10 border-red-500'}`}>
