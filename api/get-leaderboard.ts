@@ -18,6 +18,7 @@ const dbConfig: ConnectionConfiguration = {
 };
 
 export default async function handler(req, res) {
+  console.log('[api/get-leaderboard] Function invoked.');
   if (req.method !== 'GET') {
     return res.status(405).json({ message: 'Method Not Allowed' });
   }
