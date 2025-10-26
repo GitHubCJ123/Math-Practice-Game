@@ -41,9 +41,12 @@ export default async function handler(req, res) {
     return res.status(400).json({ message: 'operationType and a numeric score are required.' });
   }
 
+  console.log(`[api/submit-score] Checking profanity for: "${playerName}"`);
   if (isProfane(playerName)) {
+    console.log(`[api/submit-score] Profanity DETECTED for: "${playerName}"`);
     return res.status(400).json({ message: 'Inappropriate name detected. Please choose another.' });
   }
+  console.log(`[api/submit-score] Profanity check PASSED for: "${playerName}"`);
 
   const connection = new Connection(dbConfig);
 
