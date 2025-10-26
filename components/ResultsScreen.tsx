@@ -361,7 +361,7 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({ questions, userAns
             </form>
             {submissionStatus === 'error' && <p className="text-red-500 mt-3">{errorMessage}</p>}
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-4 italic">
-              Note: No bad words. If you're already on the leaderboard, use the same name to replace your old score (only if this one is better).
+              If you're already on the leaderboard, use the same name to replace your old score (only if this one is better).
             </p>
           </div>
         )}
