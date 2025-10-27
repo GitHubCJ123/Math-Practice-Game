@@ -52,7 +52,7 @@ export default async function handler(req, res) {
       const totalScores = rows[0][0].value;
       const betterScores = rows[0][1].value;
 
-      const isTopScore = totalScores < 10 || betterScores < 10;
+      const isTopScore = totalScores < 5 || betterScores < 5;
 
       res.status(200).json({ isTopScore });
       connection.close();

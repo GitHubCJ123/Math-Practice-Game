@@ -72,7 +72,7 @@ export const QuizScreen: React.FC<QuizScreenProps> = ({ questions, timeLimit, on
     }
     const intervalId = setInterval(() => {
       setElapsedTime(prev => {
-        const newElapsedTime = prev + 1;
+        const newElapsedTime = prev + 0.01; // Update every 10ms for smoother timer
         if (timeLimit > 0 && newElapsedTime >= timeLimit) {
           clearInterval(intervalId);
           setTimerRunning(false);
@@ -84,7 +84,7 @@ export const QuizScreen: React.FC<QuizScreenProps> = ({ questions, timeLimit, on
         }
         return newElapsedTime;
       });
-    }, 1000);
+    }, 10); // Interval of 10ms
     return () => clearInterval(intervalId);
      // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timerRunning, timeLimit, onFinishQuiz]);
@@ -122,10 +122,14 @@ export const QuizScreen: React.FC<QuizScreenProps> = ({ questions, timeLimit, on
   };
 
   const formatTime = (seconds: number) => {
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
-    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+    return seconds.toFixed(3);
   };
+
+  const formatCountdownTime = (seconds: number) => {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = Math.ceil(seconds % 60);
+    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+  }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -165,8 +169,9 @@ export const QuizScreen: React.FC<QuizScreenProps> = ({ questions, timeLimit, on
                 <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-800 dark:text-white">Quiz in Progress</h1>
                 <div className={`flex items-center gap-2 text-lg font-bold p-3 rounded-full bg-slate-100 dark:bg-slate-800 transition-colors duration-300 ${isTimeLow ? 'text-red-600 dark:text-red-500 animate-pulse' : 'text-slate-800 dark:text-slate-200'}`}>
                     <ClockIcon className="w-6 h-6"/>
-                    <span>{formatTime(elapsedTime)}</span>
-                    {timeLimit > 0 && <span className="text-slate-500 dark:text-slate-400"> / {formatTime(timeLimit)}</span>}
+                    <span>
+                      {timeLimit > 0 ? formatCountdownTime(remainingTime) : formatTime(elapsedTime)}
+                    </span>
                 </div>
             </div>
             {questions[0]?.operation === 'fraction-to-decimal' && (

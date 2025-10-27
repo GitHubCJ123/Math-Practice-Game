@@ -38,7 +38,7 @@ export default async function handler(req, res) {
     }
 
     const sql = `
-      SELECT TOP 10 PlayerName, Score
+      SELECT TOP 5 PlayerName, Score
       FROM LeaderboardScores
       WHERE OperationType = @operationType
       ORDER BY Score ASC;

@@ -337,7 +337,7 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({ questions, userAns
             </button>
             <div className="flex items-center justify-center gap-3 mb-3">
               <TrophyIcon className="w-8 h-8 text-blue-500" />
-              <h2 className="text-2xl font-bold text-blue-800 dark:text-blue-300">You're in the Top 10!</h2>
+              <h2 className="text-2xl font-bold text-blue-800 dark:text-blue-300">You're in the Top 5!</h2>
             </div>
             <p className="text-blue-700 dark:text-blue-400 mb-1">Enter your name to be added to the global leaderboard.</p>
             <p className="text-sm text-blue-600 dark:text-blue-500 mb-4">(First name or nickname recommended)</p>
