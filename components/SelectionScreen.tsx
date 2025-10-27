@@ -235,8 +235,8 @@ const GlobalLeaderboard: React.FC = () => {
 
   return (
     <div className="mt-10 p-6 bg-slate-100 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700 animate-fade-in">
-      <div className="flex justify-between items-start mb-4">
-        <div className="text-center sm:text-left">
+      <div className="flex flex-col items-center text-center mb-4">
+        <div>
           <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 inline-flex items-center gap-2">
             🏆 Global Leaderboards
             <span className="text-xs font-semibold uppercase text-white bg-blue-500 px-2 py-0.5 rounded-full">Beta</span>
@@ -245,9 +245,9 @@ const GlobalLeaderboard: React.FC = () => {
             This leaderboard is in beta. Results may be incorrect as it's still in testing. Full release on November 1st.
           </p>
         </div>
-        <div className="flex-shrink-0 ml-4">
-          <div className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-1 text-center">Resets In</div>
-          <div className="flex gap-2 text-center text-blue-600 dark:text-blue-400">
+        <div className="mt-4">
+          <div className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-1">Resets In</div>
+          <div className="flex gap-2 justify-center text-blue-600 dark:text-blue-400">
             <div>
                 <div className="font-bold text-lg tabular-nums">{String(timeLeft.days).padStart(2, '0')}</div>
                 <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">Days</div>
@@ -265,6 +265,7 @@ const GlobalLeaderboard: React.FC = () => {
                 <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">Secs</div>
             </div>
           </div>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">The leaderboard resets every month.</p>
         </div>
       </div>
       <div className="flex justify-center mb-4 border-b border-gray-200 dark:border-gray-700">
