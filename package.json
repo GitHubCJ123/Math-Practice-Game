@@ -17,6 +17,7 @@
     "@vercel/speed-insights": "^1.2.0",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
+    "node-cron": "^4.2.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.9.4",

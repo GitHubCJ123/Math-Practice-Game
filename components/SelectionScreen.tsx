@@ -162,10 +162,43 @@ const GlobalLeaderboard: React.FC = () => {
   const [scores, setScores] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
+  const [timeLeft, setTimeLeft] = useState({
+    days: 0,
+    hours: 0,
+    minutes: 0,
+    seconds: 0,
+  });
+
   const operations: Operation[] = [
     'multiplication', 'division', 'squares', 'square-roots', 
     'fraction-to-decimal', 'decimal-to-fraction'
   ];
+
+  useEffect(() => {
+    const timerId = setInterval(() => {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = now.getMonth();
+        // Last day of current month, at 23:59:59
+        const endDate = new Date(year, month + 1, 0, 23, 59, 59);
+
+        const diff = endDate.getTime() - now.getTime();
+
+        if (diff <= 0) {
+            setTimeLeft({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+            return;
+        }
+
+        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+        const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+        const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+
+        setTimeLeft({ days, hours, minutes, seconds });
+    }, 1000);
+
+    return () => clearInterval(timerId);
+  }, []);
 
   useEffect(() => {
     const fetchScores = async () => {
@@ -202,14 +235,37 @@ const GlobalLeaderboard: React.FC = () => {
 
   return (
     <div className="mt-10 p-6 bg-slate-100 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700 animate-fade-in">
-      <div className="text-center mb-4">
-        <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 inline-flex items-center gap-2">
-          🏆 Global Leaderboards
-          <span className="text-xs font-semibold uppercase text-white bg-blue-500 px-2 py-0.5 rounded-full">Beta</span>
-        </h2>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-          This leaderboard is in beta. Results may be incorrect as it's still in testing. Full release on November 1st.
-        </p>
+      <div className="flex justify-between items-start mb-4">
+        <div className="text-center sm:text-left">
+          <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 inline-flex items-center gap-2">
+            🏆 Global Leaderboards
+            <span className="text-xs font-semibold uppercase text-white bg-blue-500 px-2 py-0.5 rounded-full">Beta</span>
+          </h2>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-xs">
+            This leaderboard is in beta. Results may be incorrect as it's still in testing. Full release on November 1st.
+          </p>
+        </div>
+        <div className="flex-shrink-0 ml-4">
+          <div className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-1 text-center">Resets In</div>
+          <div className="flex gap-2 text-center text-blue-600 dark:text-blue-400">
+            <div>
+                <div className="font-bold text-lg tabular-nums">{String(timeLeft.days).padStart(2, '0')}</div>
+                <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">Days</div>
+            </div>
+            <div>
+                <div className="font-bold text-lg tabular-nums">{String(timeLeft.hours).padStart(2, '0')}</div>
+                <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">Hours</div>
+            </div>
+            <div>
+                <div className="font-bold text-lg tabular-nums">{String(timeLeft.minutes).padStart(2, '0')}</div>
+                <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">Mins</div>
+            </div>
+            <div>
+                <div className="font-bold text-lg tabular-nums">{String(timeLeft.seconds).padStart(2, '0')}</div>
+                <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">Secs</div>
+            </div>
+          </div>
+        </div>
       </div>
       <div className="flex justify-center mb-4 border-b border-gray-200 dark:border-gray-700">
         <div className="-mb-px flex flex-wrap justify-center gap-x-4" aria-label="Tabs">
@@ -276,7 +332,7 @@ const HighScoresDisplay: React.FC = () => {
   if (!highScores || Object.keys(highScores).length === 0) {
     return (
         <div className="mt-10 p-6 bg-slate-100 dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 animate-fade-in">
-            <h2 className="text-xl font-bold text-slate-700 dark:text-slate-200 mb-4 text-center">🏆 Hall of Fame</h2>
+            <h2 className="text-xl font-bold text-slate-700 dark:text-slate-200 mb-4 text-center">🏆 Personal Bests</h2>
             <p className="text-center text-slate-500 dark:text-slate-400">No high scores yet. Be the first to set one!</p>
         </div>
     );
@@ -287,7 +343,7 @@ const HighScoresDisplay: React.FC = () => {
   return (
     <div className="mt-10 p-6 bg-slate-100 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700 animate-fade-in">
       <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100">🏆 Hall of Fame</h2>
+        <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100">🏆 Personal Bests</h2>
         <button 
             onClick={handleClearHighScores}
             className={`flex items-center gap-1.5 px-3 py-1 text-sm font-semibold rounded-full transition-colors ${
@@ -536,6 +592,7 @@ export const SelectionScreen: React.FC<SelectionScreenProps> = ({ onStartQuiz, i
         
         {showStats && <StatisticsDisplay />}
         <GlobalLeaderboard />
+        <HighScoresDisplay />
     </div>
   );
 };

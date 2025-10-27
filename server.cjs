@@ -3,6 +3,7 @@ require('dotenv').config({ path: '.env.local' });
 const express = require('express');
 const cors = require('cors');
 const { Connection, Request, TYPES } = require('tedious');
+const cron = require('node-cron');
 
 const app = express();
 const port = 3001;
@@ -33,6 +34,37 @@ const isProfane = (text) => {
   const words = text.toLowerCase().split(/\s+/);
   return words.some(word => badWords.includes(word));
 };
+
+
+// --- Scheduled Job for Leaderboard Reset ---
+cron.schedule('59 59 23 L * *', () => {
+  console.log('Running cron job to reset leaderboard...');
+  const connection = new Connection(dbConfig);
+
+  connection.on('connect', (err) => {
+    if (err) {
+      console.error('Cron job DB connection error:', err);
+      return;
+    }
+
+    const sql = 'DELETE FROM LeaderboardScores;';
+    const request = new Request(sql, (err) => {
+      if (err) {
+        console.error('Cron job leaderboard reset error:', err);
+      } else {
+        console.log('Leaderboard has been reset successfully.');
+      }
+      connection.close();
+    });
+
+    connection.execSql(request);
+  });
+
+  connection.connect();
+}, {
+  scheduled: true,
+  timezone: "UTC"
+});
 
 
 // --- API Endpoints ---
