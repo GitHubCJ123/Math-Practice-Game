@@ -35,32 +35,48 @@ const isProfane = (text) => {
   return words.some(word => badWords.includes(word));
 };
 
+const containsLink = (text) => {
+  // Regular expression to detect common URL patterns, case-insensitively.
+  // This checks for http/https, www., or formats like "example.com".
+  const linkPattern = /(https?:\/\/|www\.)|\w+\.(com|org|net|io|dev|app|xyz|gg|co|info|biz|ru|us|uk|ca)\b/i;
+  return linkPattern.test(text);
+};
+
 
 // --- Scheduled Job for Leaderboard Reset ---
-cron.schedule('59 59 23 L * *', () => {
-  console.log('Running cron job to reset leaderboard...');
-  const connection = new Connection(dbConfig);
+// Schedule to run daily at 23:59:59 UTC. The function will check if it's the last day of the month.
+cron.schedule('59 59 23 * * *', () => {
+  const now = new Date();
+  const tomorrow = new Date(now);
+  tomorrow.setDate(now.getDate() + 1);
 
-  connection.on('connect', (err) => {
-    if (err) {
-      console.error('Cron job DB connection error:', err);
-      return;
-    }
+  // If tomorrow's month is different, then today is the last day of the month.
+  if (now.getMonth() !== tomorrow.getMonth()) {
+    console.log('It is the last day of the month. Running cron job to reset leaderboard...');
+    
+    const connection = new Connection(dbConfig);
 
-    const sql = 'DELETE FROM LeaderboardScores;';
-    const request = new Request(sql, (err) => {
+    connection.on('connect', (err) => {
       if (err) {
-        console.error('Cron job leaderboard reset error:', err);
-      } else {
-        console.log('Leaderboard has been reset successfully.');
+        console.error('Cron job DB connection error:', err);
+        return;
       }
-      connection.close();
+
+      const sql = 'DELETE FROM LeaderboardScores;';
+      const request = new Request(sql, (err) => {
+        if (err) {
+          console.error('Cron job leaderboard reset error:', err);
+        } else {
+          console.log('Leaderboard has been reset successfully.');
+        }
+        connection.close();
+      });
+
+      connection.execSql(request);
     });
 
-    connection.execSql(request);
-  });
-
-  connection.connect();
+    connection.connect();
+  }
 }, {
   scheduled: true,
   timezone: "UTC"
@@ -170,6 +186,11 @@ app.post('/api/submit-score', (req, res) => {
   // --- Profanity Filter ---
   if (isProfane(playerName)) {
     return res.status(400).json({ message: 'Inappropriate name detected. Please choose another.' });
+  }
+
+  // --- Link Filter ---
+  if (containsLink(playerName)) {
+    return res.status(400).json({ message: 'Usernames cannot contain links. Please choose another.' });
   }
 
   const connection = new Connection(dbConfig);
