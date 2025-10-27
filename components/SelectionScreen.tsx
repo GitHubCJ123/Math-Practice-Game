@@ -202,7 +202,15 @@ const GlobalLeaderboard: React.FC = () => {
 
   return (
     <div className="mt-10 p-6 bg-slate-100 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700 animate-fade-in">
-      <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-4 text-center">🏆 Global Leaderboards</h2>
+      <div className="text-center mb-4">
+        <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 inline-flex items-center gap-2">
+          🏆 Global Leaderboards
+          <span className="text-xs font-semibold uppercase text-white bg-blue-500 px-2 py-0.5 rounded-full">Beta</span>
+        </h2>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+          This leaderboard is in beta. Results may be incorrect as it's still in testing. Full release on November 1st.
+        </p>
+      </div>
       <div className="flex justify-center mb-4 border-b border-gray-200 dark:border-gray-700">
         <div className="-mb-px flex flex-wrap justify-center gap-x-4" aria-label="Tabs">
           {operations.map((op) => (
