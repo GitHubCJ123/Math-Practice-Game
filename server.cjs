@@ -3,7 +3,6 @@ require('dotenv').config({ path: '.env.local' });
 const express = require('express');
 const cors = require('cors');
 const { Connection, Request, TYPES } = require('tedious');
-const cron = require('node-cron');
 
 const app = express();
 const port = 3001;
@@ -41,46 +40,6 @@ const containsLink = (text) => {
   const linkPattern = /(https?:\/\/|www\.)|\w+\.(com|org|net|io|dev|app|xyz|gg|co|info|biz|ru|us|uk|ca)\b/i;
   return linkPattern.test(text);
 };
-
-
-// --- Scheduled Job for Leaderboard Reset ---
-// Schedule to run daily at 23:59:59 UTC. The function will check if it's the last day of the month.
-cron.schedule('59 59 23 * * *', () => {
-  const now = new Date();
-  const tomorrow = new Date(now);
-  tomorrow.setDate(now.getDate() + 1);
-
-  // If tomorrow's month is different, then today is the last day of the month.
-  if (now.getMonth() !== tomorrow.getMonth()) {
-    console.log('It is the last day of the month. Running cron job to reset leaderboard...');
-    
-    const connection = new Connection(dbConfig);
-
-    connection.on('connect', (err) => {
-      if (err) {
-        console.error('Cron job DB connection error:', err);
-        return;
-      }
-
-      const sql = 'DELETE FROM LeaderboardScores;';
-      const request = new Request(sql, (err) => {
-        if (err) {
-          console.error('Cron job leaderboard reset error:', err);
-        } else {
-          console.log('Leaderboard has been reset successfully.');
-        }
-        connection.close();
-      });
-
-      connection.execSql(request);
-    });
-
-    connection.connect();
-  }
-}, {
-  scheduled: true,
-  timezone: "UTC"
-});
 
 
 // --- API Endpoints ---
@@ -250,23 +209,11 @@ app.post('/api/submit-score', (req, res) => {
             if (err) return connection.rollbackTransaction(() => res.status(500).json({ message: "DB Error", error: err.message }));
             
             // After inserting, trim the leaderboard to the top 10
-            const trimSql = `
-              WITH CTE AS (
-                SELECT Id, ROW_NUMBER() OVER (ORDER BY Score ASC) as rn 
-                FROM LeaderboardScores WHERE OperationType = @operationType
-              )
-              DELETE FROM LeaderboardScores WHERE Id IN (SELECT Id FROM CTE WHERE rn > 10);
-            `;
-            const trimRequest = new Request(trimSql, (err) => {
-               if (err) return connection.rollbackTransaction(() => res.status(500).json({ message: "DB Error", error: err.message }));
-               connection.commitTransaction(err => {
-                  if (err) return connection.rollbackTransaction(() => res.status(500).json({ message: "DB Error", error: err.message }));
-                  res.status(201).json({ message: 'Score submitted successfully!' });
-                  connection.close();
-               });
+            connection.commitTransaction(err => {
+              if (err) return connection.rollbackTransaction(() => res.status(500).json({ message: "DB Error", error: err.message }));
+              res.status(201).json({ message: 'Score submitted successfully!' });
+              connection.close();
             });
-            trimRequest.addParameter('operationType', TYPES.NVarChar, operationType);
-            connection.execSql(trimRequest);
           });
           insertRequest.addParameter('playerName', TYPES.NVarChar, playerName);
           insertRequest.addParameter('score', TYPES.Int, scoreNum);

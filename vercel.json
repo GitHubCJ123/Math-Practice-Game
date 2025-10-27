@@ -1,8 +1,9 @@
 {
-  "rewrites": [
+  "rewrites": [{ "source": "/api/:match*", "destination": "/api/:match*" }],
+  "crons": [
     {
-      "source": "/(.*)",
-      "destination": "/index.html"
+      "path": "/api/archive-scores",
+      "schedule": "0 5 1 * *"
     }
   ]
 }

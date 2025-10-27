@@ -18,15 +18,21 @@ const dbConfig: ConnectionConfiguration = {
 };
 
 export default async function handler(req, res) {
-  console.log('[api/get-leaderboard] Function invoked.');
   if (req.method !== 'GET') {
     return res.status(405).json({ message: 'Method Not Allowed' });
   }
 
-  const { operationType } = req.query;
+  const { operationType, year, month } = req.query;
 
-  if (!operationType || typeof operationType !== 'string') {
-    return res.status(400).json({ message: 'operationType query parameter is required' });
+  if (!operationType || typeof operationType !== 'string' || !year || !month) {
+    return res.status(400).json({ message: 'operationType, year, and month query parameters are required' });
+  }
+
+  const yearNum = parseInt(year as string, 10);
+  const monthNum = parseInt(month as string, 10);
+
+  if (isNaN(yearNum) || isNaN(monthNum)) {
+    return res.status(400).json({ message: 'year and month must be valid numbers' });
   }
 
   const connection = new Connection(dbConfig);
@@ -38,12 +44,9 @@ export default async function handler(req, res) {
     }
 
     const sql = `
-      SELECT TOP 5 PlayerName, Score
-      FROM LeaderboardScores
-      WHERE 
-        OperationType = @operationType AND
-        MONTH(CreatedAt) = MONTH(GETDATE()) AND
-        YEAR(CreatedAt) = YEAR(GETDATE())
+      SELECT PlayerName, Score
+      FROM HallOfFame
+      WHERE OperationType = @operationType AND Year = @year AND Month = @month
       ORDER BY Score ASC;
     `;
 
@@ -52,16 +55,18 @@ export default async function handler(req, res) {
         return res.status(500).json({ message: "Error executing query", error: err.message });
       }
 
-      const leaderboard = rows.map(row => ({
+      const hallOfFame = rows.map(row => ({
         playerName: row[0].value,
         score: row[1].value
       }));
 
-      res.status(200).json(leaderboard);
+      res.status(200).json(hallOfFame);
       connection.close();
     });
 
     request.addParameter('operationType', TYPES.NVarChar, operationType);
+    request.addParameter('year', TYPES.Int, yearNum);
+    request.addParameter('month', TYPES.Int, monthNum);
     connection.execSql(request);
   });
 
