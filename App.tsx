@@ -243,7 +243,7 @@ const SelectionScreenWrapper: React.FC<SelectionScreenWrapperProps> = ({
       setQuestions(generated);
       setUserAnswers(Array(10).fill(''));
       setTimeTaken(0);
-      navigate('/quiz');
+      navigate('/quiz', { replace: true });
     },
     [generateQuestions, navigate, setQuestions, setQuizSettings, setTimeTaken, setUserAnswers]
   );
@@ -287,7 +287,7 @@ const QuizScreenWrapper: React.FC<QuizScreenWrapperProps> = ({
     setUserAnswers(answers);
     setTimeTaken(time);
     handleShowResults(answers, time);
-    navigate('/results');
+    navigate('/results', { replace: true });
   };
 
   if (questions.length === 0) {
