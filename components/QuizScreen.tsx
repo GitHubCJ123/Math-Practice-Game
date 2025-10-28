@@ -37,6 +37,7 @@ export const QuizScreen: React.FC<QuizScreenProps> = ({ questions, timeLimit, on
   const [answers, setAnswers] = useState<string[]>(Array(10).fill(''));
   const [elapsedTime, setElapsedTime] = useState(0);
   const [timerRunning, setTimerRunning] = useState(false);
+  const [quizFinished, setQuizFinished] = useState(false);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const [introStage, setIntroStage] = useState<'ready' | 'set' | 'go' | 'finished'>('ready');
 
@@ -45,6 +46,21 @@ export const QuizScreen: React.FC<QuizScreenProps> = ({ questions, timeLimit, on
   useEffect(() => {
     answersRef.current = answers;
   }, [answers]);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden' && timerRunning && !quizFinished) {
+        setQuizFinished(true); // Prevent multiple submissions
+        onFinishQuiz(answersRef.current, elapsedTime);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [timerRunning, onFinishQuiz, elapsedTime, quizFinished]);
 
   useEffect(() => {
     if (introStage === 'ready') {
@@ -78,7 +94,10 @@ export const QuizScreen: React.FC<QuizScreenProps> = ({ questions, timeLimit, on
           setTimerRunning(false);
           playTimeUpSound();
           setTimeout(() => {
-            onFinishQuiz(answersRef.current, timeLimit);
+            if (!quizFinished) {
+              setQuizFinished(true);
+              onFinishQuiz(answersRef.current, timeLimit);
+            }
           }, 300); // Delay to allow sound to play
           return timeLimit;
         }
@@ -134,7 +153,10 @@ export const QuizScreen: React.FC<QuizScreenProps> = ({ questions, timeLimit, on
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setTimerRunning(false);
-    onFinishQuiz(answers, elapsedTime);
+    if (!quizFinished) {
+      setQuizFinished(true);
+      onFinishQuiz(answers, elapsedTime);
+    }
   };
   
   const getOperationSymbol = (op: Operation) => {
