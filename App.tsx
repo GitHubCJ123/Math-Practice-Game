@@ -136,6 +136,22 @@ const App: React.FC = () => {
     // navigate('/results'); // This is handled by the wrapper component
   };
 
+  // Expose the quiz finisher to the window for Cypress testing
+  if (import.meta.env.VITE_NODE_ENV === 'test') {
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-ignore
+    window.onFinishQuiz = (answers: string[], time: number) => {
+      // In a test context, we need to ensure questions are set for the results screen
+      if (questions.length === 0) {
+        setQuizSettings({ operation: 'multiplication', selectedNumbers: [1,2,3,4,5,6,7,8,9,10,11,12], timeLimit: 0 });
+        setQuestions(generateQuestions('multiplication', [1,2,3,4,5,6,7,8,9,10,11,12]));
+      }
+      handleShowResults(answers, time);
+      // We need a way to navigate in tests. This is a simple solution.
+      setTimeout(() => window.location.pathname = '/results', 100);
+    };
+  }
+
   const handleRestart = () => {
     // navigate('/'); // This is handled by the wrapper component
     // This function can be used to reset state if needed in the future

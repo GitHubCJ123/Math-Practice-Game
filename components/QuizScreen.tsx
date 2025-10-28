@@ -212,6 +212,11 @@ export const QuizScreen: React.FC<QuizScreenProps> = ({ questions, timeLimit, on
                                     className="w-24 p-2 text-center text-2xl font-bold border-2 border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-white dark:bg-slate-900"
                                     maxLength={7}
                                />
+                               {import.meta.env.VITE_NODE_ENV === 'test' && (
+                                <span data-cy={`correct-answer-${index}`} style={{ display: 'none' }}>
+                                    {q.answer}
+                                </span>
+                               )}
                             </div>
                         </div>
                     ))}
