@@ -1,4 +1,9 @@
 {
+  "functions": {
+    "api/**/*.ts": {
+      "memory": 1024
+    }
+  },
   "rewrites": [{ "source": "/api/:match*", "destination": "/api/:match*" }],
   "crons": [
     {

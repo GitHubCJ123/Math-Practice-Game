@@ -4,6 +4,11 @@ import type { Operation, HighScores, HighScore, AllQuizStats, QuizStats } from '
 import { StarIcon, SunIcon, MoonIcon, ChartBarIcon, BullseyeIcon, ListBulletIcon, ClockIcon, TrashIcon } from './icons';
 import { Leaderboard } from './Leaderboard';
 
+interface Score {
+  playerName: string;
+  score: number;
+}
+
 interface SelectionScreenProps {
   onStartQuiz: (operation: Operation, selectedNumbers: number[], timeLimit: number) => void;
   initialSettings?: {
@@ -176,12 +181,12 @@ const operations: Operation[] = [
 ];
 
 const HallOfFameDisplay: React.FC = () => {
-    const [activeTab, setActiveTab] = useState<Operation>('multiplication');
-    const [scores, setScores] = useState([]);
+    const [scores, setScores] = useState<Score[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [availableDates, setAvailableDates] = useState<{ [year: number]: number[] }>({});
     const [selectedYear, setSelectedYear] = useState<number | null>(null);
     const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
+    const [monthlyChampions, setMonthlyChampions] = useState<Partial<Record<Operation, Score | null>>>({});
 
     const months = [
         { value: 1, name: 'January' }, { value: 2, name: 'February' }, { value: 3, name: 'March' },
@@ -221,25 +226,29 @@ const HallOfFameDisplay: React.FC = () => {
             return;
         }
 
-        const fetchHallOfFame = async () => {
+        const fetchAllChampions = async () => {
             setIsLoading(true);
-            try {
-                const response = await fetch(`/api/get-hall-of-fame?operationType=${activeTab}&year=${selectedYear}&month=${selectedMonth}`);
-                if (!response.ok) {
-                    throw new Error('Failed to fetch hall of fame');
+            const champions: Record<Operation, Score | null> = {} as Record<Operation, Score | null>;
+            for (const op of operations) {
+                try {
+                    const response = await fetch(`/api/get-hall-of-fame?operationType=${op}&year=${selectedYear}&month=${selectedMonth}`);
+                    if (response.ok) {
+                        const data = await response.json();
+                        champions[op] = data.length > 0 ? data[0] : null; // Get only the top score
+                    } else {
+                        champions[op] = null;
+                    }
+                } catch (error) {
+                    console.error(`Error fetching hall of fame for ${op}:`, error);
+                    champions[op] = null;
                 }
-                const data = await response.json();
-                setScores(data);
-            } catch (error) {
-                console.error("Error fetching hall of fame:", error);
-                setScores([]);
-            } finally {
-                setIsLoading(false);
             }
+            setMonthlyChampions(champions);
+            setIsLoading(false);
         };
 
-        fetchHallOfFame();
-    }, [activeTab, selectedYear, selectedMonth]);
+        fetchAllChampions();
+    }, [selectedYear, selectedMonth]);
 
     const availableYears = Object.keys(availableDates).map(Number).sort((a, b) => b - a);
     const availableMonthsForYear = selectedYear ? availableDates[selectedYear] : [];
@@ -266,7 +275,7 @@ const HallOfFameDisplay: React.FC = () => {
                     🏛️ Hall of Fame
                 </h2>
                 <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-xs">
-                    View the top 5 players for each operation from previous months.
+                    View the top player for each operation from previous months.
                 </p>
                 <div className="flex justify-center gap-4 my-4">
                     <select
@@ -298,37 +307,69 @@ const HallOfFameDisplay: React.FC = () => {
                     </div>
                 )}
             </div>
-            <div className="flex justify-center mb-4 border-b border-gray-200 dark:border-gray-700">
-                <div className="-mb-px flex flex-wrap justify-center gap-x-4" aria-label="Tabs">
-                    {operations.map((op) => (
-                        <button
-                            key={op}
-                            onClick={() => setActiveTab(op)}
-                            className={`${activeTab === op ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'} whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm transition-colors`}
-                        >
-                            {getOperationDisplayName(op)}
-                        </button>
-                    ))}
+             {isLoading ? (
+                <div className="text-center text-gray-500 dark:text-gray-400">Loading Champions...</div>
+            ) : (
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    {operations.map(op => {
+                        const champion = monthlyChampions[op];
+                        return (
+                            <div key={op} className="p-4 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700 text-center">
+                                <h4 className="font-bold text-blue-600 dark:text-blue-400 capitalize">{getOperationDisplayName(op)}</h4>
+                                {champion ? (
+                                    <>
+                                        <p className="text-lg font-semibold text-slate-800 dark:text-slate-100">{champion.playerName}</p>
+                                        <p className="text-sm text-slate-500 dark:text-slate-400">{(champion.score / 1000).toFixed(3)}s</p>
+                                    </>
+                                ) : (
+                                    <p className="text-sm text-slate-500 dark:text-slate-400">-</p>
+                                )}
+                            </div>
+                        );
+                    })}
                 </div>
-            </div>
-            <Leaderboard
-                title={selectedYear && selectedMonth ? `${getOperationDisplayName(activeTab)} - ${months.find(m => m.value === selectedMonth)?.name} ${selectedYear}` : 'Hall of Fame'}
-                scores={scores}
-                isLoading={isLoading}
-            />
+            )}
         </div>
     );
 };
 
 const GlobalLeaderboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Operation>('multiplication');
-  const [scores, setScores] = useState([]);
+  const [scores, setScores] = useState<Score[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  const operations: Operation[] = [
-    'multiplication', 'division', 'squares', 'square-roots', 
-    'fraction-to-decimal', 'decimal-to-fraction'
-  ];
+  const [timeLeft, setTimeLeft] = useState({
+    days: 0,
+    hours: 0,
+    minutes: 0,
+    seconds: 0,
+  });
+
+  useEffect(() => {
+    const timerId = setInterval(() => {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = now.getMonth();
+        // Last day of current month, at 23:59:59
+        const endDate = new Date(year, month + 1, 0, 23, 59, 59);
+
+        const diff = endDate.getTime() - now.getTime();
+
+        if (diff <= 0) {
+            setTimeLeft({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+            return;
+        }
+
+        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+        const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+        const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+
+        setTimeLeft({ days, hours, minutes, seconds });
+    }, 1000);
+
+    return () => clearInterval(timerId);
+  }, []);
 
   useEffect(() => {
     const fetchScores = async () => {
@@ -374,6 +415,28 @@ const GlobalLeaderboard: React.FC = () => {
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-xs">
             This leaderboard is in beta. Results may be incorrect as it's still in testing. Full release on November 1st.
           </p>
+        </div>
+        <div className="mt-4">
+          <div className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-1">Resets In</div>
+          <div className="flex gap-2 justify-center text-blue-600 dark:text-blue-400">
+            <div>
+                <div className="font-bold text-lg tabular-nums">{String(timeLeft.days).padStart(2, '0')}</div>
+                <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">Days</div>
+            </div>
+            <div>
+                <div className="font-bold text-lg tabular-nums">{String(timeLeft.hours).padStart(2, '0')}</div>
+                <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">Hours</div>
+            </div>
+            <div>
+                <div className="font-bold text-lg tabular-nums">{String(timeLeft.minutes).padStart(2, '0')}</div>
+                <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">Mins</div>
+            </div>
+            <div>
+                <div className="font-bold text-lg tabular-nums">{String(timeLeft.seconds).padStart(2, '0')}</div>
+                <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">Secs</div>
+            </div>
+          </div>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">The leaderboard resets every month.</p>
         </div>
       </div>
       <div className="flex justify-center mb-4 border-b border-gray-200 dark:border-gray-700">
