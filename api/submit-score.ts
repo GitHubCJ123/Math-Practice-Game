@@ -110,7 +110,7 @@ export default async function handler(req, res) {
                 SELECT Id, ROW_NUMBER() OVER (ORDER BY Score ASC) as rn 
                 FROM LeaderboardScores WHERE OperationType = @operationType
               )
-              DELETE FROM LeaderboardScores WHERE Id IN (SELECT Id FROM CTE WHERE rn > 10);
+              DELETE FROM LeaderboardScores WHERE Id IN (SELECT Id FROM CTE WHERE rn > 15);
             `;
             const trimRequest = new Request(trimSql, (err) => {
                if (err) return connection.rollbackTransaction(() => res.status(500).json({ message: "DB Error", error: err.message }));
