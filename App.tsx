@@ -278,7 +278,7 @@ const QuizScreenWrapper: React.FC<QuizScreenWrapperProps> = ({
   useEffect(() => {
     // Redirect to selection if there are no questions, e.g., on page refresh
     if (questions.length === 0) {
-      navigate('/');
+      navigate('/', { replace: true });
     }
   }, [questions, navigate]);
 
@@ -315,13 +315,13 @@ const ResultsScreenWrapper: React.FC<{
 
     const handleRestartClick = () => {
         handleRestart();
-        navigate('/');
+        navigate('/', { replace: true });
     };
     
     useEffect(() => {
         // Redirect if no questions are available (e.g., page refresh on results)
         if (questions.length === 0) {
-            navigate('/');
+            navigate('/', { replace: true });
         }
     }, [questions, navigate]);
 

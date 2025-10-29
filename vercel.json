@@ -4,7 +4,10 @@
       "memory": 1024
     }
   },
-  "rewrites": [{ "source": "/api/:match*", "destination": "/api/:match*" }],
+  "rewrites": [
+    { "source": "/api/:match*", "destination": "/api/:match*" },
+    { "source": "/((?!api/|assets/).*)", "destination": "/index.html" }
+  ],
   "crons": [
     {
       "path": "/api/archive-scores",
