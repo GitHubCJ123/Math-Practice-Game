@@ -40,8 +40,21 @@ export default async function handler(req, res) {
 
     const sql = `
       SELECT 
-        (SELECT COUNT(*) FROM LeaderboardScores WHERE OperationType = @operationType) as totalScores,
-        (SELECT COUNT(*) FROM LeaderboardScores WHERE OperationType = @operationType AND Score < @score) as betterScores;
+        (
+          SELECT COUNT(*) 
+          FROM LeaderboardScores 
+          WHERE OperationType = @operationType
+            AND MONTH(CreatedAt) = MONTH(GETDATE())
+            AND YEAR(CreatedAt) = YEAR(GETDATE())
+        ) as totalScores,
+        (
+          SELECT COUNT(*) 
+          FROM LeaderboardScores 
+          WHERE OperationType = @operationType 
+            AND Score < @score
+            AND MONTH(CreatedAt) = MONTH(GETDATE())
+            AND YEAR(CreatedAt) = YEAR(GETDATE())
+        ) as betterScores;
     `;
 
     const request = new Request(sql, (err, rowCount, rows) => {
