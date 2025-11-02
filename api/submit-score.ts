@@ -74,7 +74,9 @@ export default async function handler(req, res) {
         if (existingScore !== null) { // Player exists
           if (scoreNum < existingScore) { // New score is better
             const updateSql = `
-              UPDATE LeaderboardScores SET Score = @score 
+              UPDATE LeaderboardScores SET 
+                Score = @score,
+                CreatedAt = SYSUTCDATETIME()
               WHERE PlayerName = @playerName COLLATE SQL_Latin1_General_CP1_CI_AS 
               AND OperationType = @operationType;
             `;
@@ -99,15 +101,15 @@ export default async function handler(req, res) {
           }
         } else { // New player
           const insertSql = `
-            INSERT INTO LeaderboardScores (PlayerName, Score, OperationType) 
-            VALUES (@playerName, @score, @operationType);
+            INSERT INTO LeaderboardScores (PlayerName, Score, OperationType, CreatedAt) 
+            VALUES (@playerName, @score, @operationType, SYSUTCDATETIME());
           `;
           const insertRequest = new Request(insertSql, (err) => {
             if (err) return connection.rollbackTransaction(() => res.status(500).json({ message: "DB Error", error: err.message }));
             
             const trimSql = `
               WITH CTE AS (
-                SELECT Id, ROW_NUMBER() OVER (ORDER BY Score ASC) as rn 
+                SELECT Id, ROW_NUMBER() OVER (ORDER BY Score ASC, CreatedAt ASC, Id ASC) as rn 
                 FROM LeaderboardScores WHERE OperationType = @operationType
               )
               DELETE FROM LeaderboardScores WHERE Id IN (SELECT Id FROM CTE WHERE rn > 15);

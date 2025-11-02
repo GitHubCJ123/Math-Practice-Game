@@ -38,15 +38,20 @@ export default async function handler(req, res) {
     }
 
     const sql = `
-      DECLARE @EasternNow DATETIMEOFFSET = SYSUTCDATETIME() AT TIME ZONE 'UTC' AT TIME ZONE 'Eastern Standard Time';
+      DECLARE @UtcNow DATETIMEOFFSET = SYSUTCDATETIME();
+      DECLARE @EasternNow DATETIMEOFFSET = @UtcNow AT TIME ZONE 'UTC' AT TIME ZONE 'Eastern Standard Time';
+      DECLARE @MonthStartEastern DATETIMEOFFSET = DATETIMEFROMPARTS(DATEPART(YEAR, @EasternNow), DATEPART(MONTH, @EasternNow), 1, 0, 0, 0, 0, 'Eastern Standard Time');
+      DECLARE @NextMonthStartEastern DATETIMEOFFSET = DATEADD(MONTH, 1, @MonthStartEastern);
+      DECLARE @MonthStartUtc DATETIME2 = CAST(SWITCHOFFSET(@MonthStartEastern, '+00:00') AS DATETIME2);
+      DECLARE @NextMonthStartUtc DATETIME2 = CAST(SWITCHOFFSET(@NextMonthStartEastern, '+00:00') AS DATETIME2);
 
       SELECT TOP 5 PlayerName, Score
       FROM LeaderboardScores
       WHERE 
         OperationType = @operationType AND
-        DATEPART(YEAR, (CreatedAt AT TIME ZONE 'UTC') AT TIME ZONE 'Eastern Standard Time') = DATEPART(YEAR, @EasternNow) AND
-        DATEPART(MONTH, (CreatedAt AT TIME ZONE 'UTC') AT TIME ZONE 'Eastern Standard Time') = DATEPART(MONTH, @EasternNow)
-      ORDER BY Score ASC;
+        CreatedAt >= @MonthStartUtc AND
+        CreatedAt < @NextMonthStartUtc
+      ORDER BY Score ASC, CreatedAt ASC;
     `;
 
     const request = new Request(sql, (err, rowCount, rows) => {

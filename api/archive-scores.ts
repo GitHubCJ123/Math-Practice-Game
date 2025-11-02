@@ -35,30 +35,43 @@ export default async function handler(req, res) {
       return res.status(500).json({ message: "Error connecting to database" });
     }
 
-    // This SQL query calculates the previous month using US Eastern Time so the reset aligns with the
-    // leaderboard countdown that players see. It then inserts the top 5 scores for each operation from
-    // that period into the HallOfFame table.
+    // Calculate the previous month using US Eastern Time so the reset aligns with the
+    // leaderboard countdown that players see. Only the champion for each operation
+    // (fastest time) is archived into the HallOfFame table.
     const sql = `
-      DECLARE @EasternNow DATETIMEOFFSET = SYSUTCDATETIME() AT TIME ZONE 'UTC' AT TIME ZONE 'Eastern Standard Time';
-      DECLARE @ArchivePoint DATETIMEOFFSET = DATEADD(MONTH, -1, @EasternNow);
-      DECLARE @ArchiveYear INT = DATEPART(YEAR, @ArchivePoint);
-      DECLARE @ArchiveMonth INT = DATEPART(MONTH, @ArchivePoint);
+      DECLARE @UtcNow DATETIMEOFFSET = SYSUTCDATETIME();
+      DECLARE @EasternNow DATETIMEOFFSET = @UtcNow AT TIME ZONE 'UTC' AT TIME ZONE 'Eastern Standard Time';
+      DECLARE @CurrentMonthStartEastern DATETIMEOFFSET = DATETIMEFROMPARTS(DATEPART(YEAR, @EasternNow), DATEPART(MONTH, @EasternNow), 1, 0, 0, 0, 0, 'Eastern Standard Time');
+      DECLARE @PreviousMonthStartEastern DATETIMEOFFSET = DATEADD(MONTH, -1, @CurrentMonthStartEastern);
+      DECLARE @PreviousMonthEndEastern DATETIMEOFFSET = @CurrentMonthStartEastern;
+
+      DECLARE @ArchiveYear INT = DATEPART(YEAR, @PreviousMonthStartEastern);
+      DECLARE @ArchiveMonth INT = DATEPART(MONTH, @PreviousMonthStartEastern);
+
+      DECLARE @PreviousMonthStartUtc DATETIME2 = CAST(SWITCHOFFSET(@PreviousMonthStartEastern, '+00:00') AS DATETIME2);
+      DECLARE @PreviousMonthEndUtc DATETIME2 = CAST(SWITCHOFFSET(@PreviousMonthEndEastern, '+00:00') AS DATETIME2);
 
       WITH RankedScores AS (
         SELECT 
           PlayerName,
           Score,
           OperationType,
-          ROW_NUMBER() OVER(PARTITION BY OperationType ORDER BY Score ASC) as rn
+          ROW_NUMBER() OVER(PARTITION BY OperationType ORDER BY Score ASC, CreatedAt ASC) as rn
         FROM LeaderboardScores
         WHERE 
-          DATEPART(YEAR, (CreatedAt AT TIME ZONE 'UTC') AT TIME ZONE 'Eastern Standard Time') = @ArchiveYear AND 
-          DATEPART(MONTH, (CreatedAt AT TIME ZONE 'UTC') AT TIME ZONE 'Eastern Standard Time') = @ArchiveMonth
+          CreatedAt >= @PreviousMonthStartUtc AND 
+          CreatedAt < @PreviousMonthEndUtc
       )
       INSERT INTO HallOfFame (PlayerName, Score, OperationType, Month, Year)
       SELECT PlayerName, Score, OperationType, @ArchiveMonth, @ArchiveYear
       FROM RankedScores
-      WHERE rn <= 5;
+      WHERE rn = 1
+        AND NOT EXISTS (
+          SELECT 1 FROM HallOfFame H
+          WHERE H.OperationType = RankedScores.OperationType
+            AND H.Month = @ArchiveMonth
+            AND H.Year = @ArchiveYear
+        );
     `;
 
     const request = new Request(sql, (err) => {
