@@ -38,12 +38,14 @@ export default async function handler(req, res) {
     }
 
     const sql = `
+      DECLARE @EasternNow DATETIMEOFFSET = SYSUTCDATETIME() AT TIME ZONE 'UTC' AT TIME ZONE 'Eastern Standard Time';
+
       SELECT TOP 5 PlayerName, Score
       FROM LeaderboardScores
       WHERE 
         OperationType = @operationType AND
-        MONTH(CreatedAt) = MONTH(GETDATE()) AND
-        YEAR(CreatedAt) = YEAR(GETDATE())
+        DATEPART(YEAR, (CreatedAt AT TIME ZONE 'UTC') AT TIME ZONE 'Eastern Standard Time') = DATEPART(YEAR, @EasternNow) AND
+        DATEPART(MONTH, (CreatedAt AT TIME ZONE 'UTC') AT TIME ZONE 'Eastern Standard Time') = DATEPART(MONTH, @EasternNow)
       ORDER BY Score ASC;
     `;
 

@@ -39,21 +39,23 @@ export default async function handler(req, res) {
     }
 
     const sql = `
+      DECLARE @EasternNow DATETIMEOFFSET = SYSUTCDATETIME() AT TIME ZONE 'UTC' AT TIME ZONE 'Eastern Standard Time';
+
       SELECT 
         (
           SELECT COUNT(*) 
           FROM LeaderboardScores 
           WHERE OperationType = @operationType
-            AND MONTH(CreatedAt) = MONTH(GETDATE())
-            AND YEAR(CreatedAt) = YEAR(GETDATE())
+            AND DATEPART(YEAR, (CreatedAt AT TIME ZONE 'UTC') AT TIME ZONE 'Eastern Standard Time') = DATEPART(YEAR, @EasternNow)
+            AND DATEPART(MONTH, (CreatedAt AT TIME ZONE 'UTC') AT TIME ZONE 'Eastern Standard Time') = DATEPART(MONTH, @EasternNow)
         ) as totalScores,
         (
           SELECT COUNT(*) 
           FROM LeaderboardScores 
           WHERE OperationType = @operationType 
             AND Score < @score
-            AND MONTH(CreatedAt) = MONTH(GETDATE())
-            AND YEAR(CreatedAt) = YEAR(GETDATE())
+            AND DATEPART(YEAR, (CreatedAt AT TIME ZONE 'UTC') AT TIME ZONE 'Eastern Standard Time') = DATEPART(YEAR, @EasternNow)
+            AND DATEPART(MONTH, (CreatedAt AT TIME ZONE 'UTC') AT TIME ZONE 'Eastern Standard Time') = DATEPART(MONTH, @EasternNow)
         ) as betterScores;
     `;
 
