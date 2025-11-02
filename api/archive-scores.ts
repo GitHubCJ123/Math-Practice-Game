@@ -41,7 +41,7 @@ export default async function handler(req, res) {
     const sql = `
       DECLARE @UtcNow DATETIMEOFFSET = SYSUTCDATETIME();
       DECLARE @EasternNow DATETIMEOFFSET = @UtcNow AT TIME ZONE 'UTC' AT TIME ZONE 'Eastern Standard Time';
-      DECLARE @CurrentMonthStartEastern DATETIMEOFFSET = (DATEFROMPARTS(DATEPART(YEAR, @EasternNow), DATEPART(MONTH, @EasternNow), 1) AT TIME ZONE 'Eastern Standard Time');
+      DECLARE @CurrentMonthStartEastern DATETIMEOFFSET = (CAST(DATEFROMPARTS(DATEPART(YEAR, @EasternNow), DATEPART(MONTH, @EasternNow), 1) AS DATETIME2) AT TIME ZONE 'Eastern Standard Time');
       DECLARE @PreviousMonthStartEastern DATETIMEOFFSET = DATEADD(MONTH, -1, @CurrentMonthStartEastern);
       DECLARE @PreviousMonthEndEastern DATETIMEOFFSET = @CurrentMonthStartEastern;
 
