@@ -172,11 +172,25 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({ questions, userAns
                          questions.length > 0 && 
                          (isConversionMode || allNumbersSelected);
 
+      console.log('[ResultsScreen] Leaderboard eligibility check', {
+        operation,
+        correctCount,
+        totalQuestions: questions.length,
+        isConversionMode,
+        allNumbersSelected,
+        isEligible,
+      });
+
       if (isEligible) {
         const scoreInMs = Math.round(timeTaken * 1000);
         try {
+          console.log('[ResultsScreen] Submitting check-score request', {
+            operation,
+            scoreInMs,
+          });
           const response = await fetch(`/api/check-score?operationType=${operation}&score=${scoreInMs}`);
           const data = await response.json();
+          console.log('[ResultsScreen] check-score response', data);
           setIsTopScore(data.isTopScore);
         } catch (error) {
           console.error("Failed to check score:", error);
