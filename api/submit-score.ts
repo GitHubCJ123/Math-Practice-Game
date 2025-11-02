@@ -58,9 +58,20 @@ export default async function handler(req, res) {
       if (err) return res.status(500).json({ message: "Transaction Error", error: err.message });
 
       const checkExistingSql = `
-        SELECT Score FROM LeaderboardScores 
+        DECLARE @UtcNow DATETIMEOFFSET = SYSUTCDATETIME();
+        DECLARE @EasternNow DATETIMEOFFSET = @UtcNow AT TIME ZONE 'UTC' AT TIME ZONE 'Eastern Standard Time';
+        DECLARE @MonthStartEastern DATETIMEOFFSET = (CAST(DATEFROMPARTS(DATEPART(YEAR, @EasternNow), DATEPART(MONTH, @EasternNow), 1) AS DATETIME2) AT TIME ZONE 'Eastern Standard Time');
+        DECLARE @NextMonthStartEastern DATETIMEOFFSET = DATEADD(MONTH, 1, @MonthStartEastern);
+        DECLARE @MonthStartUtc DATETIME2 = CAST(SWITCHOFFSET(@MonthStartEastern, '+00:00') AS DATETIME2);
+        DECLARE @NextMonthStartUtc DATETIME2 = CAST(SWITCHOFFSET(@NextMonthStartEastern, '+00:00') AS DATETIME2);
+
+        SELECT TOP 1 Score 
+        FROM LeaderboardScores 
         WHERE PlayerName = @playerName COLLATE SQL_Latin1_General_CP1_CI_AS 
-        AND OperationType = @operationType;
+          AND OperationType = @operationType
+          AND CreatedAt >= @MonthStartUtc
+          AND CreatedAt < @NextMonthStartUtc
+        ORDER BY Score ASC;
       `;
 
       const request = new Request(checkExistingSql, (err, rowCount, rows) => {
@@ -74,11 +85,20 @@ export default async function handler(req, res) {
         if (existingScore !== null) { // Player exists
           if (scoreNum < existingScore) { // New score is better
             const updateSql = `
+              DECLARE @UtcNow DATETIMEOFFSET = SYSUTCDATETIME();
+              DECLARE @EasternNow DATETIMEOFFSET = @UtcNow AT TIME ZONE 'UTC' AT TIME ZONE 'Eastern Standard Time';
+              DECLARE @MonthStartEastern DATETIMEOFFSET = (CAST(DATEFROMPARTS(DATEPART(YEAR, @EasternNow), DATEPART(MONTH, @EasternNow), 1) AS DATETIME2) AT TIME ZONE 'Eastern Standard Time');
+              DECLARE @NextMonthStartEastern DATETIMEOFFSET = DATEADD(MONTH, 1, @MonthStartEastern);
+              DECLARE @MonthStartUtc DATETIME2 = CAST(SWITCHOFFSET(@MonthStartEastern, '+00:00') AS DATETIME2);
+              DECLARE @NextMonthStartUtc DATETIME2 = CAST(SWITCHOFFSET(@NextMonthStartEastern, '+00:00') AS DATETIME2);
+
               UPDATE LeaderboardScores SET 
                 Score = @score,
                 CreatedAt = SYSUTCDATETIME()
               WHERE PlayerName = @playerName COLLATE SQL_Latin1_General_CP1_CI_AS 
-              AND OperationType = @operationType;
+                AND OperationType = @operationType
+                AND CreatedAt >= @MonthStartUtc
+                AND CreatedAt < @NextMonthStartUtc;
             `;
             const updateRequest = new Request(updateSql, (err) => {
               if (err) return connection.rollbackTransaction(() => res.status(500).json({ message: "DB Error", error: err.message }));
