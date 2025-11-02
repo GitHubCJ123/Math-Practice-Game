@@ -82,6 +82,8 @@ export default async function handler(req, res) {
           return;
         }
 
+        console.log('[api/submit-score] Existing rows found:', rowCount);
+
         const existingRecord = rowCount > 0 ? {
           id: rows[0][0].value,
           score: rows[0][1].value,
@@ -91,44 +93,10 @@ export default async function handler(req, res) {
 
         const existingScore = existingRecord ? existingRecord.score : null;
 
-        if (existingRecord) { // Player exists
-          const isCurrentMonthRecord = existingRecord.isCurrentMonth;
+        console.log('[api/submit-score] Existing record info:', existingRecord);
 
-          const runUpdate = (successStatus, successMessage) => {
-            const updateSql = `
-              UPDATE LeaderboardScores SET 
-                Score = @score,
-                CreatedAt = SYSUTCDATETIME()
-              WHERE Id = @existingId;
-            `;
-
-            const updateRequest = new Request(updateSql, (err) => {
-              if (err) return connection.rollbackTransaction(() => res.status(500).json({ message: "DB Error", error: err.message }));
-              connection.commitTransaction(err => {
-                if (err) return connection.rollbackTransaction(() => res.status(500).json({ message: "DB Error", error: err.message }));
-                res.status(successStatus).json({ message: successMessage });
-                connection.close();
-              });
-            });
-            updateRequest.addParameter('score', TYPES.Int, scoreNum);
-            updateRequest.addParameter('existingId', TYPES.Int, existingRecord.id);
-            connection.execSql(updateRequest);
-          };
-
-          if (isCurrentMonthRecord) {
-            if (scoreNum < existingScore) { // New score is better for current month
-              runUpdate(200, 'Score updated successfully!');
-            } else { // New score is not better
-              connection.commitTransaction(err => {
-                  if (err) return connection.rollbackTransaction(() => res.status(500).json({ message: "DB Error", error: err.message }));
-                  res.status(200).json({ message: 'Existing score is better.' });
-                  connection.close();
-              });
-            }
-          } else { // Previous month record - treat as new submission
-            runUpdate(201, 'Score submitted successfully for the new month!');
-          }
-        } else { // New player
+        const insertNewScore = (successStatus, successMessage) => {
+          console.log('[api/submit-score] Inserting new score', { playerName, operationType, score: scoreNum, successStatus, successMessage });
           const insertSql = `
             INSERT INTO LeaderboardScores (PlayerName, Score, OperationType, CreatedAt) 
             VALUES (@playerName, @score, @operationType, SYSUTCDATETIME());
@@ -205,7 +173,8 @@ export default async function handler(req, res) {
                if (err) return connection.rollbackTransaction(() => res.status(500).json({ message: "DB Error", error: err.message }));
                connection.commitTransaction(err => {
                   if (err) return connection.rollbackTransaction(() => res.status(500).json({ message: "DB Error", error: err.message }));
-                  res.status(201).json({ message: 'Score submitted successfully!' });
+                  console.log('[api/submit-score] Insert/trim complete', { successStatus, successMessage });
+                  res.status(successStatus).json({ message: successMessage });
                   connection.close();
                });
             });
@@ -216,6 +185,42 @@ export default async function handler(req, res) {
           insertRequest.addParameter('score', TYPES.Int, scoreNum);
           insertRequest.addParameter('operationType', TYPES.NVarChar, operationType);
           connection.execSql(insertRequest);
+        };
+
+        if (existingRecord && existingRecord.isCurrentMonth) { // Player exists for current month
+          console.log('[api/submit-score] Found current month record');
+          if (scoreNum < existingScore) {
+            const updateSql = `
+              UPDATE LeaderboardScores SET 
+                Score = @score,
+                CreatedAt = SYSUTCDATETIME()
+              WHERE Id = @existingId;
+            `;
+
+            const updateRequest = new Request(updateSql, (err) => {
+              if (err) return connection.rollbackTransaction(() => res.status(500).json({ message: "DB Error", error: err.message }));
+              connection.commitTransaction(err => {
+                if (err) return connection.rollbackTransaction(() => res.status(500).json({ message: "DB Error", error: err.message }));
+                console.log('[api/submit-score] Current month score updated');
+                res.status(200).json({ message: 'Score updated successfully!' });
+                connection.close();
+              });
+            });
+            updateRequest.addParameter('score', TYPES.Int, scoreNum);
+            updateRequest.addParameter('existingId', TYPES.Int, existingRecord.id);
+            connection.execSql(updateRequest);
+          } else {
+            connection.commitTransaction(err => {
+                if (err) return connection.rollbackTransaction(() => res.status(500).json({ message: "DB Error", error: err.message }));
+                console.log('[api/submit-score] Existing score is better (no update)');
+                res.status(200).json({ message: 'Existing score is better.' });
+                connection.close();
+            });
+          }
+        } else {
+          console.log('[api/submit-score] No current month record, using insert path');
+          const successMessage = existingRecord ? 'Score submitted successfully for the new month!' : 'Score submitted successfully!';
+          insertNewScore(201, successMessage);
         }
       });
       request.addParameter('playerName', TYPES.NVarChar, playerName);
