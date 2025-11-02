@@ -108,11 +108,69 @@ export default async function handler(req, res) {
             if (err) return connection.rollbackTransaction(() => res.status(500).json({ message: "DB Error", error: err.message }));
             
             const trimSql = `
-              WITH CTE AS (
-                SELECT Id, ROW_NUMBER() OVER (ORDER BY Score ASC, CreatedAt ASC, Id ASC) as rn 
-                FROM LeaderboardScores WHERE OperationType = @operationType
+              DECLARE @UtcNow DATETIMEOFFSET = SYSUTCDATETIME();
+              DECLARE @EasternNow DATETIMEOFFSET = @UtcNow AT TIME ZONE 'UTC' AT TIME ZONE 'Eastern Standard Time';
+              DECLARE @MonthStartEastern DATETIMEOFFSET = DATETIMEFROMPARTS(DATEPART(YEAR, @EasternNow), DATEPART(MONTH, @EasternNow), 1, 0, 0, 0, 0, 'Eastern Standard Time');
+              DECLARE @MonthStartUtc DATETIME2 = CAST(SWITCHOFFSET(@MonthStartEastern, '+00:00') AS DATETIME2);
+
+              WITH MonthlyWinners AS (
+                SELECT 
+                  Id,
+                  PlayerName,
+                  Score,
+                  OperationType,
+                  DATEPART(YEAR, (CreatedAt AT TIME ZONE 'UTC') AT TIME ZONE 'Eastern Standard Time') AS WinnerYear,
+                  DATEPART(MONTH, (CreatedAt AT TIME ZONE 'UTC') AT TIME ZONE 'Eastern Standard Time') AS WinnerMonth,
+                  ROW_NUMBER() OVER (
+                    PARTITION BY 
+                      OperationType,
+                      DATEPART(YEAR, (CreatedAt AT TIME ZONE 'UTC') AT TIME ZONE 'Eastern Standard Time'),
+                      DATEPART(MONTH, (CreatedAt AT TIME ZONE 'UTC') AT TIME ZONE 'Eastern Standard Time')
+                    ORDER BY 
+                      Score ASC,
+                      CreatedAt ASC,
+                      Id ASC
+                  ) AS rn
+                FROM LeaderboardScores
+                WHERE OperationType = @operationType
+                  AND CreatedAt < @MonthStartUtc
+              ), WinnersToInsert AS (
+                SELECT PlayerName, Score, OperationType, WinnerMonth, WinnerYear
+                FROM MonthlyWinners
+                WHERE rn = 1
               )
-              DELETE FROM LeaderboardScores WHERE Id IN (SELECT Id FROM CTE WHERE rn > 15);
+              INSERT INTO HallOfFame (PlayerName, Score, OperationType, Month, Year)
+              SELECT 
+                w.PlayerName,
+                w.Score,
+                w.OperationType,
+                w.WinnerMonth,
+                w.WinnerYear
+              FROM WinnersToInsert w
+              WHERE NOT EXISTS (
+                SELECT 1 FROM HallOfFame h
+                WHERE h.OperationType = w.OperationType
+                  AND h.Month = w.WinnerMonth
+                  AND h.Year = w.WinnerYear
+              );
+
+              DELETE FROM LeaderboardScores
+              WHERE OperationType = @operationType
+                AND CreatedAt < @MonthStartUtc;
+
+              WITH RankedScores AS (
+                SELECT 
+                  Id,
+                  ROW_NUMBER() OVER (
+                    ORDER BY 
+                      Score ASC,
+                      CreatedAt ASC,
+                      Id ASC
+                  ) as rn 
+                FROM LeaderboardScores 
+                WHERE OperationType = @operationType
+              )
+              DELETE FROM LeaderboardScores WHERE Id IN (SELECT Id FROM RankedScores WHERE rn > 15);
             `;
             const trimRequest = new Request(trimSql, (err) => {
                if (err) return connection.rollbackTransaction(() => res.status(500).json({ message: "DB Error", error: err.message }));
