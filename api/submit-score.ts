@@ -65,13 +65,15 @@ export default async function handler(req, res) {
         DECLARE @MonthStartUtc DATETIME2 = CAST(SWITCHOFFSET(@MonthStartEastern, '+00:00') AS DATETIME2);
         DECLARE @NextMonthStartUtc DATETIME2 = CAST(SWITCHOFFSET(@NextMonthStartEastern, '+00:00') AS DATETIME2);
 
-        SELECT TOP 1 Score 
+        SELECT TOP 1 
+          Id,
+          Score,
+          CreatedAt,
+          CASE WHEN CreatedAt >= @MonthStartUtc AND CreatedAt < @NextMonthStartUtc THEN 1 ELSE 0 END AS IsCurrentMonth
         FROM LeaderboardScores 
         WHERE PlayerName = @playerName COLLATE SQL_Latin1_General_CP1_CI_AS 
           AND OperationType = @operationType
-          AND CreatedAt >= @MonthStartUtc
-          AND CreatedAt < @NextMonthStartUtc
-        ORDER BY Score ASC;
+        ORDER BY CreatedAt DESC;
       `;
 
       const request = new Request(checkExistingSql, (err, rowCount, rows) => {
@@ -80,44 +82,51 @@ export default async function handler(req, res) {
           return;
         }
 
-        const existingScore = rowCount > 0 ? rows[0][0].value : null;
+        const existingRecord = rowCount > 0 ? {
+          id: rows[0][0].value,
+          score: rows[0][1].value,
+          createdAt: rows[0][2].value,
+          isCurrentMonth: rows[0][3].value === 1
+        } : null;
 
-        if (existingScore !== null) { // Player exists
-          if (scoreNum < existingScore) { // New score is better
+        const existingScore = existingRecord ? existingRecord.score : null;
+
+        if (existingRecord) { // Player exists
+          const isCurrentMonthRecord = existingRecord.isCurrentMonth;
+
+          const runUpdate = (successStatus, successMessage) => {
             const updateSql = `
-              DECLARE @UtcNow DATETIMEOFFSET = SYSUTCDATETIME();
-              DECLARE @EasternNow DATETIMEOFFSET = @UtcNow AT TIME ZONE 'UTC' AT TIME ZONE 'Eastern Standard Time';
-              DECLARE @MonthStartEastern DATETIMEOFFSET = (CAST(DATEFROMPARTS(DATEPART(YEAR, @EasternNow), DATEPART(MONTH, @EasternNow), 1) AS DATETIME2) AT TIME ZONE 'Eastern Standard Time');
-              DECLARE @NextMonthStartEastern DATETIMEOFFSET = DATEADD(MONTH, 1, @MonthStartEastern);
-              DECLARE @MonthStartUtc DATETIME2 = CAST(SWITCHOFFSET(@MonthStartEastern, '+00:00') AS DATETIME2);
-              DECLARE @NextMonthStartUtc DATETIME2 = CAST(SWITCHOFFSET(@NextMonthStartEastern, '+00:00') AS DATETIME2);
-
               UPDATE LeaderboardScores SET 
                 Score = @score,
                 CreatedAt = SYSUTCDATETIME()
-              WHERE PlayerName = @playerName COLLATE SQL_Latin1_General_CP1_CI_AS 
-                AND OperationType = @operationType
-                AND CreatedAt >= @MonthStartUtc
-                AND CreatedAt < @NextMonthStartUtc;
+              WHERE Id = @existingId;
             `;
+
             const updateRequest = new Request(updateSql, (err) => {
               if (err) return connection.rollbackTransaction(() => res.status(500).json({ message: "DB Error", error: err.message }));
               connection.commitTransaction(err => {
                 if (err) return connection.rollbackTransaction(() => res.status(500).json({ message: "DB Error", error: err.message }));
-                res.status(200).json({ message: 'Score updated successfully!' });
+                res.status(successStatus).json({ message: successMessage });
                 connection.close();
               });
             });
             updateRequest.addParameter('score', TYPES.Int, scoreNum);
-            updateRequest.addParameter('playerName', TYPES.NVarChar, playerName);
-            updateRequest.addParameter('operationType', TYPES.NVarChar, operationType);
+            updateRequest.addParameter('existingId', TYPES.Int, existingRecord.id);
             connection.execSql(updateRequest);
-          } else { // New score is not better
-            connection.commitTransaction(err => {
-                if (err) return connection.rollbackTransaction(() => res.status(500).json({ message: "DB Error", error: err.message }));
-                res.status(200).json({ message: 'Existing score is better.' });
-                connection.close();
-            });
+          };
+
+          if (isCurrentMonthRecord) {
+            if (scoreNum < existingScore) { // New score is better for current month
+              runUpdate(200, 'Score updated successfully!');
+            } else { // New score is not better
+              connection.commitTransaction(err => {
+                  if (err) return connection.rollbackTransaction(() => res.status(500).json({ message: "DB Error", error: err.message }));
+                  res.status(200).json({ message: 'Existing score is better.' });
+                  connection.close();
+              });
+            }
+          } else { // Previous month record - treat as new submission
+            runUpdate(201, 'Score submitted successfully for the new month!');
           }
         } else { // New player
           const insertSql = `
