@@ -57,6 +57,17 @@ export default async function handler(req, res) {
     connection.beginTransaction(err => {
       if (err) return res.status(500).json({ message: "Transaction Error", error: err.message });
 
+      let responseSent = false;
+      const finalize = (status: number, payload: unknown) => {
+        if (responseSent) {
+          console.warn('[api/submit-score] Attempted to respond twice', { status, payload });
+          return;
+        }
+        responseSent = true;
+        res.status(status).json(payload);
+        connection.close();
+      };
+
       const checkExistingSql = `
         DECLARE @UtcNow DATETIMEOFFSET = SYSUTCDATETIME();
         DECLARE @EasternNow DATETIMEOFFSET = @UtcNow AT TIME ZONE 'UTC' AT TIME ZONE 'Eastern Standard Time';
@@ -65,7 +76,7 @@ export default async function handler(req, res) {
         DECLARE @MonthStartUtc DATETIME2 = CAST(SWITCHOFFSET(@MonthStartEastern, '+00:00') AS DATETIME2);
         DECLARE @NextMonthStartUtc DATETIME2 = CAST(SWITCHOFFSET(@NextMonthStartEastern, '+00:00') AS DATETIME2);
 
-        SELECT TOP 1 
+        SELECT 
           Id,
           Score,
           CreatedAt,
@@ -73,27 +84,122 @@ export default async function handler(req, res) {
         FROM LeaderboardScores 
         WHERE PlayerName = @playerName COLLATE SQL_Latin1_General_CP1_CI_AS 
           AND OperationType = @operationType
-        ORDER BY CreatedAt DESC;
+        ORDER BY 
+          CASE WHEN CreatedAt >= @MonthStartUtc AND CreatedAt < @NextMonthStartUtc THEN 0 ELSE 1 END,
+          CreatedAt DESC;
       `;
 
       const request = new Request(checkExistingSql, (err, rowCount, rows) => {
         if (err) {
-          connection.rollbackTransaction(() => res.status(500).json({ message: "DB Error", error: err.message }));
+          connection.rollbackTransaction(() => finalize(500, { message: "DB Error", error: err.message }));
           return;
         }
 
         console.log('[api/submit-score] Existing rows found:', rowCount);
 
-        const existingRecord = rowCount > 0 ? {
-          id: rows[0][0].value,
-          score: rows[0][1].value,
-          createdAt: rows[0][2].value,
-          isCurrentMonth: rows[0][3].value === 1
-        } : null;
+        let existingRecord = null;
+        for (let i = 0; i < rowCount; i++) {
+          const row = rows[i];
+          if (!row || row.length < 4) {
+            console.warn('[api/submit-score] Skipping malformed row', row);
+            continue;
+          }
+
+          const record = {
+            id: row[0].value,
+            score: row[1].value,
+            createdAt: row[2].value,
+            isCurrentMonth: row[3].value === 1
+          };
+
+          existingRecord = record;
+          if (record.isCurrentMonth) {
+            break;
+          }
+        }
 
         const existingScore = existingRecord ? existingRecord.score : null;
 
         console.log('[api/submit-score] Existing record info:', existingRecord);
+
+        const runMaintenance = (successStatus, successMessage) => {
+          const maintenanceSql = `
+            DECLARE @UtcNow DATETIMEOFFSET = SYSUTCDATETIME();
+            DECLARE @EasternNow DATETIMEOFFSET = @UtcNow AT TIME ZONE 'UTC' AT TIME ZONE 'Eastern Standard Time';
+            DECLARE @MonthStartEastern DATETIMEOFFSET = (CAST(DATEFROMPARTS(DATEPART(YEAR, @EasternNow), DATEPART(MONTH, @EasternNow), 1) AS DATETIME2) AT TIME ZONE 'Eastern Standard Time');
+            DECLARE @MonthStartUtc DATETIME2 = CAST(SWITCHOFFSET(@MonthStartEastern, '+00:00') AS DATETIME2);
+
+            WITH MonthlyWinners AS (
+              SELECT 
+                Id,
+                PlayerName,
+                Score,
+                OperationType,
+                DATEPART(YEAR, (CreatedAt AT TIME ZONE 'UTC') AT TIME ZONE 'Eastern Standard Time') AS WinnerYear,
+                DATEPART(MONTH, (CreatedAt AT TIME ZONE 'UTC') AT TIME ZONE 'Eastern Standard Time') AS WinnerMonth,
+                ROW_NUMBER() OVER (
+                  PARTITION BY 
+                    OperationType,
+                    DATEPART(YEAR, (CreatedAt AT TIME ZONE 'UTC') AT TIME ZONE 'Eastern Standard Time'),
+                    DATEPART(MONTH, (CreatedAt AT TIME ZONE 'UTC') AT TIME ZONE 'Eastern Standard Time')
+                  ORDER BY 
+                    Score ASC,
+                    CreatedAt ASC,
+                    Id ASC
+                ) AS rn
+              FROM LeaderboardScores
+              WHERE OperationType = @operationType
+                AND CreatedAt < @MonthStartUtc
+            ), WinnersToInsert AS (
+              SELECT PlayerName, Score, OperationType, WinnerMonth, WinnerYear
+              FROM MonthlyWinners
+              WHERE rn = 1
+            )
+            INSERT INTO HallOfFame (PlayerName, Score, OperationType, Month, Year)
+            SELECT 
+              w.PlayerName,
+              w.Score,
+              w.OperationType,
+              w.WinnerMonth,
+              w.WinnerYear
+            FROM WinnersToInsert w
+            WHERE NOT EXISTS (
+              SELECT 1 FROM HallOfFame h
+              WHERE h.OperationType = w.OperationType
+                AND h.Month = w.WinnerMonth
+                AND h.Year = w.WinnerYear
+            );
+
+            DELETE FROM LeaderboardScores
+            WHERE OperationType = @operationType
+              AND CreatedAt < @MonthStartUtc;
+
+            WITH RankedScores AS (
+              SELECT 
+                Id,
+                ROW_NUMBER() OVER (
+                  ORDER BY 
+                    Score ASC,
+                    CreatedAt ASC,
+                    Id ASC
+                ) as rn 
+              FROM LeaderboardScores 
+              WHERE OperationType = @operationType
+            )
+            DELETE FROM LeaderboardScores WHERE Id IN (SELECT Id FROM RankedScores WHERE rn > 15);
+          `;
+
+          const maintenanceRequest = new Request(maintenanceSql, (err) => {
+            if (err) return connection.rollbackTransaction(() => finalize(500, { message: "DB Error", error: err.message }));
+            connection.commitTransaction(err => {
+              if (err) return connection.rollbackTransaction(() => finalize(500, { message: "DB Error", error: err.message }));
+              console.log('[api/submit-score] Maintenance complete', { successStatus, successMessage });
+              finalize(successStatus, { message: successMessage });
+            });
+          });
+          maintenanceRequest.addParameter('operationType', TYPES.NVarChar, operationType);
+          connection.execSql(maintenanceRequest);
+        };
 
         const insertNewScore = (successStatus, successMessage) => {
           console.log('[api/submit-score] Inserting new score', { playerName, operationType, score: scoreNum, successStatus, successMessage });
@@ -102,84 +208,8 @@ export default async function handler(req, res) {
             VALUES (@playerName, @score, @operationType, SYSUTCDATETIME());
           `;
           const insertRequest = new Request(insertSql, (err) => {
-            if (err) return connection.rollbackTransaction(() => res.status(500).json({ message: "DB Error", error: err.message }));
-            
-            const trimSql = `
-              DECLARE @UtcNow DATETIMEOFFSET = SYSUTCDATETIME();
-              DECLARE @EasternNow DATETIMEOFFSET = @UtcNow AT TIME ZONE 'UTC' AT TIME ZONE 'Eastern Standard Time';
-              DECLARE @MonthStartEastern DATETIMEOFFSET = (CAST(DATEFROMPARTS(DATEPART(YEAR, @EasternNow), DATEPART(MONTH, @EasternNow), 1) AS DATETIME2) AT TIME ZONE 'Eastern Standard Time');
-              DECLARE @MonthStartUtc DATETIME2 = CAST(SWITCHOFFSET(@MonthStartEastern, '+00:00') AS DATETIME2);
-
-              WITH MonthlyWinners AS (
-                SELECT 
-                  Id,
-                  PlayerName,
-                  Score,
-                  OperationType,
-                  DATEPART(YEAR, (CreatedAt AT TIME ZONE 'UTC') AT TIME ZONE 'Eastern Standard Time') AS WinnerYear,
-                  DATEPART(MONTH, (CreatedAt AT TIME ZONE 'UTC') AT TIME ZONE 'Eastern Standard Time') AS WinnerMonth,
-                  ROW_NUMBER() OVER (
-                    PARTITION BY 
-                      OperationType,
-                      DATEPART(YEAR, (CreatedAt AT TIME ZONE 'UTC') AT TIME ZONE 'Eastern Standard Time'),
-                      DATEPART(MONTH, (CreatedAt AT TIME ZONE 'UTC') AT TIME ZONE 'Eastern Standard Time')
-                    ORDER BY 
-                      Score ASC,
-                      CreatedAt ASC,
-                      Id ASC
-                  ) AS rn
-                FROM LeaderboardScores
-                WHERE OperationType = @operationType
-                  AND CreatedAt < @MonthStartUtc
-              ), WinnersToInsert AS (
-                SELECT PlayerName, Score, OperationType, WinnerMonth, WinnerYear
-                FROM MonthlyWinners
-                WHERE rn = 1
-              )
-              INSERT INTO HallOfFame (PlayerName, Score, OperationType, Month, Year)
-              SELECT 
-                w.PlayerName,
-                w.Score,
-                w.OperationType,
-                w.WinnerMonth,
-                w.WinnerYear
-              FROM WinnersToInsert w
-              WHERE NOT EXISTS (
-                SELECT 1 FROM HallOfFame h
-                WHERE h.OperationType = w.OperationType
-                  AND h.Month = w.WinnerMonth
-                  AND h.Year = w.WinnerYear
-              );
-
-              DELETE FROM LeaderboardScores
-              WHERE OperationType = @operationType
-                AND CreatedAt < @MonthStartUtc;
-
-              WITH RankedScores AS (
-                SELECT 
-                  Id,
-                  ROW_NUMBER() OVER (
-                    ORDER BY 
-                      Score ASC,
-                      CreatedAt ASC,
-                      Id ASC
-                  ) as rn 
-                FROM LeaderboardScores 
-                WHERE OperationType = @operationType
-              )
-              DELETE FROM LeaderboardScores WHERE Id IN (SELECT Id FROM RankedScores WHERE rn > 15);
-            `;
-            const trimRequest = new Request(trimSql, (err) => {
-               if (err) return connection.rollbackTransaction(() => res.status(500).json({ message: "DB Error", error: err.message }));
-               connection.commitTransaction(err => {
-                  if (err) return connection.rollbackTransaction(() => res.status(500).json({ message: "DB Error", error: err.message }));
-                  console.log('[api/submit-score] Insert/trim complete', { successStatus, successMessage });
-                  res.status(successStatus).json({ message: successMessage });
-                  connection.close();
-               });
-            });
-            trimRequest.addParameter('operationType', TYPES.NVarChar, operationType);
-            connection.execSql(trimRequest);
+            if (err) return connection.rollbackTransaction(() => finalize(500, { message: "DB Error", error: err.message }));
+            runMaintenance(successStatus, successMessage);
           });
           insertRequest.addParameter('playerName', TYPES.NVarChar, playerName);
           insertRequest.addParameter('score', TYPES.Int, scoreNum);
@@ -198,12 +228,11 @@ export default async function handler(req, res) {
             `;
 
             const updateRequest = new Request(updateSql, (err) => {
-              if (err) return connection.rollbackTransaction(() => res.status(500).json({ message: "DB Error", error: err.message }));
+              if (err) return connection.rollbackTransaction(() => finalize(500, { message: "DB Error", error: err.message }));
               connection.commitTransaction(err => {
-                if (err) return connection.rollbackTransaction(() => res.status(500).json({ message: "DB Error", error: err.message }));
+                if (err) return connection.rollbackTransaction(() => finalize(500, { message: "DB Error", error: err.message }));
                 console.log('[api/submit-score] Current month score updated');
-                res.status(200).json({ message: 'Score updated successfully!' });
-                connection.close();
+                finalize(200, { message: 'Score updated successfully!' });
               });
             });
             updateRequest.addParameter('score', TYPES.Int, scoreNum);
@@ -211,10 +240,9 @@ export default async function handler(req, res) {
             connection.execSql(updateRequest);
           } else {
             connection.commitTransaction(err => {
-                if (err) return connection.rollbackTransaction(() => res.status(500).json({ message: "DB Error", error: err.message }));
+                if (err) return connection.rollbackTransaction(() => finalize(500, { message: "DB Error", error: err.message }));
                 console.log('[api/submit-score] Existing score is better (no update)');
-                res.status(200).json({ message: 'Existing score is better.' });
-                connection.close();
+                finalize(200, { message: 'Existing score is better.' });
             });
           }
         } else {
