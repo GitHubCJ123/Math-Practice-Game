@@ -410,10 +410,9 @@ const GlobalLeaderboard: React.FC = () => {
         <div>
           <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 inline-flex items-center gap-2">
             🏆 Global Leaderboards
-            <span className="text-xs font-semibold uppercase text-white bg-blue-500 px-2 py-0.5 rounded-full">Beta</span>
           </h2>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-xs">
-            This leaderboard is in beta. Results may be incorrect as it's still in testing. Full release on November 3rd.
+            See how you stack up against other players this month.
           </p>
         </div>
         <div className="mt-4">
