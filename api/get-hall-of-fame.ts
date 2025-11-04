@@ -1,5 +1,5 @@
 import sql from "mssql";
-import { getPool } from "./db-pool";
+import { getPool } from "./db-pool.js";
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {

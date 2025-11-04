@@ -1,6 +1,6 @@
 import sql from "mssql";
-import { getPool } from "./db-pool";
-import { getCurrentEasternMonthBounds } from "./time-utils";
+import { getPool } from "./db-pool.js";
+import { getCurrentEasternMonthBounds } from "./time-utils.js";
 
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 let leaderboardCache: Record<string, { expiresAt: number; payload: any[] }> = {};

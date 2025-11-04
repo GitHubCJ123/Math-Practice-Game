@@ -1,5 +1,5 @@
 import sql from "mssql";
-import { getPool } from "./db-pool";
+import { getPool } from "./db-pool.js";
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const CACHE_CONTROL_HEADER = "public, max-age=300";

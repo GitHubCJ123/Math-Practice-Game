@@ -1,6 +1,6 @@
 import sql from "mssql";
-import { getPool } from "./db-pool";
-import { getCurrentEasternMonthBounds } from "./time-utils";
+import { getPool } from "./db-pool.js";
+import { getCurrentEasternMonthBounds } from "./time-utils.js";
 
 export default async function handler(req, res) {
   console.log('[api/check-score] Function invoked.');
