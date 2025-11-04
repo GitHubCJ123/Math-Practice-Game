@@ -1,22 +1,6 @@
-import { Connection, Request, ConnectionConfiguration, TYPES } from "tedious";
-
-const dbConfig: ConnectionConfiguration = {
-  server: process.env.AZURE_SERVER_NAME!,
-  authentication: {
-    type: "default",
-    options: {
-      userName: process.env.AZURE_DB_USER!,
-      password: process.env.AZURE_DB_PASSWORD!,
-    },
-  },
-  options: {
-    encrypt: true,
-    database: process.env.AZURE_DB_NAME!,
-    rowCollectionOnRequestCompletion: true,
-    connectTimeout: 30000
-  },
-};
-
+import sql from "mssql";
+import { getPool } from "./db-pool";
+import { getCurrentEasternMonthBounds } from "./time-utils";
 
 export default async function handler(req, res) {
   console.log('[api/check-score] Function invoked.');
@@ -27,61 +11,38 @@ export default async function handler(req, res) {
   const { operationType, score } = req.query;
   const scoreNum = parseInt(score as string, 10);
 
-  if (!operationType || typeof operationType !== 'string' || isNaN(scoreNum)) {
+  if (!operationType || typeof operationType !== 'string' || Number.isNaN(scoreNum)) {
     return res.status(400).json({ message: 'operationType and a numeric score are required' });
   }
 
-  const connection = new Connection(dbConfig);
+  try {
+    const { startUtc, endUtc } = getCurrentEasternMonthBounds();
+    const pool = await getPool();
+    const request = pool.request();
+    request.input('operationType', sql.NVarChar, operationType);
+    request.input('score', sql.Int, scoreNum);
+    request.input('monthStartUtc', sql.DateTime2, startUtc);
+    request.input('nextMonthStartUtc', sql.DateTime2, endUtc);
 
-  connection.on('connect', (err) => {
-    if (err) {
-      return res.status(500).json({ message: "Error connecting to database", error: err.message });
-    }
+    const result = await request.query(`
+      SELECT
+        SUM(CASE WHEN Score < @score THEN 1 ELSE 0 END) AS BetterScores,
+        COUNT(*) AS TotalScores
+      FROM LeaderboardScores
+      WHERE OperationType = @operationType
+        AND CreatedAt >= @monthStartUtc
+        AND CreatedAt < @nextMonthStartUtc;
+    `);
 
-    const sql = `
-      DECLARE @UtcNow DATETIMEOFFSET = SYSUTCDATETIME();
-      DECLARE @EasternNow DATETIMEOFFSET = @UtcNow AT TIME ZONE 'UTC' AT TIME ZONE 'Eastern Standard Time';
-      DECLARE @MonthStartEastern DATETIMEOFFSET = (CAST(DATEFROMPARTS(DATEPART(YEAR, @EasternNow), DATEPART(MONTH, @EasternNow), 1) AS DATETIME2) AT TIME ZONE 'Eastern Standard Time');
-      DECLARE @NextMonthStartEastern DATETIMEOFFSET = DATEADD(MONTH, 1, @MonthStartEastern);
-      DECLARE @MonthStartUtc DATETIME2 = CAST(SWITCHOFFSET(@MonthStartEastern, '+00:00') AS DATETIME2);
-      DECLARE @NextMonthStartUtc DATETIME2 = CAST(SWITCHOFFSET(@NextMonthStartEastern, '+00:00') AS DATETIME2);
+    const row = result.recordset[0] ?? { BetterScores: 0, TotalScores: 0 };
+    const totalScores = row.TotalScores ?? 0;
+    const betterScores = row.BetterScores ?? 0;
 
-      SELECT 
-        (
-          SELECT COUNT(*) 
-          FROM LeaderboardScores 
-          WHERE OperationType = @operationType
-            AND CreatedAt >= @MonthStartUtc
-            AND CreatedAt < @NextMonthStartUtc
-        ) as totalScores,
-        (
-          SELECT COUNT(*) 
-          FROM LeaderboardScores 
-          WHERE OperationType = @operationType 
-            AND Score < @score
-            AND CreatedAt >= @MonthStartUtc
-            AND CreatedAt < @NextMonthStartUtc
-        ) as betterScores;
-    `;
+    const isTopScore = totalScores < 5 || betterScores < 5;
 
-    const request = new Request(sql, (err, rowCount, rows) => {
-      if (err) {
-        return res.status(500).json({ message: "Error executing query", error: err.message });
-      }
-
-      const totalScores = rows[0][0].value;
-      const betterScores = rows[0][1].value;
-
-      const isTopScore = totalScores < 5 || betterScores < 5;
-
-      res.status(200).json({ isTopScore });
-      connection.close();
-    });
-
-    request.addParameter('operationType', TYPES.NVarChar, operationType);
-    request.addParameter('score', TYPES.Int, scoreNum);
-    connection.execSql(request);
-  });
-
-  connection.connect();
+    return res.status(200).json({ isTopScore });
+  } catch (error) {
+    console.error('[api/check-score] Error handling request', error);
+    return res.status(500).json({ message: 'Error executing query', error: error.message });
+  }
 }

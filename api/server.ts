@@ -22,6 +22,7 @@ import { fileURLToPath, pathToFileURL } from 'url';
 
         for (const file of apiFiles) {
             if (file.includes('server.ts')) continue;
+            if (file.includes('db-pool.ts') || file.includes('time-utils.ts')) continue;
 
             const routeName = path.basename(file, '.ts');
             const fullPath = path.join(__dirname, file);

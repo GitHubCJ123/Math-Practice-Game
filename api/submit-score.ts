@@ -1,44 +1,31 @@
-import { Connection, Request, ConnectionConfiguration, TYPES } from "tedious";
+import sql from "mssql";
+import { getPool } from "./db-pool";
+import { getCurrentEasternMonthBounds } from "./time-utils";
+import { clearHallOfFameDatesCache } from "./get-hall-of-fame-dates";
+import { clearLeaderboardCache } from "./get-leaderboard";
 
-const dbConfig: ConnectionConfiguration = {
-  server: process.env.AZURE_SERVER_NAME!,
-  authentication: {
-    type: "default",
-    options: {
-      userName: process.env.AZURE_DB_USER!,
-      password: process.env.AZURE_DB_PASSWORD!,
-    },
-  },
-  options: {
-    encrypt: true,
-    database: process.env.AZURE_DB_NAME!,
-    rowCollectionOnRequestCompletion: true,
-    connectTimeout: 30000
-  },
+const BAD_WORDS = [
+  'fuck', 'fucking', 'fucked', 'fucker', 'fuckers', 'motherfucker', 'motherfuckers', 'mf', 'mfer', 'mofo', 'effin', 'effing', 'shit', 'shits', 'shitty', 'bullshit', 'bullshitter', 'bullshitters', 'bs', 'crap', 'crappy', 'damn', 'dammit', 'goddamn', 'goddammit', 'ass', 'asses', 'asshole', 'assholes', 'arse', 'arsehole', 'arseholes', 'arsewipe', 'jackass', 'smartass', 'dumbass', 'badass', 'hardass', 'bastard', 'bastards', 'bastardy', 'bitch', 'bitches', 'bitchy', 'biatch', 'beyotch', 'dick', 'dicks', 'dickhead', 'dickheads', 'dickish', 'dicking', 'dicktastic', 'prick', 'pricks', 'prickly', 'piss', 'pissed', 'pissing', 'pissant', 'pisshead', 'pisspoor', 'pisspot', 'pissoff', 'pissface', 'cock', 'cocks', 'cocky', 'cockhead', 'cockface', 'cocksucker', 'cocksuckers', 'cockbite', 'cockwomble', 'balls', 'ballbag', 'ballsack', 'ballbuster', 'ballbusting', 'scrotum', 'testicles', 'testes', 'wank', 'wanker', 'wankers', 'wanking', 'tosser', 'git', 'pillock', 'berk', 'bugger', 'buggered', 'buggering', 'bloody', 'bollock', 'bollocks', 'bollocking', 'sod', 'sodding', 'sodoff', 'shag', 'shagging', 'shagger', 'twat', 'twats', 'twit', 'numpty', 'prat', 'nonce', 'jerk', 'jerks', 'jerkoff', 'jerkoffs', 'douche', 'douchebag', 'douchebags', 'douchey', 'toolbag', 'tool', 'skank', 'skanks', 'slag', 'slags', 'slut', 'sluts', 'slutty', 'thot', 'hoe', 'hoes', 'whore', 'whores', 'whoring', 'wh0re', 'queef', 'boner', 'boners', 'hardon', 'hump', 'humping', 'screw', 'screwed', 'screwing', 'cum', 'cums', 'cumming', 'cumshot', 'cumshots', 'cumslut', 'cumdump', 'spunk', 'jizz', 'splooge', 'porn', 'porno', 'pornography', 'xxx', 'anus', 'anal', 'butt', 'butthead', 'butthole', 'buttface', 'butthurt', 'boob', 'boobs', 'boobies', 'tits', 'titties', 'tit', 'titty', 'rack', 'nipple', 'nipples', 'vagina', 'vajayjay', 'vag', 'pussy', 'pussies', 'punani', 'poontang', 'poon', 'cooch', 'coochie', 'cooter', 'snatch', 'beaver', 'muff', 'gash', 'penis', 'pecker', 'willy', 'wiener', 'weiner', 'dong', 'donger', 'schlong', 'fap', 'fapping', 'fapper', 'throb', 'throbbing', 'milf', 'gilf', 'dilf', 'screwup', 'screwups', 'screwball', 'screwballs', 'clusterfuck', 'shitshow', 'shitstorm', 'shithead', 'shitheads', 'shitface', 'shitfaced', 'dipshit', 'dumbshit', 'horseshit', 'apeshit', 'batshit', 'assclown', 'asshat', 'asshattery', 'assbite', 'assmunch', 'assmuncher', 'asswipe', 'asswipes', 'assface', 'asskisser', 'asslicker', 'dirtbag', 'scumbag', 'scumbags', 'sleazebag', 'trashbag', 'trainwreck', 'trashfire', 'degenerate', 'perv', 'pervy', 'pervert', 'perverts', 'retard', 'retarded', 'idiot', 'moron', 'imbecile', 'dumass', 'dumba**', 'stupid', 'loser', 'twirp', 'weirdo', 'fugly', 'frig', 'friggin', 'frick', 'fricking', 'frickin', 'feck', 'feckin', 'suck', 'sucks', 'sucking', 'sucker', 'suckers', 'sucka', 'sukka', 'gooch', 'taint', 'tainted', 'poop', 'poopy', 'turd', 'turdface', 'turdferguson', 'buttsniffer', 'sphincter', 'colon', 'rectum', 'enema', 'enemas', 'dingleberry', 'dingleberries', 'booger', 'snot', 'phlegm', 'vomit', 'puke', 'barf', 'barfed', 'barfing', 'barfy', 'f-uck', 'f.u.c.k', 'f.uck', 'f_u_c.k', 'f_uck', 'fuq', 'fux', '$h!7', '$h!t', '$h17', '$h1t', '$hi7', '$hit', '5h!7', '5h!t', '5h17', '5h1t', '5hi7', '5hit', 's-hit', 's.h.i.t', 's.hit', 's_h_i.t', 's_hit', 'sh!7', 'sh!t', 'sh17', 'sh1t', 'shi7', 'b!7ch', 'b!tch', 'b-itch', 'b.i.t.c.h', 'b.itch', 'b17ch', 'b1tch', 'b_i_t_c.h', 'b_itch', 'bi7ch', 'a$$h0l3', 'a$$h0le', 'a$$hol3', 'a$$hole', 'a$sh0l3', 'a$sh0le', 'a$shol3', 'a$shole', 'a-sshole', 'a.s.s.h.o.l.e', 'a.sshole', 'a_s_s_h.o.l.e', 'a_sshole', 'as$h0l3', 'as$h0le', 'as$hol3', 'as$hole', 'as5h0l3', 'as5h0le', 'as5hol3', 'as5hole', 'assh0l3', 'assh0le', 'asshol3', 'd!ck', 'd-ick', 'd.i.c.k', 'd.ick', 'd1ck', 'd_i.c.k', 'd_ick', 'diq', 'dix', 'p-ussy', 'p.u.s.s.y', 'p.ussy', 'p_u_s.s.y', 'p_ussy', 'pu$$y', 'pu$5y', 'pu$sy', 'pu5$y', 'pu55y', 'pu5sy', 'pus$y', 'pus5y', 'c-ock', 'c.o.c.k', 'c.ock', 'c0ck', 'c_o.c.k', 'c_ock', 'coq', 'cox', 'w-hore', 'w.h.o.r.e', 'w.hore', 'w_h.o_r.e', 'w_hore', 'wh0r3', 'whor3', '$lu7', '$lut', '5lu7', '5lut', 's-lut', 's.l.u.t', 's.lut', 's_l.u.t', 's_lut', 'slu7', 'p-rick', 'p.r.i.c.k', 'p.rick', 'p_r.i_c.k', 'p_rick', 'pr!ck', 'pr1ck', 'priq', 'prix', 'j-erkoff', 'j.e.r.k.o.f.f', 'j.erkoff', 'j3rk0ff', 'j3rk'
+];
+
+const isProfane = (text: string) => {
+  const lowerText = text.toLowerCase();
+  return BAD_WORDS.some((word) => lowerText.includes(word));
 };
 
 export default async function handler(req, res) {
-  // Simple profanity filter - defined inside the handler for serverless environments
-  const badWords = [
-  'fuck', 'fucking', 'fucked', 'fucker', 'fuckers', 'motherfucker', 'motherfuckers', 'mf', 'mfer', 'mofo', 'effin', 'effing', 'shit', 'shits', 'shitty', 'bullshit', 'bullshitter', 'bullshitters', 'bs', 'crap', 'crappy', 'damn', 'dammit', 'goddamn', 'goddammit', 'ass', 'asses', 'asshole', 'assholes', 'arse', 'arsehole', 'arseholes', 'arsewipe', 'jackass', 'smartass', 'dumbass', 'badass', 'hardass', 'bastard', 'bastards', 'bastardy', 'bitch', 'bitches', 'bitchy', 'biatch', 'beyotch', 'dick', 'dicks', 'dickhead', 'dickheads', 'dickish', 'dicking', 'dicktastic', 'prick', 'pricks', 'prickly', 'piss', 'pissed', 'pissing', 'pissant', 'pisshead', 'pisspoor', 'pisspot', 'pissoff', 'pissface', 'cock', 'cocks', 'cocky', 'cockhead', 'cockface', 'cocksucker', 'cocksuckers', 'cockbite', 'cockwomble', 'balls', 'ballbag', 'ballsack', 'ballbuster', 'ballbusting', 'scrotum', 'testicles', 'testes', 'wank', 'wanker', 'wankers', 'wanking', 'tosser', 'git', 'pillock', 'berk', 'bugger', 'buggered', 'buggering', 'bloody', 'bollock', 'bollocks', 'bollocking', 'sod', 'sodding', 'sodoff', 'shag', 'shagging', 'shagger', 'twat', 'twats', 'twit', 'numpty', 'prat', 'nonce', 'jerk', 'jerks', 'jerkoff', 'jerkoffs', 'douche', 'douchebag', 'douchebags', 'douchey', 'toolbag', 'tool', 'skank', 'skanks', 'slag', 'slags', 'slut', 'sluts', 'slutty', 'thot', 'hoe', 'hoes', 'whore', 'whores', 'whoring', 'wh0re', 'queef', 'boner', 'boners', 'hardon', 'hump', 'humping', 'screw', 'screwed', 'screwing', 'cum', 'cums', 'cumming', 'cumshot', 'cumshots', 'cumslut', 'cumdump', 'spunk', 'jizz', 'splooge', 'porn', 'porno', 'pornography', 'xxx', 'anus', 'anal', 'butt', 'butthead', 'butthole', 'buttface', 'butthurt', 'boob', 'boobs', 'boobies', 'tits', 'titties', 'tit', 'titty', 'rack', 'nipple', 'nipples', 'vagina', 'vajayjay', 'vag', 'pussy', 'pussies', 'punani', 'poontang', 'poon', 'cooch', 'coochie', 'cooter', 'snatch', 'beaver', 'muff', 'gash', 'penis', 'pecker', 'willy', 'wiener', 'weiner', 'dong', 'donger', 'schlong', 'fap', 'fapping', 'fapper', 'throb', 'throbbing', 'milf', 'gilf', 'dilf', 'screwup', 'screwups', 'screwball', 'screwballs', 'clusterfuck', 'shitshow', 'shitstorm', 'shithead', 'shitheads', 'shitface', 'shitfaced', 'dipshit', 'dumbshit', 'horseshit', 'apeshit', 'batshit', 'assclown', 'asshat', 'asshattery', 'assbite', 'assmunch', 'assmuncher', 'asswipe', 'asswipes', 'assface', 'asskisser', 'asslicker', 'dirtbag', 'scumbag', 'scumbags', 'sleazebag', 'trashbag', 'trainwreck', 'trashfire', 'degenerate', 'perv', 'pervy', 'pervert', 'perverts', 'retard', 'retarded', 'idiot', 'moron', 'imbecile', 'dumass', 'dumba**', 'stupid', 'loser', 'twirp', 'weirdo', 'fugly', 'frig', 'friggin', 'frick', 'fricking', 'frickin', 'feck', 'feckin', 'suck', 'sucks', 'sucking', 'sucker', 'suckers', 'sucka', 'sukka', 'gooch', 'taint', 'tainted', 'poop', 'poopy', 'turd', 'turdface', 'turdferguson', 'buttsniffer', 'sphincter', 'colon', 'rectum', 'enema', 'enemas', 'dingleberry', 'dingleberries', 'booger', 'snot', 'phlegm', 'vomit', 'puke', 'barf', 'barfed', 'barfing', 'barfy', 'f-uck', 'f.u.c.k', 'f.uck', 'f_u_c.k', 'f_uck', 'fuq', 'fux', '$h!7', '$h!t', '$h17', '$h1t', '$hi7', '$hit', '5h!7', '5h!t', '5h17', '5h1t', '5hi7', '5hit', 's-hit', 's.h.i.t', 's.hit', 's_h_i.t', 's_hit', 'sh!7', 'sh!t', 'sh17', 'sh1t', 'shi7', 'b!7ch', 'b!tch', 'b-itch', 'b.i.t.c.h', 'b.itch', 'b17ch', 'b1tch', 'b_i_t_c.h', 'b_itch', 'bi7ch', 'a$$h0l3', 'a$$h0le', 'a$$hol3', 'a$$hole', 'a$sh0l3', 'a$sh0le', 'a$shol3', 'a$shole', 'a-sshole', 'a.s.s.h.o.l.e', 'a.sshole', 'a_s_s_h.o.l.e', 'a_sshole', 'as$h0l3', 'as$h0le', 'as$hol3', 'as$hole', 'as5h0l3', 'as5h0le', 'as5hol3', 'as5hole', 'assh0l3', 'assh0le', 'asshol3', 'd!ck', 'd-ick', 'd.i.c.k', 'd.ick', 'd1ck', 'd_i.c.k', 'd_ick', 'diq', 'dix', 'p-ussy', 'p.u.s.s.y', 'p.ussy', 'p_u_s.s.y', 'p_ussy', 'pu$$y', 'pu$5y', 'pu$sy', 'pu5$y', 'pu55y', 'pu5sy', 'pus$y', 'pus5y', 'c-ock', 'c.o.c.k', 'c.ock', 'c0ck', 'c_o.c.k', 'c_ock', 'coq', 'cox', 'w-hore', 'w.h.o.r.e', 'w.hore', 'w_h.o_r.e', 'w_hore', 'wh0r3', 'whor3', '$lu7', '$lut', '5lu7', '5lut', 's-lut', 's.l.u.t', 's.lut', 's_l.u.t', 's_lut', 'slu7', 'p-rick', 'p.r.i.c.k', 'p.rick', 'p_r.i_c.k', 'p_rick', 'pr!ck', 'pr1ck', 'priq', 'prix', 'j-erkoff', 'j.e.r.k.o.f.f', 'j.erkoff', 'j3rk0ff', 'j3rk'
-  ]; 
-  const isProfane = (text) => {
-    const lowerText = text.toLowerCase();
-    return badWords.some(word => lowerText.includes(word));
-  };
-
   console.log('[api/submit-score] Function invoked.');
   if (req.method !== 'POST') {
     return res.status(405).json({ message: 'Method Not Allowed' });
   }
-  
+
   const { playerName, score, operationType } = req.body;
   const scoreNum = parseInt(score, 10);
 
   if (!playerName || typeof playerName !== 'string' || playerName.length > 50 || playerName.length < 1) {
     return res.status(400).json({ message: 'Valid playerName is required.' });
   }
-  if (!operationType || typeof operationType !== 'string' || isNaN(scoreNum)) {
+  if (!operationType || typeof operationType !== 'string' || Number.isNaN(scoreNum)) {
     return res.status(400).json({ message: 'operationType and a numeric score are required.' });
   }
 
@@ -49,213 +36,81 @@ export default async function handler(req, res) {
   }
   console.log(`[api/submit-score] Profanity check PASSED for: "${playerName}"`);
 
-  const connection = new Connection(dbConfig);
+  const { startUtc, endUtc } = getCurrentEasternMonthBounds();
+  let scoreChanged = false;
 
-  connection.on('connect', (err) => {
-    if (err) return res.status(500).json({ message: "DB Connection Error", error: err.message });
+  let transaction: sql.Transaction | null = null;
+  try {
+    const pool = await getPool();
+    transaction = new sql.Transaction(pool);
+    await transaction.begin();
 
-    connection.beginTransaction(err => {
-      if (err) return res.status(500).json({ message: "Transaction Error", error: err.message });
+    const checkRequest = new sql.Request(transaction);
+    checkRequest.input('playerName', sql.NVarChar, playerName);
+    checkRequest.input('operationType', sql.NVarChar, operationType);
+    checkRequest.input('monthStartUtc', sql.DateTime2, startUtc);
+    checkRequest.input('nextMonthStartUtc', sql.DateTime2, endUtc);
 
-      let responseSent = false;
-      const finalize = (status: number, payload: unknown) => {
-        if (responseSent) {
-          console.warn('[api/submit-score] Attempted to respond twice', { status, payload });
-          return;
-        }
-        responseSent = true;
-        res.status(status).json(payload);
-        connection.close();
-      };
+    const existingResult = await checkRequest.query(`
+      SELECT TOP 1 Id, Score
+      FROM LeaderboardScores
+      WHERE PlayerName = @playerName
+        AND OperationType = @operationType
+        AND CreatedAt >= @monthStartUtc
+        AND CreatedAt < @nextMonthStartUtc
+      ORDER BY Score ASC, CreatedAt ASC;
+    `);
 
-      const checkExistingSql = `
-        DECLARE @UtcNow DATETIMEOFFSET = SYSUTCDATETIME();
-        DECLARE @EasternNow DATETIMEOFFSET = @UtcNow AT TIME ZONE 'UTC' AT TIME ZONE 'Eastern Standard Time';
-        DECLARE @MonthStartEastern DATETIMEOFFSET = (CAST(DATEFROMPARTS(DATEPART(YEAR, @EasternNow), DATEPART(MONTH, @EasternNow), 1) AS DATETIME2) AT TIME ZONE 'Eastern Standard Time');
-        DECLARE @NextMonthStartEastern DATETIMEOFFSET = DATEADD(MONTH, 1, @MonthStartEastern);
-        DECLARE @MonthStartUtc DATETIME2 = CAST(SWITCHOFFSET(@MonthStartEastern, '+00:00') AS DATETIME2);
-        DECLARE @NextMonthStartUtc DATETIME2 = CAST(SWITCHOFFSET(@NextMonthStartEastern, '+00:00') AS DATETIME2);
+    let responseStatus = 201;
+    let responsePayload = { message: 'Score submitted successfully!' };
 
-        SELECT 
-          Id,
-          Score,
-          CreatedAt,
-          CASE WHEN CreatedAt >= @MonthStartUtc AND CreatedAt < @NextMonthStartUtc THEN 1 ELSE 0 END AS IsCurrentMonth
-        FROM LeaderboardScores 
-        WHERE PlayerName = @playerName COLLATE SQL_Latin1_General_CP1_CI_AS 
-          AND OperationType = @operationType
-        ORDER BY 
-          CASE WHEN CreatedAt >= @MonthStartUtc AND CreatedAt < @NextMonthStartUtc THEN 0 ELSE 1 END,
-          CreatedAt DESC;
-      `;
+    if (existingResult.recordset.length > 0) {
+      const existingRecord = existingResult.recordset[0];
+      console.log('[api/submit-score] Found current month record', existingRecord);
+      if (scoreNum < existingRecord.Score) {
+        const updateRequest = new sql.Request(transaction);
+        updateRequest.input('score', sql.Int, scoreNum);
+        updateRequest.input('existingId', sql.Int, existingRecord.Id);
+        await updateRequest.query(`
+          UPDATE LeaderboardScores
+          SET Score = @score, CreatedAt = SYSUTCDATETIME()
+          WHERE Id = @existingId;
+        `);
+        responseStatus = 200;
+        responsePayload = { message: 'Score updated successfully!' };
+        scoreChanged = true;
+      } else {
+        responseStatus = 200;
+        responsePayload = { message: 'Existing score is better.' };
+      }
+    } else {
+      console.log('[api/submit-score] No current month record, inserting new score');
+      const insertRequest = new sql.Request(transaction);
+      insertRequest.input('playerName', sql.NVarChar, playerName);
+      insertRequest.input('score', sql.Int, scoreNum);
+      insertRequest.input('operationType', sql.NVarChar, operationType);
+      await insertRequest.query(`
+        INSERT INTO LeaderboardScores (PlayerName, Score, OperationType, CreatedAt)
+        VALUES (@playerName, @score, @operationType, SYSUTCDATETIME());
+      `);
+      scoreChanged = true;
+    }
 
-      const request = new Request(checkExistingSql, (err, rowCount, rows) => {
-        if (err) {
-          connection.rollbackTransaction(() => finalize(500, { message: "DB Error", error: err.message }));
-          return;
-        }
-
-        console.log('[api/submit-score] Existing rows found:', rowCount);
-
-        let existingRecord = null;
-        for (let i = 0; i < rowCount; i++) {
-          const row = rows[i];
-          if (!row || row.length < 4) {
-            console.warn('[api/submit-score] Skipping malformed row', row);
-            continue;
-          }
-
-          const record = {
-            id: row[0].value,
-            score: row[1].value,
-            createdAt: row[2].value,
-            isCurrentMonth: row[3].value === 1
-          };
-
-          existingRecord = record;
-          if (record.isCurrentMonth) {
-            break;
-          }
-        }
-
-        const existingScore = existingRecord ? existingRecord.score : null;
-
-        console.log('[api/submit-score] Existing record info:', existingRecord);
-
-        const runMaintenance = (successStatus, successMessage) => {
-          const maintenanceSql = `
-            DECLARE @UtcNow DATETIMEOFFSET = SYSUTCDATETIME();
-            DECLARE @EasternNow DATETIMEOFFSET = @UtcNow AT TIME ZONE 'UTC' AT TIME ZONE 'Eastern Standard Time';
-            DECLARE @MonthStartEastern DATETIMEOFFSET = (CAST(DATEFROMPARTS(DATEPART(YEAR, @EasternNow), DATEPART(MONTH, @EasternNow), 1) AS DATETIME2) AT TIME ZONE 'Eastern Standard Time');
-            DECLARE @MonthStartUtc DATETIME2 = CAST(SWITCHOFFSET(@MonthStartEastern, '+00:00') AS DATETIME2);
-
-            WITH MonthlyWinners AS (
-              SELECT 
-                Id,
-                PlayerName,
-                Score,
-                OperationType,
-                DATEPART(YEAR, (CreatedAt AT TIME ZONE 'UTC') AT TIME ZONE 'Eastern Standard Time') AS WinnerYear,
-                DATEPART(MONTH, (CreatedAt AT TIME ZONE 'UTC') AT TIME ZONE 'Eastern Standard Time') AS WinnerMonth,
-                ROW_NUMBER() OVER (
-                  PARTITION BY 
-                    OperationType,
-                    DATEPART(YEAR, (CreatedAt AT TIME ZONE 'UTC') AT TIME ZONE 'Eastern Standard Time'),
-                    DATEPART(MONTH, (CreatedAt AT TIME ZONE 'UTC') AT TIME ZONE 'Eastern Standard Time')
-                  ORDER BY 
-                    Score ASC,
-                    CreatedAt ASC,
-                    Id ASC
-                ) AS rn
-              FROM LeaderboardScores
-              WHERE OperationType = @operationType
-                AND CreatedAt < @MonthStartUtc
-            ), WinnersToInsert AS (
-              SELECT PlayerName, Score, OperationType, WinnerMonth, WinnerYear
-              FROM MonthlyWinners
-              WHERE rn = 1
-            )
-            INSERT INTO HallOfFame (PlayerName, Score, OperationType, Month, Year)
-            SELECT 
-              w.PlayerName,
-              w.Score,
-              w.OperationType,
-              w.WinnerMonth,
-              w.WinnerYear
-            FROM WinnersToInsert w
-            WHERE NOT EXISTS (
-              SELECT 1 FROM HallOfFame h
-              WHERE h.OperationType = w.OperationType
-                AND h.Month = w.WinnerMonth
-                AND h.Year = w.WinnerYear
-            );
-
-            DELETE FROM LeaderboardScores
-            WHERE OperationType = @operationType
-              AND CreatedAt < @MonthStartUtc;
-
-            WITH RankedScores AS (
-              SELECT 
-                Id,
-                ROW_NUMBER() OVER (
-                  ORDER BY 
-                    Score ASC,
-                    CreatedAt ASC,
-                    Id ASC
-                ) as rn 
-              FROM LeaderboardScores 
-              WHERE OperationType = @operationType
-            )
-            DELETE FROM LeaderboardScores WHERE Id IN (SELECT Id FROM RankedScores WHERE rn > 15);
-          `;
-
-          const maintenanceRequest = new Request(maintenanceSql, (err) => {
-            if (err) return connection.rollbackTransaction(() => finalize(500, { message: "DB Error", error: err.message }));
-            connection.commitTransaction(err => {
-              if (err) return connection.rollbackTransaction(() => finalize(500, { message: "DB Error", error: err.message }));
-              console.log('[api/submit-score] Maintenance complete', { successStatus, successMessage });
-              finalize(successStatus, { message: successMessage });
-            });
-          });
-          maintenanceRequest.addParameter('operationType', TYPES.NVarChar, operationType);
-          connection.execSql(maintenanceRequest);
-        };
-
-        const insertNewScore = (successStatus, successMessage) => {
-          console.log('[api/submit-score] Inserting new score', { playerName, operationType, score: scoreNum, successStatus, successMessage });
-          const insertSql = `
-            INSERT INTO LeaderboardScores (PlayerName, Score, OperationType, CreatedAt) 
-            VALUES (@playerName, @score, @operationType, SYSUTCDATETIME());
-          `;
-          const insertRequest = new Request(insertSql, (err) => {
-            if (err) return connection.rollbackTransaction(() => finalize(500, { message: "DB Error", error: err.message }));
-            runMaintenance(successStatus, successMessage);
-          });
-          insertRequest.addParameter('playerName', TYPES.NVarChar, playerName);
-          insertRequest.addParameter('score', TYPES.Int, scoreNum);
-          insertRequest.addParameter('operationType', TYPES.NVarChar, operationType);
-          connection.execSql(insertRequest);
-        };
-
-        if (existingRecord && existingRecord.isCurrentMonth) { // Player exists for current month
-          console.log('[api/submit-score] Found current month record');
-          if (scoreNum < existingScore) {
-            const updateSql = `
-              UPDATE LeaderboardScores SET 
-                Score = @score,
-                CreatedAt = SYSUTCDATETIME()
-              WHERE Id = @existingId;
-            `;
-
-            const updateRequest = new Request(updateSql, (err) => {
-              if (err) return connection.rollbackTransaction(() => finalize(500, { message: "DB Error", error: err.message }));
-              connection.commitTransaction(err => {
-                if (err) return connection.rollbackTransaction(() => finalize(500, { message: "DB Error", error: err.message }));
-                console.log('[api/submit-score] Current month score updated');
-                finalize(200, { message: 'Score updated successfully!' });
-              });
-            });
-            updateRequest.addParameter('score', TYPES.Int, scoreNum);
-            updateRequest.addParameter('existingId', TYPES.Int, existingRecord.id);
-            connection.execSql(updateRequest);
-          } else {
-            connection.commitTransaction(err => {
-                if (err) return connection.rollbackTransaction(() => finalize(500, { message: "DB Error", error: err.message }));
-                console.log('[api/submit-score] Existing score is better (no update)');
-                finalize(200, { message: 'Existing score is better.' });
-            });
-          }
-        } else {
-          console.log('[api/submit-score] No current month record, using insert path');
-          const successMessage = existingRecord ? 'Score submitted successfully for the new month!' : 'Score submitted successfully!';
-          insertNewScore(201, successMessage);
-        }
-      });
-      request.addParameter('playerName', TYPES.NVarChar, playerName);
-      request.addParameter('operationType', TYPES.NVarChar, operationType);
-      connection.execSql(request);
-    });
-  });
-
-  connection.connect();
+    await transaction.commit();
+    if (scoreChanged) {
+      clearHallOfFameDatesCache();
+      clearLeaderboardCache(operationType);
+    }
+    return res.status(responseStatus).json(responsePayload);
+  } catch (error) {
+    if (transaction) {
+      try {
+        await transaction.rollback();
+      } catch (rollbackError) {
+        console.error('[api/submit-score] Failed to rollback transaction', rollbackError);
+      }
+    }
+    console.error('[api/submit-score] Error handling request', error);
+    return res.status(500).json({ message: 'DB Error', error: error.message });
+  }
 }

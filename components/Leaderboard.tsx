@@ -17,7 +17,12 @@ const formatScore = (score: number) => {
   return `${(score / 1000).toFixed(3)}s`;
 };
 
-export const Leaderboard: React.FC<LeaderboardProps> = ({ title, scores, isLoading, subtitle }) => {
+export const Leaderboard: React.FC<LeaderboardProps> = ({
+  title,
+  scores,
+  isLoading,
+  subtitle,
+}) => {
   return (
     <div className="w-full p-4 bg-white border border-gray-200 rounded-lg shadow-md dark:bg-gray-800 dark:border-gray-700">
       <h3 className="text-xl font-bold text-center mb-2 text-gray-900 dark:text-white">{title}</h3>

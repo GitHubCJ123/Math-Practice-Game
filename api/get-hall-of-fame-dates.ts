@@ -1,63 +1,55 @@
-import { Connection, Request, ConnectionConfiguration } from "tedious";
+import sql from "mssql";
+import { getPool } from "./db-pool";
 
-const dbConfig: ConnectionConfiguration = {
-  server: process.env.AZURE_SERVER_NAME!,
-  authentication: {
-    type: "default",
-    options: {
-      userName: process.env.AZURE_DB_USER!,
-      password: process.env.AZURE_DB_PASSWORD!,
-    },
-  },
-  options: {
-    encrypt: true,
-    database: process.env.AZURE_DB_NAME!,
-    rowCollectionOnRequestCompletion: true,
-    connectTimeout: 30000
-  },
-};
+const CACHE_TTL_MS = 5 * 60 * 1000;
+const CACHE_CONTROL_HEADER = "public, max-age=300";
+
+let cache: { expiresAt: number; payload: Record<number, number[]> } | null = null;
+
+export function clearHallOfFameDatesCache() {
+  cache = null;
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
     return res.status(405).json({ message: 'Method Not Allowed' });
   }
 
-  const connection = new Connection(dbConfig);
+  const now = Date.now();
+  if (cache && cache.expiresAt > now) {
+    console.log('[api/get-hall-of-fame-dates] Serving from cache.');
+    res.setHeader('Cache-Control', CACHE_CONTROL_HEADER);
+    return res.status(200).json(cache.payload);
+  }
 
-  connection.on("connect", (err) => {
-    if (err) {
-      console.error("DB connection error:", err);
-      return res.status(500).json({ message: "Error connecting to database", error: err.message });
-    }
-
-    const sql = `
+  try {
+    console.log('[api/get-hall-of-fame-dates] Fetching from database...');
+    const pool = await getPool();
+    const result = await pool.request().query(`
       SELECT DISTINCT Year, Month
       FROM HallOfFame
       ORDER BY Year DESC, Month DESC;
-    `;
+    `);
 
-    const request = new Request(sql, (err, rowCount, rows) => {
-      if (err) {
-        console.error("Error executing query:", err);
-        return res.status(500).json({ message: "Error executing query", error: err.message });
+    const grouped = result.recordset.reduce<Record<number, number[]>>((acc, row) => {
+      const year = row.Year as number;
+      const month = row.Month as number;
+      if (!acc[year]) {
+        acc[year] = [];
       }
+      acc[year].push(month);
+      return acc;
+    }, {});
 
-      const dates = rows.reduce((acc, row) => {
-        const year = row[0].value;
-        const month = row[1].value;
-        if (!acc[year]) {
-          acc[year] = [];
-        }
-        acc[year].push(month);
-        return acc;
-      }, {});
+    cache = {
+      expiresAt: now + CACHE_TTL_MS,
+      payload: grouped,
+    };
 
-      res.status(200).json(dates);
-      connection.close();
-    });
-
-    connection.execSql(request);
-  });
-
-  connection.connect();
+    res.setHeader('Cache-Control', CACHE_CONTROL_HEADER);
+    return res.status(200).json(grouped);
+  } catch (error) {
+    console.error('[api/get-hall-of-fame-dates] Error handling request', error);
+    return res.status(500).json({ message: 'Error executing query', error: error.message });
+  }
 }

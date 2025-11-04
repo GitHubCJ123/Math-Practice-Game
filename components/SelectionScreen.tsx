@@ -371,26 +371,26 @@ const GlobalLeaderboard: React.FC = () => {
     return () => clearInterval(timerId);
   }, []);
 
-  useEffect(() => {
-    const fetchScores = async () => {
-      setIsLoading(true);
-      try {
-        const response = await fetch(`/api/get-leaderboard?operationType=${activeTab}`);
-        if (!response.ok) {
-          throw new Error('Failed to fetch scores');
-        }
-        const data = await response.json();
-        setScores(data);
-      } catch (error) {
-        console.error("Error fetching leaderboard:", error);
-        setScores([]); // Clear scores on error
-      } finally {
-        setIsLoading(false);
+  const fetchScores = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const response = await fetch(`/api/get-leaderboard?operationType=${activeTab}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch scores');
       }
-    };
-
-    fetchScores();
+      const data = await response.json();
+      setScores(data);
+    } catch (error) {
+      console.error('Error fetching leaderboard:', error);
+      setScores([]);
+    } finally {
+      setIsLoading(false);
+    }
   }, [activeTab]);
+
+  useEffect(() => {
+    fetchScores();
+  }, [fetchScores]);
 
   const getOperationDisplayName = (op: Operation) => {
     switch (op) {
@@ -460,7 +460,7 @@ const GlobalLeaderboard: React.FC = () => {
         title={getOperationDisplayName(activeTab)} 
         scores={scores} 
         isLoading={isLoading} 
-        subtitle="(Scores for the Current Month)"
+        subtitle="Scores for the current month (updates instantly)"
       />
     </div>
   );
