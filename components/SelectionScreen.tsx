@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import type { Operation, HighScores, HighScore, AllQuizStats, QuizStats } from '../types';
 import { StarIcon, SunIcon, MoonIcon, ChartBarIcon, BullseyeIcon, ListBulletIcon, ClockIcon, TrashIcon } from './icons';
 import { Leaderboard } from './Leaderboard';
@@ -562,6 +562,7 @@ const Section: React.FC<{ title: string; step: number; children: React.ReactNode
 );
 
 export const SelectionScreen: React.FC<SelectionScreenProps> = ({ onStartQuiz, initialSettings, isDarkMode, toggleDarkMode }) => {
+  const navigate = useNavigate();
   const [operation, setOperation] = useState<Operation>(initialSettings?.operation || 'multiplication');
   const [selectedNumbers, setSelectedNumbers] = useState<number[]>(initialSettings?.selectedNumbers || []);
   const [timeLimit, setTimeLimit] = useState<number>(initialSettings?.timeLimit ?? 0);
@@ -746,7 +747,7 @@ export const SelectionScreen: React.FC<SelectionScreenProps> = ({ onStartQuiz, i
             </Section>
         </div>
 
-        <div className="mt-12 text-center">
+        <div className="mt-12 text-center space-y-4">
             <button
                 onClick={handleStart}
                 disabled={(selectedNumbers.length === 0 && !isConversionMode) || needsAtLeastTen}
@@ -754,6 +755,14 @@ export const SelectionScreen: React.FC<SelectionScreenProps> = ({ onStartQuiz, i
             >
                 Start Quiz
             </button>
+            <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
+                <button
+                    onClick={() => navigate('/multiplayer')}
+                    className="w-full sm:w-auto px-16 py-4 text-xl font-bold text-white bg-purple-600 rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300"
+                >
+                    1v1 Online Match
+                </button>
+            </div>
         </div>
         <div className="mt-10 border-t border-slate-200 dark:border-slate-800 pt-6 flex justify-center">
              <button onClick={() => setShowStats(prev => !prev)} className="px-6 py-2 font-semibold text-white bg-slate-600 dark:bg-slate-700 rounded-full hover:bg-slate-700 dark:hover:bg-slate-600 transition-colors shadow-sm flex items-center gap-2">

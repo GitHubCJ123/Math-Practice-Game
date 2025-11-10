@@ -48,4 +48,28 @@ export function getEasternMonthBounds(year: number, month: number): MonthBounds 
   };
 }
 
+export interface DayBounds {
+  startUtc: Date;
+  endUtc: Date;
+  year: number;
+  month: number;
+  day: number;
+  dayIdentifier: string; // Format: YYYY-MM-DD in Eastern time
+}
+
+export function getCurrentEasternDayBounds(): DayBounds {
+  const nowEastern = DateTime.now().setZone(EASTERN_TIME_ZONE);
+  const start = nowEastern.startOf("day");
+  const end = start.plus({ days: 1 });
+
+  return {
+    startUtc: start.toUTC().toJSDate(),
+    endUtc: end.toUTC().toJSDate(),
+    year: start.year,
+    month: start.month,
+    day: start.day,
+    dayIdentifier: start.toFormat("yyyy-MM-dd"),
+  };
+}
+
 

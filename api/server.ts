@@ -16,15 +16,20 @@ import { fileURLToPath, pathToFileURL } from 'url';
         const app = express();
         app.use(cors());
         app.use(express.json());
+        app.use(express.urlencoded({ extended: true })); // For Pusher auth form data
 
         console.log('[API Server] Loading routes...');
         const apiFiles = globSync('**/*.ts', { cwd: __dirname });
+        console.log('[API Server] Found files:', apiFiles);
 
         for (const file of apiFiles) {
             if (file.includes('server.ts')) continue;
-            if (file.includes('db-pool.ts') || file.includes('time-utils.ts')) continue;
+            if (file.includes('db-pool.ts') || file.includes('time-utils.ts') || file.includes('pusher-utils.ts') || file.includes('question-generator.ts')) continue;
+            if (file.includes('[gameId]')) continue; // Skip dynamic route directories
 
-            const routeName = path.basename(file, '.ts');
+            // Handle nested routes: preserve directory structure
+            // Convert Windows backslashes to forward slashes for URLs
+            const routeName = file.replace(/\.ts$/, '').replace(/\\/g, '/');
             const fullPath = path.join(__dirname, file);
 
             try {
@@ -33,7 +38,11 @@ import { fileURLToPath, pathToFileURL } from 'url';
                 const { default: routeHandler } = await import(moduleUrl);
 
                 if (typeof routeHandler === 'function') {
-                    app.all(`/api/${routeName}`, routeHandler);
+                    // For nested routes like 'games/create', create '/api/games/create'
+                    // For top-level routes like 'submit-score', create '/api/submit-score'
+                    const routePath = `/api/${routeName}`;
+                    app.all(routePath, routeHandler);
+                    console.log(`[API Server] Loaded route: ${routePath}`);
                 } else {
                     console.warn(`[API Server] Could not load route ${routeName}: default export is not a function.`);
                 }
@@ -41,6 +50,12 @@ import { fileURLToPath, pathToFileURL } from 'url';
                 console.error(`[API Server] Failed to load route ${file}:`, error);
             }
         }
+
+        // Add a catch-all for debugging unmatched routes
+        app.use('/api', (req, res) => {
+            console.log(`[API Server] Unmatched route: ${req.method} ${req.path}`);
+            res.status(404).json({ message: 'Route not found', path: req.path });
+        });
 
         const port = 3001;
         app.listen(port, () => {

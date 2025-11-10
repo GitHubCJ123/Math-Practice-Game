@@ -1,10 +1,15 @@
 
 import React, { useState, useCallback, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import type { Operation, Question } from './types';
 import { SelectionScreen } from './components/SelectionScreen';
 import { QuizScreen } from './components/QuizScreen';
 import { ResultsScreen } from './components/ResultsScreen';
+import { MultiplayerMenu } from './components/MultiplayerMenu';
+import { Lobby } from './components/Lobby';
+import { GameRoom } from './components/GameRoom';
+import { GameSummary } from './components/GameSummary';
+import { MatchmakingScreen } from './components/MatchmakingScreen';
 import { conversions } from './lib/conversions';
 import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/react";
@@ -202,6 +207,28 @@ const App: React.FC = () => {
                 />
               }
             />
+            <Route
+              path="/multiplayer"
+              element={
+                <MultiplayerMenuWrapper />
+              }
+            />
+            <Route
+              path="/matchmaking"
+              element={<MatchmakingScreenWrapper />}
+            />
+            <Route
+              path="/lobby/:gameId"
+              element={<Lobby />}
+            />
+            <Route
+              path="/game/:gameId"
+              element={<GameRoom />}
+            />
+            <Route
+              path="/summary/:gameId"
+              element={<GameSummary />}
+            />
           </Routes>
         </main>
         <Analytics />
@@ -338,6 +365,37 @@ const ResultsScreenWrapper: React.FC<{
             quizSettings={quizSettings}
         />
     );
+};
+
+const MultiplayerMenuWrapper: React.FC = () => {
+    const navigate = useNavigate();
+
+    const handleBack = () => {
+        navigate('/', { replace: true });
+    };
+
+    return <MultiplayerMenu onBack={handleBack} />;
+};
+
+const MatchmakingScreenWrapper: React.FC = () => {
+    const navigate = useNavigate();
+    const location = useLocation();
+    const locationState = location.state as any;
+    const sessionId = locationState?.sessionId;
+    const pusherChannel = locationState?.pusherChannel;
+    const matchData = locationState?.matchData;
+
+    useEffect(() => {
+        if (!sessionId || !pusherChannel) {
+            navigate('/multiplayer', { replace: true });
+        }
+    }, [sessionId, pusherChannel, navigate]);
+
+    if (!sessionId || !pusherChannel) {
+        return null;
+    }
+
+    return <MatchmakingScreen sessionId={sessionId} pusherChannel={pusherChannel} matchData={matchData} />;
 };
 
 
