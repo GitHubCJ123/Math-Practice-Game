@@ -130,7 +130,16 @@ export const GameRoom: React.FC<GameRoomProps> = () => {
     setPusher(pusherInstance);
 
     const channelName = `private-game-${roomCode}`;
+    console.log('[GameRoom] Subscribing to game channel:', channelName);
     const gameChannel = pusherInstance.subscribe(channelName);
+
+    gameChannel.bind('pusher:subscription_succeeded', () => {
+      console.log('[GameRoom] Successfully subscribed to game channel:', channelName);
+    });
+
+    gameChannel.bind('pusher:subscription_error', (error: any) => {
+      console.error('[GameRoom] Subscription error for game channel:', error);
+    });
 
     gameChannel.bind('opponent-finished', (data: any) => {
       // Only show opponent finished if it's not us
@@ -147,8 +156,15 @@ export const GameRoom: React.FC<GameRoomProps> = () => {
         mySessionId: sessionId,
         cheaterSessionId: data.cheaterSessionId,
       });
-      if (data.winnerSessionId === sessionId) {
-        console.log('[GameRoom] We won! Opponent cheated. Navigating to summary...');
+      
+      // Normalize session IDs for comparison (trim whitespace)
+      const winnerId = String(data.winnerSessionId || '').trim();
+      const cheaterId = String(data.cheaterSessionId || '').trim();
+      const myId = String(sessionId || '').trim();
+      
+      // If we're NOT the cheater, navigate to summary to show opponent forfeited
+      if (cheaterId !== myId && cheaterId && myId) {
+        console.log('[GameRoom] Opponent cheated! Navigating to summary to show forfeited...');
         // We won because opponent cheated - navigate to summary immediately
         setTimerRunning(false);
         setQuizFinished(true);
@@ -182,13 +198,52 @@ export const GameRoom: React.FC<GameRoomProps> = () => {
           },
         });
       } else {
-        console.log('[GameRoom] We are NOT the winner, ignoring opponent-cheated event');
+        console.log('[GameRoom] We are the cheater, ignoring opponent-cheated event');
       }
     });
 
     gameChannel.bind('game-results', (data: any) => {
       console.log('[GameRoom] Game results received via Pusher:', data);
-      // This event is now handled by GameSummary component
+      // If opponent cheated, navigate to summary immediately to show "Forfeited"
+      if (data.cheated === true) {
+        const winnerId = String(data.winner || '').trim();
+        const myId = String(sessionId || '').trim();
+        const cheaterId = data.players?.find((p: any) => p.correctCount === 0)?.sessionId;
+        const isCheater = String(cheaterId || '').trim() === myId;
+        
+        console.log('[GameRoom] Game results show cheating. Checking:', {
+          winnerId,
+          myId,
+          cheaterId,
+          isCheater,
+          areEqual: winnerId === myId,
+        });
+        
+        // If we're NOT the cheater, navigate to summary to show opponent forfeited
+        if (!isCheater) {
+          console.log('[GameRoom] Opponent cheated! Navigating to summary to show forfeited...');
+          setTimerRunning(false);
+          setQuizFinished(true);
+          navigate(`/summary/${gameId}`, {
+            state: {
+              questions,
+              answers: answersRef.current,
+              playerResult: {
+                sessionId,
+                finalTime: null,
+                correctCount: null,
+              },
+              gameResults: data,
+              waitingForOpponent: false,
+              forfeited: false,
+              sessionId,
+              roomCode,
+            },
+          });
+          return; // Don't process further
+        }
+      }
+      // Otherwise, this event is handled by GameSummary component
       // It will update the opponent's score when received
     });
 

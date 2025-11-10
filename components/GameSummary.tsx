@@ -204,10 +204,11 @@ export const GameSummary: React.FC<GameSummaryProps> = () => {
   // Check if CURRENT player forfeited (they will have correctCount: 0 when cheated: true and they're the cheater)
   const currentPlayerForfeited = forfeited || (gameResults?.cheated === true && currentPlayerResult?.correctCount === 0);
   
-  // Check if opponent forfeited (cheated) - they will have correctCount: 0 when cheated: true AND they're NOT the winner
+  // Check if opponent forfeited (cheated) - they will have correctCount: 0 when cheated: true
+  // The opponent is the one who is NOT the current player
   const opponentForfeited = gameResults?.cheated === true && 
-                            opponentResult?.correctCount === 0 && 
-                            gameResults?.winner !== opponentResult?.sessionId;
+                            opponentResult && 
+                            opponentResult.correctCount === 0;
   
   console.log('[GameSummary] Opponent result check:', {
     hasGameResults: !!gameResults,

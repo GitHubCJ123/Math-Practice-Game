@@ -182,6 +182,23 @@ export default async function handler(req: any, res: any) {
           }
         }
 
+        // Send game-results event to notify opponent that you forfeited
+        const pusher = getPusherInstance();
+        await pusher.trigger(`private-game-${game.RoomCode}`, 'game-results', {
+          players: [{
+            sessionId: opponentData?.PlayerSessionId || '',
+            finalTime: opponentData?.FinalTime ? Number(opponentData.FinalTime) : null,
+            correctCount: opponentCorrectCount,
+          }, {
+            sessionId: sessionId,
+            finalTime: null,
+            correctCount: 0, // Cheater gets 0
+          }],
+          winner: opponentData?.PlayerSessionId || null,
+          isTie: false,
+          cheated: true,
+        });
+
         return res.status(200).json({ 
           success: true,
           forfeited: true,
