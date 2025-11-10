@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import Pusher from 'pusher-js';
 import type { Question } from '../types';
 
@@ -16,6 +16,8 @@ interface MatchmakingScreenProps {
 
 export const MatchmakingScreen: React.FC<MatchmakingScreenProps> = ({ sessionId, pusherChannel, matchData }) => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const locationState = location.state as any;
   const [pusher, setPusher] = useState<Pusher | null>(null);
   const [channel, setChannel] = useState<any>(null);
   const [countdown, setCountdown] = useState<number | null>(null);
@@ -175,13 +177,35 @@ export const MatchmakingScreen: React.FC<MatchmakingScreenProps> = ({ sessionId,
     setChannel(matchmakingChannel);
 
     // Also subscribe to game channel as backup (in case matchmaking channel event is missed)
-    if (matchData && matchData.roomCode) {
-      const gameChannelName = `private-game-${matchData.roomCode}`;
-      console.log('[MatchmakingScreen] Also subscribing to game channel as backup:', gameChannelName);
+    // OR for rematch scenarios where we need to listen to rematch-accepted events
+    const rematchRoomCode = locationState?.roomCode || matchData?.roomCode;
+    
+    if (rematchRoomCode) {
+      const gameChannelName = `private-game-${rematchRoomCode}`;
+      console.log('[MatchmakingScreen] Also subscribing to game channel for rematch:', gameChannelName);
       const gameChannel = pusherInstance.subscribe(gameChannelName);
       
       gameChannel.bind('pusher:subscription_succeeded', () => {
-        console.log('[MatchmakingScreen] Successfully subscribed to game channel');
+        console.log('[MatchmakingScreen] Successfully subscribed to game channel for rematch');
+      });
+
+      // Listen for rematch-accepted event
+      gameChannel.bind('rematch-accepted', (data: { 
+        questions: Question[];
+        gameId: number;
+        startTime?: number;
+        roomCode?: string;
+      }) => {
+        console.log('[MatchmakingScreen] Rematch accepted event received on game channel', data);
+        if (data.startTime && data.questions) {
+          console.log('[MatchmakingScreen] Using rematch-accepted event to set matchInfo');
+          setMatchInfo({
+            gameId: data.gameId,
+            roomCode: data.roomCode || rematchRoomCode,
+            questions: data.questions,
+            startTime: data.startTime,
+          });
+        }
       });
 
       gameChannel.bind('game-start', (data: { 
@@ -226,7 +250,7 @@ export const MatchmakingScreen: React.FC<MatchmakingScreenProps> = ({ sessionId,
 
       pusherInstance.disconnect();
     };
-  }, [sessionId, pusherChannel, navigate, matchData]);
+  }, [sessionId, pusherChannel, navigate, matchData, locationState]);
 
   const handleCancel = async () => {
     // Cancel matchmaking

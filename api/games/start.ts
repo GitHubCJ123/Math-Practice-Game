@@ -85,13 +85,17 @@ export default async function handler(req: any, res: any) {
     const questions = generateQuestions(operation, selectedNumbers);
     const questionsJson = JSON.stringify(questions);
 
+    // Calculate start time (12 seconds from now to account for network latency)
+    const startTime = Date.now() + 12000;
+
     // Update game status to in_progress
     const updateGameRequest = new sql.Request(transaction);
     updateGameRequest.input('gameId', sql.Int, gameId);
     updateGameRequest.input('questions', sql.NVarChar, questionsJson);
+    updateGameRequest.input('startTime', sql.BigInt, startTime);
     await updateGameRequest.query(`
       UPDATE Games
-      SET Status = 'in_progress', Questions = @questions, UpdatedAt = GETUTCDATE()
+      SET Status = 'in_progress', Questions = @questions, StartTime = @startTime, UpdatedAt = GETUTCDATE()
       WHERE Id = @gameId
     `);
 
@@ -102,12 +106,14 @@ export default async function handler(req: any, res: any) {
     await pusher.trigger(`private-game-${game.RoomCode}`, 'game-start', {
       questions,
       gameId: game.Id,
+      startTime,
     });
 
     return res.status(200).json({ 
       success: true,
       questions,
       gameId: game.Id,
+      startTime,
     });
   } catch (error) {
     if (transaction) {

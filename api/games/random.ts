@@ -118,22 +118,23 @@ export default async function handler(req: any, res: any) {
       const questions = generateQuestions(operation as Operation, selectedNumbersArray);
       const questionsJson = JSON.stringify(questions);
 
-      const updateGameRequest = new sql.Request(transaction);
-      updateGameRequest.input('gameId', sql.Int, gameId);
-      updateGameRequest.input('questions', sql.NVarChar, questionsJson);
-      await updateGameRequest.query(`
-        UPDATE Games
-        SET Status = 'in_progress', Questions = @questions, UpdatedAt = GETUTCDATE()
-        WHERE Id = @gameId
-      `);
-
-      await transaction.commit();
-
       // Calculate start time (12 seconds from now to account for network latency)
       // This ensures Player 1 has time to receive the Pusher event before countdown starts
       // Player 2 will see 12 seconds initially, Player 1 will see ~10 seconds when they receive it
       // Both will finish at the same time
       const startTime = Date.now() + 12000; // 12 seconds from now (10s countdown + 2s buffer for latency)
+
+      const updateGameRequest = new sql.Request(transaction);
+      updateGameRequest.input('gameId', sql.Int, gameId);
+      updateGameRequest.input('questions', sql.NVarChar, questionsJson);
+      updateGameRequest.input('startTime', sql.BigInt, startTime);
+      await updateGameRequest.query(`
+        UPDATE Games
+        SET Status = 'in_progress', Questions = @questions, StartTime = @startTime, UpdatedAt = GETUTCDATE()
+        WHERE Id = @gameId
+      `);
+
+      await transaction.commit();
 
       // Notify both players via Pusher
       const pusher = getPusherInstance();

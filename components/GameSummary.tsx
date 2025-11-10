@@ -29,6 +29,9 @@ export const GameSummary: React.FC<GameSummaryProps> = () => {
   const [loadedQuestions, setLoadedQuestions] = useState<Question[]>(questions);
   const [loadedAnswers, setLoadedAnswers] = useState<string[]>(userAnswers);
   const [hasClickedPlayAgain, setHasClickedPlayAgain] = useState(false);
+  const [hasClickedRematch, setHasClickedRematch] = useState(false);
+  const [rematchStatus, setRematchStatus] = useState<'waiting' | 'accepted' | 'timeout' | 'pending_acceptance' | null>(null);
+  const [rematchRequestingSessionId, setRematchRequestingSessionId] = useState<string | null>(null);
   const [pusher, setPusher] = useState<Pusher | null>(null);
   const [channel, setChannel] = useState<any>(null);
   
@@ -107,16 +110,68 @@ export const GameSummary: React.FC<GameSummaryProps> = () => {
     };
     gameChannel.bind('opponent-cheated', opponentCheatedHandler);
 
+    // Listen for rematch request
+    const rematchRequestHandler = (data: any) => {
+      console.log('[GameSummary] Rematch request received:', data);
+      if (data.requestingSessionId !== sessionId) {
+        // Opponent wants a rematch
+        setRematchStatus('pending_acceptance');
+        setRematchRequestingSessionId(data.requestingSessionId);
+      }
+    };
+    gameChannel.bind('rematch-request', rematchRequestHandler);
+
+    // Listen for rematch accepted
+    const rematchAcceptedHandler = (data: any) => {
+      console.log('[GameSummary] Rematch accepted event received:', data);
+      console.log('[GameSummary] Current state:', { hasClickedRematch, rematchStatus, sessionId, data });
+      
+      // Both players should navigate when rematch is accepted
+      if (data.questions && data.startTime) {
+        console.log('[GameSummary] Navigating to matchmaking with rematch data');
+        navigate('/multiplayer', {
+          state: {
+            rematch: true,
+            gameId: parseInt(gameId || '0', 10),
+            roomCode: data.roomCode || roomCode,
+            sessionId,
+            opponentSessionId: hasClickedRematch ? data.acceptingSessionId : data.requestingSessionId,
+            questions: data.questions,
+            startTime: data.startTime,
+          },
+        });
+      }
+    };
+    gameChannel.bind('rematch-accepted', rematchAcceptedHandler);
+
+    // Listen for rematch declined/timeout
+    const rematchDeclinedHandler = (data: any) => {
+      console.log('[GameSummary] Rematch declined/timeout:', data);
+      if (hasClickedRematch) {
+        setRematchStatus('timeout');
+        setTimeout(() => {
+          navigate('/multiplayer');
+        }, 2000);
+      } else if (rematchStatus === 'pending_acceptance') {
+        setRematchStatus(null);
+        setRematchRequestingSessionId(null);
+      }
+    };
+    gameChannel.bind('rematch-declined', rematchDeclinedHandler);
+
     setChannel(gameChannel);
 
     return () => {
       gameChannel.unbind('game-results', gameResultsHandler);
       gameChannel.unbind('opponent-cheated', opponentCheatedHandler);
+      gameChannel.unbind('rematch-request', rematchRequestHandler);
+      gameChannel.unbind('rematch-accepted', rematchAcceptedHandler);
+      gameChannel.unbind('rematch-declined', rematchDeclinedHandler);
       gameChannel.unbind_all();
       gameChannel.unsubscribe();
       pusherInstance.disconnect();
     };
-  }, [roomCode, gameId, sessionId, navigate]);
+  }, [roomCode, gameId, sessionId, navigate, hasClickedRematch, rematchStatus]);
 
   const handleGoHome = async () => {
     // Clean up game data before navigating
@@ -162,6 +217,145 @@ export const GameSummary: React.FC<GameSummaryProps> = () => {
 
     // Navigate directly to multiplayer menu (matchmaking)
     navigate('/multiplayer');
+  };
+
+  const handleAcceptRematch = async () => {
+    try {
+      const response = await fetch('/api/games/rematch-accept', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          gameId: parseInt(gameId || '0', 10),
+          sessionId,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to accept rematch');
+      }
+
+      const result = await response.json();
+      console.log('[GameSummary] Rematch accepted, received data:', result);
+      
+      // Navigate immediately with the data from the API response
+      // This ensures we don't miss the navigation if Pusher event is delayed
+      if (result.questions && result.startTime) {
+        navigate('/multiplayer', {
+          state: {
+            rematch: true,
+            gameId: parseInt(gameId || '0', 10),
+            roomCode,
+            sessionId,
+            opponentSessionId: result.requestingSessionId || null,
+            questions: result.questions,
+            startTime: result.startTime,
+          },
+        });
+      } else {
+        // Fallback: wait for Pusher event
+        setRematchStatus('accepted');
+      }
+    } catch (error) {
+      console.error('[GameSummary] Error accepting rematch:', error);
+    }
+  };
+
+  const handleDeclineRematch = async () => {
+    try {
+      await fetch('/api/games/rematch-decline', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          gameId: parseInt(gameId || '0', 10),
+          sessionId,
+        }),
+      });
+
+      setRematchStatus(null);
+      setRematchRequestingSessionId(null);
+    } catch (error) {
+      console.error('[GameSummary] Error declining rematch:', error);
+    }
+  };
+
+  const handleRematch = async () => {
+    if (hasClickedRematch) {
+      console.log('[GameSummary] Already clicked rematch, ignoring');
+      return;
+    }
+
+    console.log('[GameSummary] Clicking rematch - sending request to opponent', { gameId, sessionId, roomCode });
+    setHasClickedRematch(true);
+    setRematchStatus('waiting');
+
+    try {
+      const requestBody = {
+        gameId: parseInt(gameId || '0', 10),
+        sessionId,
+        roomCode,
+      };
+      console.log('[GameSummary] Sending rematch request with body:', requestBody);
+      
+      const response = await fetch('/api/games/rematch-request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody),
+      });
+
+      console.log('[GameSummary] Rematch request response status:', response.status);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('[GameSummary] Rematch request failed:', errorText);
+        throw new Error(`Failed to send rematch request: ${response.status} ${errorText}`);
+      }
+
+      const result = await response.json();
+      console.log('[GameSummary] Rematch request successful:', result);
+
+      // Set up timeout check
+      const checkRematchStatus = async () => {
+        try {
+          const statusResponse = await fetch(`/api/games/rematch-status?gameId=${gameId}&sessionId=${encodeURIComponent(sessionId)}`);
+          if (statusResponse.ok) {
+            const status = await statusResponse.json();
+            console.log('[GameSummary] Rematch status check:', status);
+            if (status.status === 'accepted') {
+              setRematchStatus('accepted');
+            } else if (status.status === 'timeout' || status.status === 'declined') {
+              setRematchStatus('timeout');
+              setTimeout(() => {
+                navigate('/multiplayer');
+              }, 2000);
+            }
+          }
+        } catch (error) {
+          console.error('[GameSummary] Error checking rematch status:', error);
+        }
+      };
+
+      // Check status every 2 seconds for 30 seconds
+      const statusInterval = setInterval(checkRematchStatus, 2000);
+      setTimeout(() => {
+        clearInterval(statusInterval);
+        checkRematchStatus().then(() => {
+          setRematchStatus((currentStatus) => {
+            if (currentStatus !== 'accepted') {
+              setTimeout(() => {
+                navigate('/multiplayer');
+              }, 2000);
+              return 'timeout';
+            }
+            return currentStatus;
+          });
+        });
+      }, 30000);
+    } catch (error: any) {
+      console.error('[GameSummary] Error sending rematch request:', error);
+      alert(`Failed to send rematch request: ${error.message}`);
+      setHasClickedRematch(false);
+      setRematchStatus(null);
+    }
   };
 
   if (!loadedQuestions || loadedQuestions.length === 0) {
@@ -397,15 +591,57 @@ export const GameSummary: React.FC<GameSummaryProps> = () => {
         >
           Go Back to Home Screen
         </button>
-        <div>
+        <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              console.log('[GameSummary] Rematch button clicked!', { hasClickedRematch, hasClickedPlayAgain, gameId, sessionId, roomCode });
+              handleRematch();
+            }}
+            disabled={hasClickedRematch || hasClickedPlayAgain}
+            className="w-full sm:w-auto px-16 py-4 text-xl font-bold text-white bg-purple-600 rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100"
+          >
+            {rematchStatus === 'waiting' ? 'Waiting for Opponent...' : rematchStatus === 'timeout' ? 'Rematch Timeout' : 'Rematch'}
+          </button>
           <button
             onClick={handlePlayAgain}
-            disabled={hasClickedPlayAgain}
+            disabled={hasClickedPlayAgain || hasClickedRematch}
             className="w-full sm:w-auto px-16 py-4 text-xl font-bold text-white bg-blue-600 rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100"
           >
             {hasClickedPlayAgain ? 'Finding Match...' : 'Play Again'}
           </button>
         </div>
+        {rematchStatus === 'waiting' && (
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">
+            Waiting for opponent to accept rematch... (30s timeout)
+          </p>
+        )}
+        {rematchStatus === 'timeout' && (
+          <p className="text-sm text-red-500 dark:text-red-400 mt-2">
+            Opponent did not accept rematch. Redirecting to matchmaking...
+          </p>
+        )}
+        {rematchStatus === 'pending_acceptance' && (
+          <div className="mt-4 p-4 bg-purple-100 dark:bg-purple-500/20 border-2 border-purple-500 rounded-lg">
+            <p className="text-lg font-bold text-purple-700 dark:text-purple-400 mb-3">
+              Opponent wants a rematch!
+            </p>
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+              <button
+                onClick={handleAcceptRematch}
+                className="px-8 py-3 text-lg font-bold text-white bg-green-600 rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300"
+              >
+                Accept Rematch
+              </button>
+              <button
+                onClick={handleDeclineRematch}
+                className="px-8 py-3 text-lg font-bold text-white bg-red-600 rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300"
+              >
+                Decline
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

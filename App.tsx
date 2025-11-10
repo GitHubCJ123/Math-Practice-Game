@@ -369,6 +369,32 @@ const ResultsScreenWrapper: React.FC<{
 
 const MultiplayerMenuWrapper: React.FC = () => {
     const navigate = useNavigate();
+    const location = useLocation();
+    const locationState = location.state as any;
+
+    // Check if this is a rematch - redirect to matchmaking screen
+    useEffect(() => {
+        if (locationState?.rematch) {
+            // This is a rematch - navigate to matchmaking with rematch data
+            navigate('/matchmaking', {
+                state: {
+                    rematch: true,
+                    gameId: locationState.gameId,
+                    roomCode: locationState.roomCode,
+                    sessionId: locationState.sessionId,
+                    opponentSessionId: locationState.opponentSessionId,
+                    matchData: locationState.questions && locationState.startTime ? {
+                        gameId: locationState.gameId,
+                        roomCode: locationState.roomCode,
+                        questions: locationState.questions,
+                        startTime: locationState.startTime,
+                    } : null,
+                    pusherChannel: `private-matchmaking-${locationState.sessionId}`,
+                },
+                replace: true,
+            });
+        }
+    }, [locationState, navigate]);
 
     const handleBack = () => {
         navigate('/', { replace: true });

@@ -35,7 +35,7 @@ export default async function handler(req: any, res: any) {
     const gameRequest = pool.request();
     gameRequest.input('gameId', sql.Int, parseInt(gameId as string, 10));
     const gameResult = await gameRequest.query(`
-      SELECT RoomCode, Questions, Status, CreatedAt
+      SELECT RoomCode, Questions, Status, CreatedAt, StartTime
       FROM Games
       WHERE Id = @gameId
     `);
@@ -47,15 +47,20 @@ export default async function handler(req: any, res: any) {
     const game = gameResult.recordset[0];
     const questions = JSON.parse(game.Questions || '[]');
     
-    // Calculate startTime based on when game status was set to 'in_progress'
-    // The startTime is calculated as CreatedAt + ~time until status update + 12 seconds
-    // For accuracy, we'll estimate it was set ~1 second after creation, then add 12 seconds
-    // This matches the logic in random.ts: startTime = Date.now() + 12000
-    const createdAt = new Date(game.CreatedAt).getTime();
-    // Estimate: game was created, then status updated ~1 second later, then startTime = that time + 12000
-    // So startTime ≈ createdAt + 1000 + 12000 = createdAt + 13000
-    // But to be safe, let's use a more conservative estimate
-    const startTime = createdAt + 13000; // Should be close to the actual startTime
+    // Use the stored StartTime if available (set when match was found in random.ts)
+    // This ensures synchronization - both players use the exact same startTime that was
+    // calculated at match time and sent via Pusher
+    let startTime: number;
+    if (game.StartTime !== null && game.StartTime !== undefined) {
+      // Use the stored synchronized startTime
+      startTime = game.StartTime;
+    } else {
+      // Fallback for games created before StartTime column was added
+      // Calculate based on CreatedAt (less accurate but better than nothing)
+      const createdAt = new Date(game.CreatedAt).getTime();
+      startTime = createdAt + 13000;
+      console.warn('[api/games/get-game-info] StartTime not stored, using fallback calculation:', startTime);
+    }
 
     return res.status(200).json({
       roomCode: game.RoomCode,
