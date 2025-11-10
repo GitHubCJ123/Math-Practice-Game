@@ -24,3 +24,4 @@ CREATE TABLE GamePlayers (
 -- Optional index for faster lookups of waiting games for matchmaking.
 CREATE INDEX IX_Games_Status ON Games(Status) WHERE Status = 'waiting';
 
+
