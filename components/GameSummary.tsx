@@ -30,8 +30,9 @@ export const GameSummary: React.FC<GameSummaryProps> = () => {
   const [loadedAnswers, setLoadedAnswers] = useState<string[]>(userAnswers);
   const [hasClickedPlayAgain, setHasClickedPlayAgain] = useState(false);
   const [hasClickedRematch, setHasClickedRematch] = useState(false);
-  const [rematchStatus, setRematchStatus] = useState<'waiting' | 'accepted' | 'timeout' | 'pending_acceptance' | null>(null);
+  const [rematchStatus, setRematchStatus] = useState<'waiting' | 'accepted' | 'timeout' | 'pending_acceptance' | 'error' | null>(null);
   const [rematchRequestingSessionId, setRematchRequestingSessionId] = useState<string | null>(null);
+  const [rematchError, setRematchError] = useState<string | null>(null);
   const [pusher, setPusher] = useState<Pusher | null>(null);
   const [channel, setChannel] = useState<any>(null);
   
@@ -176,10 +177,11 @@ export const GameSummary: React.FC<GameSummaryProps> = () => {
   const handleGoHome = async () => {
     // Clean up game data before navigating
     try {
-      await fetch('/api/games/cleanup', {
+      await fetch('/api/cleanup?action=cleanup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          action: 'cleanup',
           gameId: parseInt(gameId || '0', 10),
           sessionId,
         }),
@@ -202,10 +204,11 @@ export const GameSummary: React.FC<GameSummaryProps> = () => {
     
     // Clean up the current game
     try {
-      await fetch('/api/games/cleanup', {
+      await fetch('/api/cleanup?action=cleanup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          action: 'cleanup',
           gameId: parseInt(gameId || '0', 10),
           sessionId,
         }),
@@ -221,10 +224,11 @@ export const GameSummary: React.FC<GameSummaryProps> = () => {
 
   const handleAcceptRematch = async () => {
     try {
-      const response = await fetch('/api/games/rematch-accept', {
+      const response = await fetch('/api/rematch?action=accept', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          action: 'accept',
           gameId: parseInt(gameId || '0', 10),
           sessionId,
         }),
@@ -262,10 +266,11 @@ export const GameSummary: React.FC<GameSummaryProps> = () => {
 
   const handleDeclineRematch = async () => {
     try {
-      await fetch('/api/games/rematch-decline', {
+      await fetch('/api/rematch?action=decline', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          action: 'decline',
           gameId: parseInt(gameId || '0', 10),
           sessionId,
         }),
@@ -296,18 +301,39 @@ export const GameSummary: React.FC<GameSummaryProps> = () => {
       };
       console.log('[GameSummary] Sending rematch request with body:', requestBody);
       
-      const response = await fetch('/api/games/rematch-request', {
+      const response = await fetch('/api/rematch?action=request', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody),
+        body: JSON.stringify({
+          action: 'request',
+          gameId: parseInt(gameId || '0', 10),
+          sessionId,
+          roomCode,
+        }),
       });
 
       console.log('[GameSummary] Rematch request response status:', response.status);
       
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error('[GameSummary] Rematch request failed:', errorText);
-        throw new Error(`Failed to send rematch request: ${response.status} ${errorText}`);
+        let errorMessage = 'Failed to send rematch request';
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.message || errorMessage;
+        } catch {
+          const errorText = await response.text();
+          errorMessage = errorText || errorMessage;
+        }
+        console.error('[GameSummary] Rematch request failed:', errorMessage);
+        
+        // Check if opponent left
+        if (errorMessage.includes('already left') || errorMessage.includes('not found')) {
+          setRematchStatus('error');
+          setRematchError('Opponent has already left the match');
+          setHasClickedRematch(false);
+          return;
+        }
+        
+        throw new Error(errorMessage);
       }
 
       const result = await response.json();
@@ -316,7 +342,7 @@ export const GameSummary: React.FC<GameSummaryProps> = () => {
       // Set up timeout check
       const checkRematchStatus = async () => {
         try {
-          const statusResponse = await fetch(`/api/games/rematch-status?gameId=${gameId}&sessionId=${encodeURIComponent(sessionId)}`);
+          const statusResponse = await fetch(`/api/rematch?action=status&gameId=${gameId}&sessionId=${encodeURIComponent(sessionId)}`);
           if (statusResponse.ok) {
             const status = await statusResponse.json();
             console.log('[GameSummary] Rematch status check:', status);
@@ -352,9 +378,9 @@ export const GameSummary: React.FC<GameSummaryProps> = () => {
       }, 30000);
     } catch (error: any) {
       console.error('[GameSummary] Error sending rematch request:', error);
-      alert(`Failed to send rematch request: ${error.message}`);
+      setRematchStatus('error');
+      setRematchError(error.message || 'Failed to send rematch request');
       setHasClickedRematch(false);
-      setRematchStatus(null);
     }
   };
 
@@ -596,12 +622,13 @@ export const GameSummary: React.FC<GameSummaryProps> = () => {
             onClick={(e) => {
               e.preventDefault();
               console.log('[GameSummary] Rematch button clicked!', { hasClickedRematch, hasClickedPlayAgain, gameId, sessionId, roomCode });
+              setRematchError(null); // Clear any previous error
               handleRematch();
             }}
             disabled={hasClickedRematch || hasClickedPlayAgain}
             className="w-full sm:w-auto px-16 py-4 text-xl font-bold text-white bg-purple-600 rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100"
           >
-            {rematchStatus === 'waiting' ? 'Waiting for Opponent...' : rematchStatus === 'timeout' ? 'Rematch Timeout' : 'Rematch'}
+            {rematchStatus === 'waiting' ? 'Waiting for Opponent...' : rematchStatus === 'timeout' ? 'Rematch Timeout' : rematchStatus === 'error' ? 'Rematch' : 'Rematch'}
           </button>
           <button
             onClick={handlePlayAgain}
@@ -620,6 +647,13 @@ export const GameSummary: React.FC<GameSummaryProps> = () => {
           <p className="text-sm text-red-500 dark:text-red-400 mt-2">
             Opponent did not accept rematch. Redirecting to matchmaking...
           </p>
+        )}
+        {rematchStatus === 'error' && rematchError && (
+          <div className="mt-4 p-4 bg-red-100 dark:bg-red-500/20 border-2 border-red-500 rounded-lg">
+            <p className="text-lg font-bold text-red-700 dark:text-red-400 text-center">
+              {rematchError}
+            </p>
+          </div>
         )}
         {rematchStatus === 'pending_acceptance' && (
           <div className="mt-4 p-4 bg-purple-100 dark:bg-purple-500/20 border-2 border-purple-500 rounded-lg">

@@ -24,8 +24,21 @@ import { fileURLToPath, pathToFileURL } from 'url';
 
         for (const file of apiFiles) {
             if (file.includes('server.ts')) continue;
-            if (file.includes('db-pool.ts') || file.includes('time-utils.ts') || file.includes('pusher-utils.ts') || file.includes('question-generator.ts')) continue;
+            if (file.includes('db-pool.ts') || file.includes('time-utils.ts') || file.includes('pusher-utils.ts') || file.includes('question-generator.ts') || file.includes('daily-id-reset.ts')) continue;
             if (file.includes('[gameId]')) continue; // Skip dynamic route directories
+            
+            // Exclude old endpoint files that have been consolidated
+            if (file === 'submit-score.ts' || file === 'check-score.ts' || file === 'get-leaderboard.ts' || file === 'get-hall-of-fame.ts' || file === 'get-hall-of-fame-dates.ts') continue;
+            if (file.includes('games/') && (
+                file === 'games/create.ts' || file === 'games/join.ts' || file === 'games/random.ts' || 
+                file === 'games/status.ts' || file === 'games/get-game-info.ts' || file === 'games/players.ts' || 
+                file === 'games/start.ts' || file === 'games/submit.ts' || file === 'games/play-again.ts' || 
+                file === 'games/play-again-status.ts' || file === 'games/cancel-matchmaking.ts' || 
+                file === 'games/check-matchmaking-status.ts' || file === 'games/rematch-request.ts' || 
+                file === 'games/rematch-accept.ts' || file === 'games/rematch-decline.ts' || 
+                file === 'games/rematch-status.ts' || file === 'games/cleanup.ts' || 
+                file === 'games/cleanup-abandoned.ts'
+            )) continue;
 
             // Handle nested routes: preserve directory structure
             // Convert Windows backslashes to forward slashes for URLs

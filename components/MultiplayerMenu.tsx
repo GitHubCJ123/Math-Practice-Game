@@ -12,6 +12,7 @@ export const MultiplayerMenu: React.FC<MultiplayerMenuProps> = ({ onBack }) => {
   const [roomCode, setRoomCode] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [queueCount, setQueueCount] = useState<number | null>(null);
 
   const handleJoinGame = async (codeToJoin?: string) => {
     const code = codeToJoin || roomCode;
@@ -29,10 +30,11 @@ export const MultiplayerMenu: React.FC<MultiplayerMenuProps> = ({ onBack }) => {
     const selectedNumbers = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
     try {
-      const response = await fetch('/api/games/join', {
+      const response = await fetch('/api/games?action=join', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          action: 'join',
           roomCode: code.toUpperCase(),
           operation,
           selectedNumbers,
@@ -53,6 +55,19 @@ export const MultiplayerMenu: React.FC<MultiplayerMenuProps> = ({ onBack }) => {
     }
   };
 
+  // Fetch queue count
+  const fetchQueueCount = async () => {
+    try {
+      const response = await fetch('/api/matchmaking?action=count');
+      if (response.ok) {
+        const data = await response.json();
+        setQueueCount(data.count || 0);
+      }
+    } catch (err) {
+      console.error('Failed to fetch queue count:', err);
+    }
+  };
+
   // Check if there's a 'join' parameter in the URL
   useEffect(() => {
     const joinCode = searchParams.get('join');
@@ -64,11 +79,18 @@ export const MultiplayerMenu: React.FC<MultiplayerMenuProps> = ({ onBack }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
+  // Fetch queue count on mount and refresh periodically
+  useEffect(() => {
+    fetchQueueCount();
+    const interval = setInterval(fetchQueueCount, 5000); // Refresh every 5 seconds
+    return () => clearInterval(interval);
+  }, []);
+
   const handleCreateGame = async () => {
     setIsLoading(true);
     setError('');
     try {
-      const response = await fetch('/api/games/create', {
+      const response = await fetch('/api/games?action=create', {
         method: 'POST',
       });
       
@@ -93,7 +115,7 @@ export const MultiplayerMenu: React.FC<MultiplayerMenuProps> = ({ onBack }) => {
     const selectedNumbers = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
     try {
-      const response = await fetch(`/api/games/random?operation=${operation}&selectedNumbers=${JSON.stringify(selectedNumbers)}`, {
+      const response = await fetch(`/api/games?action=random&operation=${operation}&selectedNumbers=${JSON.stringify(selectedNumbers)}`, {
         method: 'GET',
       });
 
@@ -139,6 +161,17 @@ export const MultiplayerMenu: React.FC<MultiplayerMenuProps> = ({ onBack }) => {
       )}
 
       <div className="space-y-4">
+        {queueCount !== null && (
+          <div className="text-center mb-2">
+            <p className="text-sm text-slate-600 dark:text-slate-400">
+              {queueCount === 0 
+                ? 'No one is currently looking for a match'
+                : queueCount === 1
+                ? '1 person is currently looking for a match'
+                : `${queueCount} people are currently looking for a match`}
+            </p>
+          </div>
+        )}
         <button
           onClick={handleRandomMatch}
           disabled={isLoading}

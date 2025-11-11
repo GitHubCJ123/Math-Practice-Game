@@ -188,7 +188,7 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({ questions, userAns
             operation,
             scoreInMs,
           });
-          const response = await fetch(`/api/check-score?operationType=${operation}&score=${scoreInMs}`);
+          const response = await fetch(`/api/scores?action=check&operationType=${operation}&score=${scoreInMs}`);
           const data = await response.json();
           console.log('[ResultsScreen] check-score response', data);
           setIsTopScore(data.isTopScore);
@@ -274,10 +274,11 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({ questions, userAns
     const scoreInMs = Math.round(timeTaken * 1000);
 
     try {
-      const response = await fetch('/api/submit-score', {
+      const response = await fetch('/api/scores?action=submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          action: 'submit',
           playerName: playerName.trim(),
           score: scoreInMs,
           operationType: operation,

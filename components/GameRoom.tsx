@@ -63,10 +63,11 @@ export const GameRoom: React.FC<GameRoomProps> = () => {
 
         // Automatically submit current answers (forfeit)
         try {
-          const response = await fetch('/api/games/submit', {
+          const response = await fetch('/api/games?action=submit', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
+              action: 'submit',
               gameId,
               answers: answersRef.current,
               timeTaken: elapsedTimeRef.current,
@@ -325,10 +326,11 @@ export const GameRoom: React.FC<GameRoomProps> = () => {
 
     try {
       console.log('[GameRoom] Submitting answers:', { gameId, sessionId, timeTaken: elapsedTime });
-      const response = await fetch('/api/games/submit', {
+      const response = await fetch('/api/games?action=submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          action: 'submit',
           gameId,
           answers,
           timeTaken: elapsedTime,

@@ -120,13 +120,13 @@ export const MatchmakingScreen: React.FC<MatchmakingScreenProps> = ({ sessionId,
       // Check if we're already matched (Player 1 case - Player 2 already matched us)
       // If we're not in the queue anymore, we were matched, so fetch our game info
       try {
-        const checkResponse = await fetch(`/api/games/check-matchmaking-status?sessionId=${sessionId}`);
+        const checkResponse = await fetch(`/api/matchmaking?action=check&sessionId=${sessionId}`);
         if (checkResponse.ok) {
           const status = await checkResponse.json();
           if (status.matched && status.gameId && !matchInfo) {
             console.log('[MatchmakingScreen] Already matched! Fetching game info:', status);
             // We were matched while waiting to subscribe - fetch game details
-            const gameResponse = await fetch(`/api/games/get-game-info?gameId=${status.gameId}&sessionId=${sessionId}`);
+            const gameResponse = await fetch(`/api/games?action=info&gameId=${status.gameId}&sessionId=${sessionId}`);
             if (gameResponse.ok) {
               const gameData = await gameResponse.json();
               if (gameData.startTime) {
@@ -239,10 +239,10 @@ export const MatchmakingScreen: React.FC<MatchmakingScreenProps> = ({ sessionId,
       
       if (!isNavigatingRef.current && isSubscribedRef.current) {
         console.log('[MatchmakingScreen] Canceling matchmaking');
-        fetch('/api/games/cancel-matchmaking', {
+        fetch('/api/matchmaking?action=cancel', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sessionId }),
+          body: JSON.stringify({ action: 'cancel', sessionId }),
         }).catch((error) => {
           console.error('[MatchmakingScreen] Failed to cancel matchmaking:', error);
         });
@@ -255,10 +255,10 @@ export const MatchmakingScreen: React.FC<MatchmakingScreenProps> = ({ sessionId,
   const handleCancel = async () => {
     // Cancel matchmaking
     try {
-      await fetch('/api/games/cancel-matchmaking', {
+      await fetch('/api/matchmaking?action=cancel', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId }),
+        body: JSON.stringify({ action: 'cancel', sessionId }),
       });
     } catch (error) {
       console.error('[MatchmakingScreen] Failed to cancel matchmaking:', error);

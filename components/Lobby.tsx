@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import Pusher from 'pusher-js';
 import type { Question } from '../types';
 
@@ -11,6 +11,8 @@ interface LobbyProps {
 export const Lobby: React.FC<LobbyProps> = () => {
   const { gameId } = useParams<{ gameId: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const locationState = location.state as any;
   const [roomCode, setRoomCode] = useState('');
   const [sessionId, setSessionId] = useState('');
   const [isHost, setIsHost] = useState(false);
@@ -19,10 +21,10 @@ export const Lobby: React.FC<LobbyProps> = () => {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [pusher, setPusher] = useState<Pusher | null>(null);
   const [channel, setChannel] = useState<any>(null);
+  const [linkCopied, setLinkCopied] = useState(false);
 
   useEffect(() => {
     // Get roomCode and sessionId from location state
-    const locationState = (window.history.state as any)?.usr;
     const stateRoomCode = locationState?.roomCode;
     const stateSessionId = locationState?.sessionId;
     
@@ -38,7 +40,7 @@ export const Lobby: React.FC<LobbyProps> = () => {
     // Check if user is the host (first player) and game status
     const checkGameStatus = async () => {
       try {
-        const response = await fetch(`/api/games/status?gameId=${gameId}&sessionId=${stateSessionId}`);
+        const response = await fetch(`/api/games?action=status&gameId=${gameId}&sessionId=${stateSessionId}`);
         if (response.ok) {
           const data = await response.json();
           
@@ -57,7 +59,7 @@ export const Lobby: React.FC<LobbyProps> = () => {
           }
 
           // Check if user is host by checking player order
-          const playersResponse = await fetch(`/api/games/players?gameId=${gameId}&sessionId=${stateSessionId}`);
+          const playersResponse = await fetch(`/api/games?action=players&gameId=${gameId}&sessionId=${stateSessionId}`);
           if (playersResponse.ok) {
             const playersData = await playersResponse.json();
             setIsHost(playersData.isHost || false);
@@ -135,15 +137,16 @@ export const Lobby: React.FC<LobbyProps> = () => {
       gameChannel.unsubscribe();
       pusherInstance.disconnect();
     };
-  }, [gameId, navigate]);
+  }, [gameId, navigate, locationState]);
 
   const handleStartGame = async () => {
     setIsStarting(true);
     try {
-      const response = await fetch('/api/games/start', {
+      const response = await fetch('/api/games?action=start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          action: 'start',
           gameId: parseInt(gameId || '0', 10),
           sessionId,
         }),
@@ -190,15 +193,37 @@ export const Lobby: React.FC<LobbyProps> = () => {
                   className="flex-1 px-4 py-2 text-sm border-2 border-slate-300 dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200"
                 />
                 <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(shareLink);
-                    alert('Link copied to clipboard!');
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(shareLink);
+                      setLinkCopied(true);
+                      setTimeout(() => setLinkCopied(false), 3000);
+                    } catch (err) {
+                      // Fallback for browsers that don't support clipboard API
+                      const input = document.createElement('input');
+                      input.value = shareLink;
+                      document.body.appendChild(input);
+                      input.select();
+                      try {
+                        document.execCommand('copy');
+                        setLinkCopied(true);
+                        setTimeout(() => setLinkCopied(false), 3000);
+                      } catch (fallbackErr) {
+                        setLinkCopied(false);
+                      }
+                      document.body.removeChild(input);
+                    }
                   }}
                   className="px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
                 >
                   Copy
                 </button>
               </div>
+              {linkCopied && (
+                <p className="text-sm text-green-600 dark:text-green-400 mt-2 text-center">
+                  Link copied to clipboard!
+                </p>
+              )}
             </div>
 
             <div className="animate-pulse">

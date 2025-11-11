@@ -199,7 +199,7 @@ const HallOfFameDisplay: React.FC = () => {
         const fetchDates = async () => {
             setIsLoading(true);
             try {
-                const response = await fetch('/api/get-hall-of-fame-dates');
+                const response = await fetch('/api/scores?action=hall-of-fame-dates');
                 if (!response.ok) throw new Error('Failed to fetch dates');
                 const data = await response.json();
                 setAvailableDates(data);
@@ -231,7 +231,7 @@ const HallOfFameDisplay: React.FC = () => {
             const champions: Record<Operation, Score | null> = {} as Record<Operation, Score | null>;
             for (const op of operations) {
                 try {
-                    const response = await fetch(`/api/get-hall-of-fame?operationType=${op}&year=${selectedYear}&month=${selectedMonth}`);
+                    const response = await fetch(`/api/scores?action=hall-of-fame&operationType=${op}&year=${selectedYear}&month=${selectedMonth}`);
                     if (response.ok) {
                         const data = await response.json();
                         champions[op] = data.length > 0 ? data[0] : null; // Get only the top score
@@ -374,7 +374,7 @@ const GlobalLeaderboard: React.FC = () => {
   const fetchScores = useCallback(async () => {
     setIsLoading(true);
     try {
-      const response = await fetch(`/api/get-leaderboard?operationType=${activeTab}`);
+      const response = await fetch(`/api/scores?action=leaderboard&operationType=${activeTab}`);
       if (!response.ok) {
         throw new Error('Failed to fetch scores');
       }
@@ -758,7 +758,7 @@ export const SelectionScreen: React.FC<SelectionScreenProps> = ({ onStartQuiz, i
             <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
                 <button
                     onClick={() => navigate('/multiplayer')}
-                    className="w-full sm:w-auto px-16 py-4 text-xl font-bold text-white bg-purple-600 rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300"
+                    className="w-full sm:w-auto px-16 py-4 text-xl font-bold text-white bg-blue-600 rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300"
                 >
                     1v1 Online Match
                 </button>
