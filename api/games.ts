@@ -1,8 +1,8 @@
 import sql from 'mssql';
-import { getPool } from './db-pool.js';
-import { generateRoomCode, generateSessionId, getPusherInstance } from './pusher-utils.js';
-import { generateQuestions } from './question-generator.js';
-import { ensureDailyIdReset } from './daily-id-reset.js';
+import { getPool } from '../lib/db-pool.js';
+import { generateRoomCode, generateSessionId, getPusherInstance } from '../lib/pusher-utils.js';
+import { generateQuestions } from '../lib/question-generator.js';
+import { ensureDailyIdReset } from '../lib/daily-id-reset.js';
 import type { Operation } from '../types';
 
 export default async function handler(req: any, res: any) {

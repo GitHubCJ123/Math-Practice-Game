@@ -1,6 +1,6 @@
 import sql from "mssql";
-import { getPool } from "./db-pool.js";
-import { getCurrentEasternMonthBounds, getPreviousEasternMonthBounds } from "./time-utils.js";
+import { getPool } from "../lib/db-pool.js";
+import { getCurrentEasternMonthBounds, getPreviousEasternMonthBounds } from "../lib/time-utils.js";
 import { clearHallOfFameDatesCache, clearLeaderboardCache } from "./scores.js";
 
 export default async function handler(req, res) {

@@ -1,5 +1,5 @@
 import Pusher from 'pusher';
-import { getPool } from '../db-pool.js';
+import { getPool } from '../../lib/db-pool.js';
 import sql from 'mssql';
 
 const pusher = new Pusher({

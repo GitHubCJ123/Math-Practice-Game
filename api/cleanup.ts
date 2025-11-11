@@ -1,5 +1,5 @@
 import sql from 'mssql';
-import { getPool } from './db-pool.js';
+import { getPool } from '../lib/db-pool.js';
 
 export default async function handler(req: any, res: any) {
   // Get action from query or body, or detect from cron

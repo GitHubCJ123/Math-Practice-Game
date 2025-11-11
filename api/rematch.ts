@@ -1,7 +1,7 @@
 import sql from 'mssql';
-import { getPool } from './db-pool.js';
-import { getPusherInstance } from './pusher-utils.js';
-import { generateQuestions } from './question-generator.js';
+import { getPool } from '../lib/db-pool.js';
+import { getPusherInstance } from '../lib/pusher-utils.js';
+import { generateQuestions } from '../lib/question-generator.js';
 import type { Operation } from '../types';
 
 export default async function handler(req: any, res: any) {
