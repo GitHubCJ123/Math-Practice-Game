@@ -758,7 +758,7 @@ export const SelectionScreen: React.FC<SelectionScreenProps> = ({ onStartQuiz, i
             <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
                 <button
                     onClick={() => navigate('/multiplayer')}
-                    className="w-full sm:w-auto px-16 py-4 text-xl font-bold text-white bg-purple-600 rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300"
+                    className="w-full sm:w-auto px-16 py-4 text-xl font-bold text-white bg-blue-600 rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300"
                 >
                     1v1 Online Match
                 </button>
