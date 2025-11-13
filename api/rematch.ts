@@ -30,21 +30,30 @@ export default async function handler(req: any, res: any) {
 }
 
 async function handleRequest(req: any, res: any) {
+  console.log('[api/rematch] handleRequest called');
+  console.log('[api/rematch] Method:', req.method);
+  console.log('[api/rematch] Body:', JSON.stringify(req.body, null, 2));
+  
   if (req.method !== 'POST') {
+    console.log('[api/rematch] Wrong method, returning 405');
     return res.status(405).json({ message: 'Method Not Allowed' });
   }
 
   const { gameId, sessionId, roomCode } = req.body;
+  console.log('[api/rematch] Extracted values:', { gameId, sessionId, roomCode });
 
   if (!gameId || isNaN(gameId)) {
+    console.log('[api/rematch] Invalid gameId:', gameId);
     return res.status(400).json({ message: 'Valid gameId is required' });
   }
 
   if (!sessionId || typeof sessionId !== 'string') {
+    console.log('[api/rematch] Invalid sessionId:', sessionId);
     return res.status(400).json({ message: 'sessionId is required' });
   }
 
   if (!roomCode || typeof roomCode !== 'string') {
+    console.log('[api/rematch] Invalid roomCode:', roomCode);
     return res.status(400).json({ message: 'roomCode is required' });
   }
 
@@ -107,14 +116,28 @@ async function handleRequest(req: any, res: any) {
     `);
 
     await transaction.commit();
+    console.log('[api/rematch] Transaction committed successfully');
 
     const pusher = getPusherInstance();
-    await pusher.trigger(`private-game-${game.RoomCode}`, 'rematch-request', {
+    const channelName = `private-game-${game.RoomCode}`;
+    const eventData = {
       requestingSessionId: sessionId,
       gameId: game.Id,
       roomCode: game.RoomCode,
       timestamp: Date.now(),
-    });
+    };
+    
+    console.log('[api/rematch] Triggering Pusher rematch-request event');
+    console.log('[api/rematch] Channel:', channelName);
+    console.log('[api/rematch] Event data:', JSON.stringify(eventData, null, 2));
+    
+    try {
+      await pusher.trigger(channelName, 'rematch-request', eventData);
+      console.log('[api/rematch] Pusher event triggered successfully');
+    } catch (pusherError: any) {
+      console.error('[api/rematch] Error triggering Pusher event:', pusherError);
+      // Still return success - the event might be received via polling
+    }
 
     setTimeout(async () => {
       try {
@@ -251,20 +274,32 @@ async function handleAccept(req: any, res: any) {
     await transaction.commit();
 
     const pusher = getPusherInstance();
-    await pusher.trigger(`private-game-${game.RoomCode}`, 'rematch-accepted', {
-      acceptingSessionId: sessionId,
-      requestingSessionId: requestingSessionId,
-      gameId: game.Id,
-      roomCode: game.RoomCode,
-      questions: newQuestions,
-      startTime: startTime,
-    });
+    const channelName = `private-game-${game.RoomCode}`;
+    
+    console.log('[api/rematch] handleAccept: Triggering Pusher events');
+    console.log('[api/rematch] handleAccept: Channel:', channelName);
+    
+    try {
+      await pusher.trigger(channelName, 'rematch-accepted', {
+        acceptingSessionId: sessionId,
+        requestingSessionId: requestingSessionId,
+        gameId: game.Id,
+        roomCode: game.RoomCode,
+        questions: newQuestions,
+        startTime: startTime,
+      });
+      console.log('[api/rematch] handleAccept: rematch-accepted event triggered');
 
-    await pusher.trigger(`private-game-${game.RoomCode}`, 'game-start', {
-      gameId: game.Id,
-      questions: newQuestions,
-      startTime: startTime,
-    });
+      await pusher.trigger(channelName, 'game-start', {
+        gameId: game.Id,
+        questions: newQuestions,
+        startTime: startTime,
+      });
+      console.log('[api/rematch] handleAccept: game-start event triggered');
+    } catch (pusherError: any) {
+      console.error('[api/rematch] handleAccept: Error triggering Pusher events:', pusherError);
+      // Still return success - clients can navigate using API response
+    }
 
     return res.status(200).json({ 
       success: true,
@@ -399,8 +434,12 @@ async function handleStatus(req: any, res: any) {
         ORDER BY UpdatedAt DESC
       `);
       
+      // Find who requested the rematch (the one who didn't request it is the one checking)
+      const requestingPlayer = playersResult.recordset.find((p: any) => p.PlayerSessionId !== sessionId);
+      
       return res.status(200).json({
         status: 'waiting',
+        requestingSessionId: requestingPlayer?.PlayerSessionId || null,
       });
     } else if (status === 'rematch_accepted') {
       return res.status(200).json({

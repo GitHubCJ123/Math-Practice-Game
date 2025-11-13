@@ -118,9 +118,51 @@ export const GameRoom: React.FC<GameRoomProps> = () => {
     const pusherKey = import.meta.env.VITE_PUSHER_KEY;
     const pusherCluster = import.meta.env.VITE_PUSHER_CLUSTER;
 
+    // Polling fallback for opponent finished (always active as backup, even without Pusher)
+    let opponentFinishedPollInterval: NodeJS.Timeout | null = null;
+    const pollForOpponentFinished = async () => {
+      try {
+        if (quizFinished) {
+          // Stop polling if we've finished
+          if (opponentFinishedPollInterval) {
+            clearInterval(opponentFinishedPollInterval);
+            opponentFinishedPollInterval = null;
+          }
+          return;
+        }
+        
+        const playersResponse = await fetch(`/api/games?action=players&gameId=${gameId}&sessionId=${encodeURIComponent(sessionId)}`);
+        if (playersResponse.ok) {
+          const playersData = await playersResponse.json();
+          // If there are 2 players and one has finished (has FinalTime), check if it's not us
+          if (playersData.players && playersData.players.length === 2) {
+            const opponent = playersData.players.find((p: any) => p.sessionId !== sessionId);
+            if (opponent && opponent.finalTime !== null && !opponentFinished) {
+              console.log('[GameRoom] Opponent finished detected via polling');
+              setOpponentFinished(true);
+              if (opponentFinishedPollInterval) {
+                clearInterval(opponentFinishedPollInterval);
+                opponentFinishedPollInterval = null;
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.error('[GameRoom] Error polling for opponent finished:', error);
+      }
+    };
+    
+    // Start polling as fallback (even if Pusher is configured)
+    opponentFinishedPollInterval = setInterval(pollForOpponentFinished, 2000);
+
     if (!pusherKey || !pusherCluster) {
-      console.error('Pusher credentials not configured');
-      return;
+      console.warn('[GameRoom] Pusher credentials not configured, using polling fallback only');
+      // Return early but keep polling active
+      return () => {
+        if (opponentFinishedPollInterval) {
+          clearInterval(opponentFinishedPollInterval);
+        }
+      };
     }
 
     const pusherInstance = new Pusher(pusherKey, {
@@ -143,9 +185,16 @@ export const GameRoom: React.FC<GameRoomProps> = () => {
     });
 
     gameChannel.bind('opponent-finished', (data: any) => {
+      console.log('[GameRoom] Opponent finished event received:', data);
       // Only show opponent finished if it's not us
       if (data.finishedPlayerSessionId && data.finishedPlayerSessionId !== sessionId) {
+        console.log('[GameRoom] Setting opponentFinished to true');
         setOpponentFinished(true);
+        // Stop polling if Pusher event received
+        if (opponentFinishedPollInterval) {
+          clearInterval(opponentFinishedPollInterval);
+          opponentFinishedPollInterval = null;
+        }
       }
     });
 
@@ -257,8 +306,12 @@ export const GameRoom: React.FC<GameRoomProps> = () => {
       gameChannel.unbind_all();
       gameChannel.unsubscribe();
       pusherInstance.disconnect();
+      
+      if (opponentFinishedPollInterval) {
+        clearInterval(opponentFinishedPollInterval);
+      }
     };
-  }, [questions, gameId, sessionId, roomCode, navigate]);
+  }, [questions, gameId, sessionId, roomCode, navigate, quizFinished, opponentFinished]);
 
   useEffect(() => {
     if (introStage === 'ready') {

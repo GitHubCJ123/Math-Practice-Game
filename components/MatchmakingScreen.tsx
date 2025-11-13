@@ -30,7 +30,14 @@ export const MatchmakingScreen: React.FC<MatchmakingScreenProps> = ({ sessionId,
   const isNavigatingRef = useRef(false);
   const isSubscribedRef = useRef(false);
   const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const receivedPusherEventRef = useRef(false); // Track if we received the Pusher event
+  const hasMatchInfoRef = useRef(false); // Track if we have match info to stop polling
+
+  console.log('[MatchmakingScreen] Component mounted/re-rendered');
+  console.log('[MatchmakingScreen] Props - sessionId:', sessionId);
+  console.log('[MatchmakingScreen] Props - pusherChannel:', pusherChannel);
+  console.log('[MatchmakingScreen] Props - matchData:', matchData);
 
   // Handle countdown - uses server's absolute timestamp for synchronization
   useEffect(() => {
@@ -85,6 +92,7 @@ export const MatchmakingScreen: React.FC<MatchmakingScreenProps> = ({ sessionId,
     // Both players use the same server startTime, so countdowns will be synchronized
     if (matchData && matchData.gameId && matchData.startTime && !matchInfo) {
       console.log('[MatchmakingScreen] Using matchData immediately - Player 2');
+      hasMatchInfoRef.current = true;
       setMatchInfo({
         gameId: matchData.gameId,
         roomCode: matchData.roomCode,
@@ -97,8 +105,67 @@ export const MatchmakingScreen: React.FC<MatchmakingScreenProps> = ({ sessionId,
     const pusherKey = import.meta.env.VITE_PUSHER_KEY;
     const pusherCluster = import.meta.env.VITE_PUSHER_CLUSTER;
 
+    console.log('[MatchmakingScreen] Pusher key exists:', !!pusherKey);
+    console.log('[MatchmakingScreen] Pusher cluster exists:', !!pusherCluster);
+
     if (!pusherKey || !pusherCluster) {
-      console.error('Pusher credentials not configured');
+      console.error('[MatchmakingScreen] Pusher credentials not configured');
+      console.error('[MatchmakingScreen] VITE_PUSHER_KEY:', pusherKey ? 'SET' : 'MISSING');
+      console.error('[MatchmakingScreen] VITE_PUSHER_CLUSTER:', pusherCluster ? 'SET' : 'MISSING');
+      
+      // Even without Pusher, we can still poll for match status
+      console.log('[MatchmakingScreen] Falling back to polling only (no Pusher)');
+      const checkMatchStatus = async () => {
+        try {
+          console.log('[MatchmakingScreen] Checking matchmaking status for sessionId:', sessionId);
+          const checkResponse = await fetch(`/api/matchmaking?action=check&sessionId=${sessionId}`);
+          if (checkResponse.ok) {
+            const status = await checkResponse.json();
+            console.log('[MatchmakingScreen] Matchmaking status check result:', status);
+            if (status.matched && status.gameId) {
+              console.log('[MatchmakingScreen] Already matched! Fetching game info:', status);
+              const gameResponse = await fetch(`/api/games?action=info&gameId=${status.gameId}&sessionId=${sessionId}`);
+              if (gameResponse.ok) {
+                const gameData = await gameResponse.json();
+                console.log('[MatchmakingScreen] Game data fetched:', gameData);
+                if (gameData.startTime) {
+                  console.log('[MatchmakingScreen] Setting matchInfo from status check (no Pusher)');
+                  hasMatchInfoRef.current = true;
+                  setMatchInfo({
+                    gameId: status.gameId,
+                    roomCode: gameData.roomCode,
+                    questions: gameData.questions,
+                    startTime: gameData.startTime,
+                  });
+                  if (pollingIntervalRef.current) {
+                    clearInterval(pollingIntervalRef.current);
+                    pollingIntervalRef.current = null;
+                  }
+                }
+              }
+            }
+          }
+        } catch (error) {
+          console.error('[MatchmakingScreen] Error checking matchmaking status:', error);
+        }
+      };
+      
+      // Poll immediately and every 2 seconds
+      checkMatchStatus();
+      if (!pollingIntervalRef.current) {
+        pollingIntervalRef.current = setInterval(async () => {
+          if (!hasMatchInfoRef.current && !isNavigatingRef.current) {
+            console.log('[MatchmakingScreen] Polling for match status (no Pusher)...');
+            await checkMatchStatus();
+          } else {
+            if (pollingIntervalRef.current) {
+              clearInterval(pollingIntervalRef.current);
+              pollingIntervalRef.current = null;
+            }
+          }
+        }, 2000);
+      }
+      
       return;
     }
 
@@ -111,45 +178,17 @@ export const MatchmakingScreen: React.FC<MatchmakingScreenProps> = ({ sessionId,
 
     // Subscribe to the matchmaking channel
     console.log('[MatchmakingScreen] Subscribing to channel:', pusherChannel);
+    console.log('[MatchmakingScreen] SessionId:', sessionId);
+    console.log('[MatchmakingScreen] Has matchData:', !!matchData);
     const matchmakingChannel = pusherInstance.subscribe(pusherChannel);
-
-    matchmakingChannel.bind('pusher:subscription_succeeded', async () => {
-      console.log('[MatchmakingScreen] Successfully subscribed to matchmaking channel');
-      isSubscribedRef.current = true;
-      
-      // Check if we're already matched (Player 1 case - Player 2 already matched us)
-      // If we're not in the queue anymore, we were matched, so fetch our game info
-      try {
-        const checkResponse = await fetch(`/api/matchmaking?action=check&sessionId=${sessionId}`);
-        if (checkResponse.ok) {
-          const status = await checkResponse.json();
-          if (status.matched && status.gameId && !matchInfo) {
-            console.log('[MatchmakingScreen] Already matched! Fetching game info:', status);
-            // We were matched while waiting to subscribe - fetch game details
-            const gameResponse = await fetch(`/api/games?action=info&gameId=${status.gameId}&sessionId=${sessionId}`);
-            if (gameResponse.ok) {
-              const gameData = await gameResponse.json();
-              if (gameData.startTime) {
-                setMatchInfo({
-                  gameId: status.gameId,
-                  roomCode: gameData.roomCode,
-                  questions: gameData.questions,
-                  startTime: gameData.startTime,
-                });
-              }
-            }
-          }
-        }
-      } catch (error) {
-        console.error('[MatchmakingScreen] Error checking matchmaking status:', error);
-      }
-    });
-
+    
+    // Log subscription state changes
     matchmakingChannel.bind('pusher:subscription_error', (error: any) => {
-      console.error('[MatchmakingScreen] Subscription error:', error);
+      console.error('[MatchmakingScreen] Subscription error for channel', pusherChannel, ':', error);
     });
 
-    // Listen for match-found event - this is the authoritative source for Player 1
+    // Listen for match-found event - BIND IMMEDIATELY to avoid race conditions
+    // This is the authoritative source for Player 1
     const matchFoundHandler = (data: { 
       gameId: number; 
       roomCode: string; 
@@ -163,8 +202,35 @@ export const MatchmakingScreen: React.FC<MatchmakingScreenProps> = ({ sessionId,
         console.error('[MatchmakingScreen] No startTime in match data');
         return;
       }
+      
+      // Subscribe to game channel as backup once we have the room code
+      // This ensures we can receive game-start events if needed
+      if (data.roomCode && pusherInstance) {
+        const gameChannelName = `private-game-${data.roomCode}`;
+        console.log('[MatchmakingScreen] Subscribing to game channel after match found:', gameChannelName);
+        const gameChannel = pusherInstance.subscribe(gameChannelName);
+        
+        gameChannel.bind('game-start', (gameStartData: { 
+          questions: Question[];
+          gameId: number;
+          startTime?: number;
+        }) => {
+          console.log('[MatchmakingScreen] Received game-start event on game channel', gameStartData);
+          if (gameStartData.startTime && gameStartData.questions) {
+            // Use game-start event if it has more recent data
+            setMatchInfo({
+              gameId: gameStartData.gameId,
+              roomCode: data.roomCode,
+              questions: gameStartData.questions,
+              startTime: gameStartData.startTime,
+            });
+          }
+        });
+      }
+      
       // Always update matchInfo when we receive the event (even if we already have it)
       // This ensures Player 1 gets the event even if they received matchData initially
+      hasMatchInfoRef.current = true;
       setMatchInfo({
         gameId: data.gameId,
         roomCode: data.roomCode,
@@ -173,23 +239,113 @@ export const MatchmakingScreen: React.FC<MatchmakingScreenProps> = ({ sessionId,
       });
     };
 
+    // Bind the event handler IMMEDIATELY, before subscription succeeds
+    // This ensures we don't miss events sent right after subscription
     matchmakingChannel.bind('match-found', matchFoundHandler);
     setChannel(matchmakingChannel);
+    
+    matchmakingChannel.bind('pusher:subscription_succeeded', async () => {
+      console.log('[MatchmakingScreen] Successfully subscribed to matchmaking channel:', pusherChannel);
+      isSubscribedRef.current = true;
+      
+      // Check if we're already matched (Player 1 case - Player 2 already matched us)
+      // If we're not in the queue anymore, we were matched, so fetch our game info
+      // This is a fallback in case the Pusher event was missed
+      const checkMatchStatus = async () => {
+        try {
+          console.log('[MatchmakingScreen] Checking matchmaking status for sessionId:', sessionId);
+          const checkResponse = await fetch(`/api/matchmaking?action=check&sessionId=${sessionId}`);
+          if (checkResponse.ok) {
+            const status = await checkResponse.json();
+            console.log('[MatchmakingScreen] Matchmaking status check result:', status);
+            if (status.matched && status.gameId) {
+              console.log('[MatchmakingScreen] Already matched! Fetching game info:', status);
+              // We were matched while waiting to subscribe - fetch game details
+              const gameResponse = await fetch(`/api/games?action=info&gameId=${status.gameId}&sessionId=${sessionId}`);
+              if (gameResponse.ok) {
+                const gameData = await gameResponse.json();
+                console.log('[MatchmakingScreen] Game data fetched:', gameData);
+                if (gameData.startTime) {
+                  console.log('[MatchmakingScreen] Setting matchInfo from status check fallback');
+                  hasMatchInfoRef.current = true;
+                  setMatchInfo({
+                    gameId: status.gameId,
+                    roomCode: gameData.roomCode,
+                    questions: gameData.questions,
+                    startTime: gameData.startTime,
+                  });
+                  // Stop polling once we have match info
+                  if (pollingIntervalRef.current) {
+                    clearInterval(pollingIntervalRef.current);
+                    pollingIntervalRef.current = null;
+                  }
+                }
+              }
+            }
+          }
+        } catch (error) {
+          console.error('[MatchmakingScreen] Error checking matchmaking status:', error);
+        }
+      };
+      
+      // Check immediately
+      await checkMatchStatus();
+      
+      // Also poll every 2 seconds as a fallback (in case Pusher event is delayed or missed)
+      if (!pollingIntervalRef.current) {
+        pollingIntervalRef.current = setInterval(async () => {
+          // Only poll if we don't have match info yet and aren't navigating
+          if (!hasMatchInfoRef.current && !isNavigatingRef.current) {
+            console.log('[MatchmakingScreen] Polling for match status...');
+            await checkMatchStatus();
+          } else {
+            // Stop polling if we have match info
+            if (pollingIntervalRef.current) {
+              clearInterval(pollingIntervalRef.current);
+              pollingIntervalRef.current = null;
+            }
+          }
+        }, 2000);
+      }
+    });
+
+    matchmakingChannel.bind('pusher:subscription_error', (error: any) => {
+      console.error('[MatchmakingScreen] Subscription error:', error);
+    });
 
     // Also subscribe to game channel as backup (in case matchmaking channel event is missed)
-    // OR for rematch scenarios where we need to listen to rematch-accepted events
+    // This provides a fallback mechanism for both players
     const rematchRoomCode = locationState?.roomCode || matchData?.roomCode;
     
+    // If we have a room code (from matchData or rematch), subscribe to game channel as backup
     if (rematchRoomCode) {
       const gameChannelName = `private-game-${rematchRoomCode}`;
-      console.log('[MatchmakingScreen] Also subscribing to game channel for rematch:', gameChannelName);
+      console.log('[MatchmakingScreen] Also subscribing to game channel as backup:', gameChannelName);
       const gameChannel = pusherInstance.subscribe(gameChannelName);
       
       gameChannel.bind('pusher:subscription_succeeded', () => {
-        console.log('[MatchmakingScreen] Successfully subscribed to game channel for rematch');
+        console.log('[MatchmakingScreen] Successfully subscribed to game channel as backup');
       });
 
-      // Listen for rematch-accepted event
+      // Listen for game-start event as backup (sent to game channel when match is found)
+      gameChannel.bind('game-start', (data: { 
+        questions: Question[];
+        gameId: number;
+        startTime?: number;
+      }) => {
+        console.log('[MatchmakingScreen] Received game-start event on game channel (backup)', data);
+        if (data.startTime && data.questions && !matchInfo) {
+          console.log('[MatchmakingScreen] Using game-start event as backup to set matchInfo');
+          setMatchInfo({
+            gameId: data.gameId,
+            roomCode: rematchRoomCode,
+            questions: data.questions,
+            startTime: data.startTime,
+          });
+        }
+      });
+
+      // Listen for rematch-accepted event (for rematch scenarios)
       gameChannel.bind('rematch-accepted', (data: { 
         questions: Question[];
         gameId: number;
@@ -207,23 +363,6 @@ export const MatchmakingScreen: React.FC<MatchmakingScreenProps> = ({ sessionId,
           });
         }
       });
-
-      gameChannel.bind('game-start', (data: { 
-        questions: Question[];
-        gameId: number;
-        startTime?: number;
-      }) => {
-        console.log('[MatchmakingScreen] Received game-start event on game channel', data);
-        if (data.startTime && !matchInfo && matchData) {
-          console.log('[MatchmakingScreen] Using game-start event to set matchInfo');
-          setMatchInfo({
-            gameId: data.gameId,
-            roomCode: matchData.roomCode,
-            questions: data.questions,
-            startTime: data.startTime,
-          });
-        }
-      });
     }
 
     // Cleanup
@@ -235,6 +374,12 @@ export const MatchmakingScreen: React.FC<MatchmakingScreenProps> = ({ sessionId,
       
       if (countdownIntervalRef.current) {
         clearInterval(countdownIntervalRef.current);
+        countdownIntervalRef.current = null;
+      }
+      
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
       }
       
       if (!isNavigatingRef.current && isSubscribedRef.current) {

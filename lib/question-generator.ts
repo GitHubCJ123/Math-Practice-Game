@@ -1,5 +1,5 @@
 import type { Operation, Question } from '../types';
-import { conversions } from './conversions';
+import { conversions } from './conversions.js';
 
 export function generateQuestions(operation: Operation, selectedNumbers: number[]): Question[] {
   const newQuestions: Question[] = [];

@@ -25,3 +25,5 @@ CREATE TABLE GamePlayers (
 CREATE INDEX IX_Games_Status ON Games(Status) WHERE Status = 'waiting';
 
 
+
+

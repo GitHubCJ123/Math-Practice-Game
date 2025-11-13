@@ -5,40 +5,81 @@ import { generateQuestions } from '../lib/question-generator.js';
 import { ensureDailyIdReset } from '../lib/daily-id-reset.js';
 import type { Operation } from '../types';
 
+console.log('[api/games] Module loaded successfully');
+console.log('[api/games] getPool:', typeof getPool);
+console.log('[api/games] generateRoomCode:', typeof generateRoomCode);
+console.log('[api/games] generateSessionId:', typeof generateSessionId);
+console.log('[api/games] getPusherInstance:', typeof getPusherInstance);
+console.log('[api/games] generateQuestions:', typeof generateQuestions);
+console.log('[api/games] ensureDailyIdReset:', typeof ensureDailyIdReset);
+
 export default async function handler(req: any, res: any) {
+  console.log('[api/games] ===== HANDLER CALLED =====');
+  console.log('[api/games] Method:', req.method);
+  console.log('[api/games] URL:', req.url);
+  console.log('[api/games] Query:', JSON.stringify(req.query));
+  console.log('[api/games] Body:', JSON.stringify(req.body));
+  
   // Get action from query or body
   const action = req.query.action || req.body.action;
+  console.log('[api/games] Extracted action:', action);
 
   if (!action) {
+    console.log('[api/games] No action provided, returning 400');
     return res.status(400).json({ message: 'action parameter is required' });
   }
 
   console.log(`[api/games] Function invoked with action: ${action}`);
-
-  // Route to appropriate handler based on action
-  switch (action) {
-    case 'create':
-      return handleCreate(req, res);
-    case 'join':
-      return handleJoin(req, res);
-    case 'random':
-      return handleRandom(req, res);
-    case 'status':
-      return handleStatus(req, res);
-    case 'info':
-      return handleGetGameInfo(req, res);
-    case 'players':
-      return handlePlayers(req, res);
-    case 'start':
-      return handleStart(req, res);
-    case 'submit':
-      return handleSubmit(req, res);
-    case 'play-again':
-      return handlePlayAgain(req, res);
-    case 'play-again-status':
-      return handlePlayAgainStatus(req, res);
-    default:
-      return res.status(400).json({ message: `Unknown action: ${action}` });
+  
+  try {
+    // Route to appropriate handler based on action
+    switch (action) {
+      case 'create':
+        console.log('[api/games] Routing to handleCreate');
+        return handleCreate(req, res);
+      case 'join':
+        console.log('[api/games] Routing to handleJoin');
+        return handleJoin(req, res);
+      case 'random':
+        console.log('[api/games] Routing to handleRandom');
+        return handleRandom(req, res);
+      case 'status':
+        console.log('[api/games] Routing to handleStatus');
+        return handleStatus(req, res);
+      case 'info':
+        console.log('[api/games] Routing to handleGetGameInfo');
+        return handleGetGameInfo(req, res);
+      case 'players':
+        console.log('[api/games] Routing to handlePlayers');
+        return handlePlayers(req, res);
+      case 'start':
+        console.log('[api/games] Routing to handleStart');
+        return handleStart(req, res);
+      case 'submit':
+        console.log('[api/games] Routing to handleSubmit');
+        return handleSubmit(req, res);
+      case 'play-again':
+        console.log('[api/games] Routing to handlePlayAgain');
+        return handlePlayAgain(req, res);
+      case 'play-again-status':
+        console.log('[api/games] Routing to handlePlayAgainStatus');
+        return handlePlayAgainStatus(req, res);
+      default:
+        console.log('[api/games] Unknown action:', action);
+        return res.status(400).json({ message: `Unknown action: ${action}` });
+    }
+  } catch (error: any) {
+    console.error('[api/games] ===== UNHANDLED ERROR =====');
+    console.error('[api/games] Error message:', error.message);
+    console.error('[api/games] Error name:', error.name);
+    console.error('[api/games] Error stack:', error.stack);
+    console.error('[api/games] Full error object:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
+    return res.status(500).json({ 
+      message: 'Internal server error', 
+      error: error.message,
+      name: error.name,
+      stack: error.stack
+    });
   }
 }
 
@@ -222,33 +263,56 @@ async function handleJoin(req: any, res: any) {
 }
 
 async function handleRandom(req: any, res: any) {
+  console.log('[api/games] ===== handleRandom STARTED =====');
+  console.log('[api/games] handleRandom - Method:', req.method);
+  
   if (req.method !== 'GET') {
+    console.log('[api/games] handleRandom - Wrong method, returning 405');
     return res.status(405).json({ message: 'Method Not Allowed' });
   }
 
   const { operation, selectedNumbers, sessionId } = req.query;
+  console.log('[api/games] handleRandom - operation:', operation);
+  console.log('[api/games] handleRandom - selectedNumbers:', selectedNumbers);
+  console.log('[api/games] handleRandom - sessionId:', sessionId);
 
   if (!operation || !selectedNumbers) {
+    console.log('[api/games] handleRandom - Missing required params');
     return res.status(400).json({ message: 'operation and selectedNumbers are required' });
   }
 
   let selectedNumbersArray: number[];
   try {
+    console.log('[api/games] handleRandom - Parsing selectedNumbers JSON...');
     selectedNumbersArray = JSON.parse(selectedNumbers);
-  } catch (e) {
+    console.log('[api/games] handleRandom - Parsed array:', selectedNumbersArray);
+  } catch (e: any) {
+    console.error('[api/games] handleRandom - JSON parse error:', e.message);
     return res.status(400).json({ message: 'selectedNumbers must be a valid JSON array' });
   }
 
+  console.log('[api/games] handleRandom - Generating session ID...');
   const playerSessionId = sessionId || generateSessionId();
   const pusherChannel = `private-matchmaking-${playerSessionId}`;
+  console.log('[api/games] handleRandom - playerSessionId:', playerSessionId);
+  console.log('[api/games] handleRandom - pusherChannel:', pusherChannel);
 
   let transaction: sql.Transaction | null = null;
   try {
+    console.log('[api/games] handleRandom: Step 1 - Getting pool...');
     const pool = await getPool();
+    console.log('[api/games] handleRandom: Step 2 - Pool obtained:', !!pool);
+    
+    console.log('[api/games] handleRandom: Step 3 - Ensuring daily reset...');
     await ensureDailyIdReset();
+    console.log('[api/games] handleRandom: Step 4 - Daily reset complete');
+    
+    console.log('[api/games] handleRandom: Step 5 - Starting transaction...');
     transaction = new sql.Transaction(pool);
     await transaction.begin();
+    console.log('[api/games] handleRandom: Step 6 - Transaction started');
 
+    console.log('[api/games] handleRandom: Step 7 - Searching for match...');
     const findMatchRequest = new sql.Request(transaction);
     findMatchRequest.input('playerSessionId', sql.NVarChar, playerSessionId);
     const matchResult = await findMatchRequest.query(`
@@ -257,10 +321,13 @@ async function handleRandom(req: any, res: any) {
       WHERE PlayerSessionId != @playerSessionId
       ORDER BY CreatedAt ASC
     `);
+    console.log('[api/games] handleRandom: Step 8 - Match search complete, found:', matchResult.recordset.length);
 
     if (matchResult.recordset.length > 0) {
+      console.log('[api/games] handleRandom: Match found! Processing...');
       const matchedPlayer = matchResult.recordset[0];
       
+      console.log('[api/games] handleRandom: Removing players from queue...');
       const removeQueueRequest = new sql.Request(transaction);
       removeQueueRequest.input('sessionId1', sql.NVarChar, playerSessionId);
       removeQueueRequest.input('sessionId2', sql.NVarChar, matchedPlayer.PlayerSessionId);
@@ -268,7 +335,9 @@ async function handleRandom(req: any, res: any) {
         DELETE FROM MatchmakingQueue
         WHERE PlayerSessionId IN (@sessionId1, @sessionId2)
       `);
+      console.log('[api/games] handleRandom: Players removed from queue');
 
+      console.log('[api/games] handleRandom: Generating room code...');
       let roomCode = generateRoomCode();
       let attempts = 0;
       let roomCodeExists = true;
@@ -287,12 +356,15 @@ async function handleRandom(req: any, res: any) {
           attempts++;
         }
       }
+      console.log('[api/games] handleRandom: Room code generated:', roomCode);
 
       if (roomCodeExists) {
+        console.error('[api/games] handleRandom: Failed to generate unique room code after 10 attempts');
         await transaction.rollback();
         return res.status(500).json({ message: 'Failed to generate unique room code' });
       }
 
+      console.log('[api/games] handleRandom: Creating game...');
       const createGameRequest = new sql.Request(transaction);
       createGameRequest.input('roomCode', sql.NVarChar, roomCode);
       const gameResult = await createGameRequest.query(`
@@ -302,7 +374,9 @@ async function handleRandom(req: any, res: any) {
       `);
 
       const gameId = gameResult.recordset[0].Id;
+      console.log('[api/games] handleRandom: Game created with ID:', gameId);
 
+      console.log('[api/games] handleRandom: Adding players to game...');
       const addPlayer1Request = new sql.Request(transaction);
       addPlayer1Request.input('gameId', sql.Int, gameId);
       addPlayer1Request.input('sessionId', sql.NVarChar, playerSessionId);
@@ -310,6 +384,7 @@ async function handleRandom(req: any, res: any) {
         INSERT INTO GamePlayers (GameId, PlayerSessionId, Status)
         VALUES (@gameId, @sessionId, 'playing');
       `);
+      console.log('[api/games] handleRandom: Player 1 added');
 
       const addPlayer2Request = new sql.Request(transaction);
       addPlayer2Request.input('gameId', sql.Int, gameId);
@@ -318,11 +393,15 @@ async function handleRandom(req: any, res: any) {
         INSERT INTO GamePlayers (GameId, PlayerSessionId, Status)
         VALUES (@gameId, @sessionId, 'playing');
       `);
+      console.log('[api/games] handleRandom: Player 2 added');
 
+      console.log('[api/games] handleRandom: Generating questions...');
       const questions = generateQuestions(operation as Operation, selectedNumbersArray);
       const questionsJson = JSON.stringify(questions);
       const startTime = Date.now() + 12000;
+      console.log('[api/games] handleRandom: Questions generated, count:', questions.length);
 
+      console.log('[api/games] handleRandom: Updating game with questions...');
       const updateGameRequest = new sql.Request(transaction);
       updateGameRequest.input('gameId', sql.Int, gameId);
       updateGameRequest.input('questions', sql.NVarChar, questionsJson);
@@ -332,9 +411,18 @@ async function handleRandom(req: any, res: any) {
         SET Status = 'in_progress', Questions = @questions, StartTime = @startTime, UpdatedAt = GETUTCDATE()
         WHERE Id = @gameId
       `);
+      console.log('[api/games] handleRandom: Game updated');
 
+      console.log('[api/games] handleRandom: Committing transaction...');
       await transaction.commit();
+      console.log('[api/games] handleRandom: Transaction committed');
 
+      console.log('[api/games] handleRandom: Triggering Pusher events...');
+      console.log('[api/games] handleRandom: Player 2 channel:', pusherChannel);
+      console.log('[api/games] handleRandom: Player 1 channel:', matchedPlayer.PusherChannel);
+      console.log('[api/games] handleRandom: Player 1 sessionId:', matchedPlayer.PlayerSessionId);
+      console.log('[api/games] handleRandom: Game channel:', `private-game-${roomCode}`);
+      
       const pusher = getPusherInstance();
       const matchData = {
         gameId,
@@ -344,19 +432,28 @@ async function handleRandom(req: any, res: any) {
         startTime,
       };
 
-      await pusher.trigger(pusherChannel, 'match-found', matchData);
-      await pusher.trigger(matchedPlayer.PusherChannel, 'match-found', {
+      const player1MatchData = {
         ...matchData,
         sessionId: matchedPlayer.PlayerSessionId,
-      });
+      };
+
+      console.log('[api/games] handleRandom: Sending match-found to Player 2 channel:', pusherChannel);
+      await pusher.trigger(pusherChannel, 'match-found', matchData);
+      
+      console.log('[api/games] handleRandom: Sending match-found to Player 1 channel:', matchedPlayer.PusherChannel);
+      await pusher.trigger(matchedPlayer.PusherChannel, 'match-found', player1MatchData);
+      
+      console.log('[api/games] handleRandom: Sending game-start to game channel:', `private-game-${roomCode}`);
       await pusher.trigger(`private-game-${roomCode}`, 'game-start', {
         questions,
         gameId,
         startTime,
       });
+      console.log('[api/games] handleRandom: All Pusher events triggered successfully');
 
       res.setHeader('Set-Cookie', `gameSession=${playerSessionId}; Path=/; HttpOnly; SameSite=Lax`);
 
+      console.log('[api/games] handleRandom: Returning success response');
       return res.status(200).json({ 
         gameId, 
         roomCode,
@@ -367,12 +464,14 @@ async function handleRandom(req: any, res: any) {
         startTime,
       });
     } else {
+      console.log('[api/games] handleRandom: No match found, adding to queue...');
       const removeExistingRequest = new sql.Request(transaction);
       removeExistingRequest.input('playerSessionId', sql.NVarChar, playerSessionId);
       await removeExistingRequest.query(`
         DELETE FROM MatchmakingQueue
         WHERE PlayerSessionId = @playerSessionId
       `);
+      console.log('[api/games] handleRandom: Removed existing queue entry if any');
 
       const addToQueueRequest = new sql.Request(transaction);
       addToQueueRequest.input('playerSessionId', sql.NVarChar, playerSessionId);
@@ -383,10 +482,15 @@ async function handleRandom(req: any, res: any) {
         INSERT INTO MatchmakingQueue (PlayerSessionId, Operation, SelectedNumbers, PusherChannel)
         VALUES (@playerSessionId, @operation, @selectedNumbers, @pusherChannel)
       `);
+      console.log('[api/games] handleRandom: Added to queue');
 
+      console.log('[api/games] handleRandom: Committing transaction...');
       await transaction.commit();
+      console.log('[api/games] handleRandom: Transaction committed');
+      
       res.setHeader('Set-Cookie', `gameSession=${playerSessionId}; Path=/; HttpOnly; SameSite=Lax`);
 
+      console.log('[api/games] handleRandom: Returning queue response');
       return res.status(200).json({ 
         sessionId: playerSessionId,
         pusherChannel,
@@ -394,16 +498,30 @@ async function handleRandom(req: any, res: any) {
         message: 'Added to matchmaking queue'
       });
     }
-  } catch (error) {
+  } catch (error: any) {
+    console.error('[api/games] ===== handleRandom ERROR =====');
+    console.error('[api/games] handleRandom - Error message:', error.message);
+    console.error('[api/games] handleRandom - Error name:', error.name);
+    console.error('[api/games] handleRandom - Error stack:', error.stack);
+    console.error('[api/games] handleRandom - Full error:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
+    
     if (transaction) {
       try {
+        console.log('[api/games] handleRandom: Rolling back transaction...');
         await transaction.rollback();
-      } catch (rollbackError) {
-        console.error('[api/games] Failed to rollback transaction', rollbackError);
+        console.log('[api/games] handleRandom: Transaction rolled back');
+      } catch (rollbackError: any) {
+        console.error('[api/games] handleRandom: Failed to rollback transaction:', rollbackError.message);
+        console.error('[api/games] handleRandom: Rollback error stack:', rollbackError.stack);
       }
     }
-    console.error('[api/games] Error:', error);
-    return res.status(500).json({ message: 'Failed to find match', error: error.message });
+    
+    return res.status(500).json({ 
+      message: 'Failed to find match', 
+      error: error.message,
+      name: error.name,
+      stack: error.stack
+    });
   }
 }
 
@@ -548,7 +666,7 @@ async function handlePlayers(req: any, res: any) {
     playersRequest.input('gameId', sql.Int, parseInt(gameId, 10));
     
     const playersResult = await playersRequest.query(`
-      SELECT PlayerSessionId, Id
+      SELECT PlayerSessionId, Id, FinalTime
       FROM GamePlayers
       WHERE GameId = @gameId
       ORDER BY Id ASC
@@ -561,7 +679,10 @@ async function handlePlayers(req: any, res: any) {
     return res.status(200).json({
       playerCount,
       isHost,
-      players: players.map((p: any) => ({ sessionId: p.PlayerSessionId })),
+      players: players.map((p: any) => ({ 
+        sessionId: p.PlayerSessionId,
+        finalTime: p.FinalTime,
+      })),
     });
   } catch (error) {
     console.error('[api/games] Error:', error);
@@ -655,12 +776,26 @@ async function handleStart(req: any, res: any) {
 
     await transaction.commit();
 
+    console.log('[api/games] handleStart: Transaction committed, triggering Pusher event');
     const pusher = getPusherInstance();
-    await pusher.trigger(`private-game-${game.RoomCode}`, 'game-start', {
+    const channelName = `private-game-${game.RoomCode}`;
+    const eventData = {
       questions,
       gameId: game.Id,
       startTime,
-    });
+    };
+    
+    console.log('[api/games] handleStart: Triggering game-start event');
+    console.log('[api/games] handleStart: Channel:', channelName);
+    console.log('[api/games] handleStart: Event data:', JSON.stringify(eventData, null, 2));
+    
+    try {
+      await pusher.trigger(channelName, 'game-start', eventData);
+      console.log('[api/games] handleStart: Pusher event triggered successfully');
+    } catch (pusherError: any) {
+      console.error('[api/games] handleStart: Error triggering Pusher event:', pusherError);
+      // Still return success even if Pusher fails - client can navigate directly
+    }
 
     return res.status(200).json({ 
       success: true,

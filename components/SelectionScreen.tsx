@@ -756,6 +756,11 @@ export const SelectionScreen: React.FC<SelectionScreenProps> = ({ onStartQuiz, i
                 Start Quiz
             </button>
             <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
+                <div className="text-center mb-2">
+                    <span className="inline-block px-3 py-1 text-xs font-semibold text-yellow-800 dark:text-yellow-200 bg-yellow-200 dark:bg-yellow-800/30 rounded-full border border-yellow-400 dark:border-yellow-600">
+                        Currently in Beta
+                    </span>
+                </div>
                 <button
                     onClick={() => navigate('/multiplayer')}
                     className="w-full sm:w-auto px-16 py-4 text-xl font-bold text-white bg-blue-600 rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300"
