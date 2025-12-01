@@ -159,6 +159,15 @@ const App: React.FC = () => {
 
   return (
     <BrowserRouter>
+      <div className="w-full bg-blue-600 text-white text-center py-2 font-bold">
+        Multiplayer Mode Coming Soon!
+      </div>
+      <div className="w-full bg-purple-600 text-white text-center py-2 font-bold">
+        Math Dash - A New Game Coming Soon!
+      </div>
+      <div className="w-full bg-green-600 text-white text-center py-2 font-bold">
+        Custom Question Amount - Coming Soon!
+      </div>
       <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col items-center justify-center p-4 transition-colors duration-300">
         <main>
           <Routes>
