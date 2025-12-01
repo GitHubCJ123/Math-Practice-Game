@@ -9,7 +9,14 @@ export default async function handler(req, res) {
     return res.status(405).json({ message: 'Method Not Allowed' });
   }
 
-  if (req.headers.authorization !== `Bearer ${process.env.CRON_SECRET}`) {
+  // Vercel Cron jobs include the `x-vercel-cron` header instead of a custom Authorization token.
+  // We still allow the legacy bearer secret so the job can be triggered manually if needed.
+  const vercelCronHeader = req.headers['x-vercel-cron'];
+  const hasVercelCronHeader = typeof vercelCronHeader === 'string';
+  const bearer = req.headers.authorization;
+  const hasValidBearer = typeof bearer === 'string' && bearer === `Bearer ${process.env.CRON_SECRET}`;
+
+  if (!hasVercelCronHeader && !hasValidBearer) {
     return res.status(401).json({ message: 'Unauthorized' });
   }
 
