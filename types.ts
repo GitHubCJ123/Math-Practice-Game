@@ -1,6 +1,11 @@
 
 export type Operation = 'multiplication' | 'division' | 'squares' | 'square-roots' | 'fraction-to-decimal' | 'decimal-to-fraction';
 
+export const DEFAULT_QUESTION_COUNT = 10;
+export const MIN_QUESTION_COUNT = 5;
+export const MAX_QUESTION_COUNT = 50;
+export const MAX_CONVERSION_QUESTION_COUNT = 25; // Limited by available conversions
+
 export interface Question {
   num1: number;
   num2?: number; // num2 is optional for unary operations like squares/roots

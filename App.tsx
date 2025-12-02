@@ -2,6 +2,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
 import type { Operation, Question } from './types';
+import { DEFAULT_QUESTION_COUNT } from './types';
 import { SelectionScreen } from './components/SelectionScreen';
 import { QuizScreen } from './components/QuizScreen';
 import { ResultsScreen } from './components/ResultsScreen';
@@ -17,6 +18,7 @@ const App: React.FC = () => {
     operation: Operation;
     selectedNumbers: number[];
     timeLimit: number;
+    questionCount: number;
   } | null>(null);
   const [isDarkMode, setIsDarkMode] = useState(false);
 
@@ -40,13 +42,13 @@ const App: React.FC = () => {
   };
 
 
-  const generateQuestions = useCallback((operation: Operation, selectedNumbers: number[]): Question[] => {
+  const generateQuestions = useCallback((operation: Operation, selectedNumbers: number[], questionCount: number = DEFAULT_QUESTION_COUNT): Question[] => {
     const newQuestions: Question[] = [];
     const questionSet = new Set<string>();
 
     if (operation === 'fraction-to-decimal' || operation === 'decimal-to-fraction') {
         const shuffledConversions = [...conversions].sort(() => 0.5 - Math.random());
-        const selectedConversions = shuffledConversions.slice(0, 10);
+        const selectedConversions = shuffledConversions.slice(0, questionCount);
 
         selectedConversions.forEach(conv => {
             if (operation === 'fraction-to-decimal') {
@@ -69,7 +71,7 @@ const App: React.FC = () => {
         return newQuestions;
     }
 
-    while (newQuestions.length < 10) {
+    while (newQuestions.length < questionCount) {
       const baseNum = selectedNumbers[Math.floor(Math.random() * selectedNumbers.length)];
       
       let question: Question;
@@ -119,11 +121,11 @@ const App: React.FC = () => {
   }, []);
 
   const handleStartQuiz = useCallback(
-    (operation: Operation, selectedNumbers: number[], timeLimit: number) => {
-      setQuizSettings({ operation, selectedNumbers, timeLimit });
-      const generated = generateQuestions(operation, selectedNumbers);
+    (operation: Operation, selectedNumbers: number[], timeLimit: number, questionCount: number = DEFAULT_QUESTION_COUNT) => {
+      setQuizSettings({ operation, selectedNumbers, timeLimit, questionCount });
+      const generated = generateQuestions(operation, selectedNumbers, questionCount);
       setQuestions(generated);
-      setUserAnswers(Array(10).fill(''));
+      setUserAnswers(Array(generated.length).fill(''));
       setTimeTaken(0);
       // navigate('/quiz'); // This is handled by the wrapper component
     },
@@ -143,8 +145,8 @@ const App: React.FC = () => {
     window.onFinishQuiz = (answers: string[], time: number) => {
       // In a test context, we need to ensure questions are set for the results screen
       if (questions.length === 0) {
-        setQuizSettings({ operation: 'multiplication', selectedNumbers: [1,2,3,4,5,6,7,8,9,10,11,12], timeLimit: 0 });
-        setQuestions(generateQuestions('multiplication', [1,2,3,4,5,6,7,8,9,10,11,12]));
+        setQuizSettings({ operation: 'multiplication', selectedNumbers: [1,2,3,4,5,6,7,8,9,10,11,12], timeLimit: 0, questionCount: DEFAULT_QUESTION_COUNT });
+        setQuestions(generateQuestions('multiplication', [1,2,3,4,5,6,7,8,9,10,11,12], DEFAULT_QUESTION_COUNT));
       }
       handleShowResults(answers, time);
       // We need a way to navigate in tests. This is a simple solution.
@@ -164,9 +166,6 @@ const App: React.FC = () => {
       </div>
       <div className="w-full bg-purple-600 text-white text-center py-2 font-bold">
         Math Dash - A New Game Coming Soon!
-      </div>
-      <div className="w-full bg-green-600 text-white text-center py-2 font-bold">
-        Custom Question Amount - Coming Soon!
       </div>
       <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col items-center justify-center p-4 transition-colors duration-300">
         <main>
@@ -224,12 +223,12 @@ interface SelectionScreenWrapperProps {
   toggleDarkMode: () => void;
   isDarkMode: boolean;
   initialSettings: any;
-  generateQuestions: (operation: Operation, selectedNumbers: number[]) => Question[];
+  generateQuestions: (operation: Operation, selectedNumbers: number[], questionCount: number) => Question[];
   setQuestions: (questions: Question[]) => void;
   setUserAnswers: (answers: string[]) => void;
   setTimeTaken: (time: number) => void;
   setQuizSettings: (settings: any) => void;
-  handleStartQuiz: (operation: Operation, selectedNumbers: number[], timeLimit: number) => void;
+  handleStartQuiz: (operation: Operation, selectedNumbers: number[], timeLimit: number, questionCount: number) => void;
 }
 
 const SelectionScreenWrapper: React.FC<SelectionScreenWrapperProps> = ({
@@ -246,11 +245,11 @@ const SelectionScreenWrapper: React.FC<SelectionScreenWrapperProps> = ({
   const navigate = useNavigate();
 
   const handleStartQuizClick = useCallback(
-    (operation: Operation, selectedNumbers: number[], timeLimit: number) => {
-      setQuizSettings({ operation, selectedNumbers, timeLimit });
-      const generated = generateQuestions(operation, selectedNumbers);
+    (operation: Operation, selectedNumbers: number[], timeLimit: number, questionCount: number = DEFAULT_QUESTION_COUNT) => {
+      setQuizSettings({ operation, selectedNumbers, timeLimit, questionCount });
+      const generated = generateQuestions(operation, selectedNumbers, questionCount);
       setQuestions(generated);
-      setUserAnswers(Array(10).fill(''));
+      setUserAnswers(Array(generated.length).fill(''));
       setTimeTaken(0);
       navigate('/quiz', { replace: true });
     },

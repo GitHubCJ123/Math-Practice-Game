@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { OpenAIClient, AzureKeyCredential } from '@azure/openai';
 import type { Operation, Question, HighScores, AllQuizStats } from '../types';
+import { DEFAULT_QUESTION_COUNT } from '../types';
 import { CheckCircleIcon, XCircleIcon, StarIcon, TrophyIcon } from './icons';
 import { feedbackMessages } from '../lib/feedbackMessages';
 
@@ -119,6 +120,7 @@ interface ResultsScreenProps {
     operation: Operation;
     selectedNumbers: number[];
     timeLimit: number;
+    questionCount: number;
   };
 }
 
@@ -167,9 +169,11 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({ questions, userAns
 
       const allNumbersSelected = selectedNumbers.length === numbersForOperation.length;
       
-      // Eligibility for leaderboard: perfect score and all numbers selected (for non-conversion modes)
+      // Eligibility for leaderboard: perfect score, all numbers selected (for non-conversion modes), and exactly 10 questions
+      const hasDefaultQuestionCount = questions.length === DEFAULT_QUESTION_COUNT;
       const isEligible = correctCount === questions.length && 
                          questions.length > 0 && 
+                         hasDefaultQuestionCount &&
                          (isConversionMode || allNumbersSelected);
 
       console.log('[ResultsScreen] Leaderboard eligibility check', {
@@ -178,6 +182,7 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({ questions, userAns
         totalQuestions: questions.length,
         isConversionMode,
         allNumbersSelected,
+        hasDefaultQuestionCount,
         isEligible,
       });
 

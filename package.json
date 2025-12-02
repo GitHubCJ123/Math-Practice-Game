@@ -12,9 +12,7 @@
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
     "server": "node server.cjs",
-    "server:test": "cross-env NODE_ENV=test node -r dotenv/config server.cjs dotenv_config_path=.env.test",
-    "cypress:open": "cypress open",
-    "cypress:run": "cypress run"
+    "server:test": "cross-env NODE_ENV=test node -r dotenv/config server.cjs dotenv_config_path=.env.test"
   },
   "dependencies": {
     "@azure/openai": "^1.0.0-beta.12",
@@ -41,7 +39,6 @@
     "concurrently": "^9.2.1",
     "cors": "^2.8.5",
     "cross-env": "^10.1.0",
-    "cypress": "^15.5.0",
     "dotenv": "^17.2.3",
     "eslint": "^9.39.1",
     "nodemon": "^3.1.10",

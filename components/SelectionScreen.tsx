@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import type { Operation, HighScores, HighScore, AllQuizStats, QuizStats } from '../types';
+import { DEFAULT_QUESTION_COUNT, MIN_QUESTION_COUNT, MAX_QUESTION_COUNT, MAX_CONVERSION_QUESTION_COUNT } from '../types';
 import { StarIcon, SunIcon, MoonIcon, ChartBarIcon, BullseyeIcon, ListBulletIcon, ClockIcon, TrashIcon } from './icons';
 import { Leaderboard } from './Leaderboard';
 
@@ -10,11 +11,12 @@ interface Score {
 }
 
 interface SelectionScreenProps {
-  onStartQuiz: (operation: Operation, selectedNumbers: number[], timeLimit: number) => void;
+  onStartQuiz: (operation: Operation, selectedNumbers: number[], timeLimit: number, questionCount: number) => void;
   initialSettings?: {
     operation: Operation;
     selectedNumbers: number[];
     timeLimit: number;
+    questionCount: number;
   } | null;
   isDarkMode: boolean;
   toggleDarkMode: () => void;
@@ -565,9 +567,11 @@ export const SelectionScreen: React.FC<SelectionScreenProps> = ({ onStartQuiz, i
   const [operation, setOperation] = useState<Operation>(initialSettings?.operation || 'multiplication');
   const [selectedNumbers, setSelectedNumbers] = useState<number[]>(initialSettings?.selectedNumbers || []);
   const [timeLimit, setTimeLimit] = useState<number>(initialSettings?.timeLimit ?? 0);
+  const [questionCount, setQuestionCount] = useState<number>(initialSettings?.questionCount ?? DEFAULT_QUESTION_COUNT);
   const [showStats, setShowStats] = useState(false);
 
   const isConversionMode = operation === 'fraction-to-decimal' || operation === 'decimal-to-fraction';
+  const maxQuestions = isConversionMode ? MAX_CONVERSION_QUESTION_COUNT : MAX_QUESTION_COUNT;
 
   const standardTimeValues = timeOptions.map(o => o.value);
   const isInitialTimeCustom = initialSettings && !standardTimeValues.includes(initialSettings.timeLimit);
@@ -597,6 +601,11 @@ export const SelectionScreen: React.FC<SelectionScreenProps> = ({ onStartQuiz, i
 
   useEffect(() => {
     setSelectedNumbers([]);
+    // Reset question count if it exceeds max for new operation
+    const newMax = (operation === 'fraction-to-decimal' || operation === 'decimal-to-fraction') 
+      ? MAX_CONVERSION_QUESTION_COUNT 
+      : MAX_QUESTION_COUNT;
+    setQuestionCount(prev => prev > newMax ? newMax : prev);
   }, [operation]);
 
   const needsAtLeastTen = (operation === 'squares' || operation === 'square-roots') && selectedNumbers.length > 0 && selectedNumbers.length < 10;
@@ -646,7 +655,7 @@ export const SelectionScreen: React.FC<SelectionScreenProps> = ({ onStartQuiz, i
           const secs = parseInt(customSeconds, 10) || 0;
           finalTimeLimit = (mins * 60) + secs;
       }
-      onStartQuiz(operation, selectedNumbers, finalTimeLimit);
+      onStartQuiz(operation, selectedNumbers, finalTimeLimit, questionCount);
   }
 
   return (
@@ -742,6 +751,72 @@ export const SelectionScreen: React.FC<SelectionScreenProps> = ({ onStartQuiz, i
                             inputMode="numeric"
                         />
                     </div>
+                </div>
+            </Section>
+
+            <Section title="Number of Questions" step={isConversionMode ? 3 : 4}>
+                <div className="flex flex-col items-center gap-4">
+                    <div className="flex items-center gap-4">
+                        <button 
+                            onClick={() => setQuestionCount(prev => Math.max(MIN_QUESTION_COUNT, prev - 5))}
+                            disabled={questionCount <= MIN_QUESTION_COUNT}
+                            className="w-12 h-12 text-2xl font-bold rounded-full bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            −
+                        </button>
+                        <div className="flex flex-col items-center">
+                            <input
+                                type="range"
+                                min={MIN_QUESTION_COUNT}
+                                max={maxQuestions}
+                                step={1}
+                                value={questionCount}
+                                onChange={(e) => setQuestionCount(parseInt(e.target.value, 10))}
+                                className="w-48 sm:w-64 h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                            />
+                            <span className="text-3xl font-bold text-slate-800 dark:text-slate-100 mt-2">{questionCount}</span>
+                        </div>
+                        <button 
+                            onClick={() => setQuestionCount(prev => Math.min(maxQuestions, prev + 5))}
+                            disabled={questionCount >= maxQuestions}
+                            className="w-12 h-12 text-2xl font-bold rounded-full bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            +
+                        </button>
+                    </div>
+                    <div className="flex gap-2 flex-wrap justify-center">
+                        {[5, 10, 15, 20, 25].filter(n => n <= maxQuestions).map(num => (
+                            <button
+                                key={num}
+                                onClick={() => setQuestionCount(num)}
+                                className={`px-4 py-2 font-semibold rounded-lg transition-all duration-200 border-2 ${
+                                    questionCount === num 
+                                        ? 'bg-blue-600 text-white border-blue-600' 
+                                        : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700 hover:border-blue-500 dark:hover:border-blue-500'
+                                }`}
+                            >
+                                {num}
+                            </button>
+                        ))}
+                        {!isConversionMode && [30, 40, 50].map(num => (
+                            <button
+                                key={num}
+                                onClick={() => setQuestionCount(num)}
+                                className={`px-4 py-2 font-semibold rounded-lg transition-all duration-200 border-2 ${
+                                    questionCount === num 
+                                        ? 'bg-blue-600 text-white border-blue-600' 
+                                        : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700 hover:border-blue-500 dark:hover:border-blue-500'
+                                }`}
+                            >
+                                {num}
+                            </button>
+                        ))}
+                    </div>
+                    {questionCount !== DEFAULT_QUESTION_COUNT && (
+                        <p className="text-center text-amber-600 dark:text-amber-400 font-semibold text-sm animate-fade-in">
+                            ⚠️ To qualify for the leaderboard, you must use {DEFAULT_QUESTION_COUNT} questions.
+                        </p>
+                    )}
                 </div>
             </Section>
         </div>

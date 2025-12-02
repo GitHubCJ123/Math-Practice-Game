@@ -34,7 +34,7 @@ const playTimeUpSound = () => {
 };
 
 export const QuizScreen: React.FC<QuizScreenProps> = ({ questions, timeLimit, onFinishQuiz }) => {
-  const [answers, setAnswers] = useState<string[]>(Array(10).fill(''));
+  const [answers, setAnswers] = useState<string[]>(Array(questions.length).fill(''));
   const [elapsedTime, setElapsedTime] = useState(0);
   const [timerRunning, setTimerRunning] = useState(false);
   const [quizFinished, setQuizFinished] = useState(false);
