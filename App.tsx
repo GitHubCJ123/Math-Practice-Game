@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
 import type { Operation, Question } from './types';
@@ -6,6 +5,7 @@ import { DEFAULT_QUESTION_COUNT } from './types';
 import { SelectionScreen } from './components/SelectionScreen';
 import { QuizScreen } from './components/QuizScreen';
 import { ResultsScreen } from './components/ResultsScreen';
+import { MathDashAd } from './components/MathDashAd';
 import { conversions } from './lib/conversions';
 import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/react";
@@ -164,11 +164,8 @@ const App: React.FC = () => {
       <div className="w-full bg-blue-600 text-white text-center py-2 font-bold">
         Multiplayer Mode Coming Soon!
       </div>
-      <div className="w-full bg-purple-600 text-white text-center py-2 font-bold">
-        Math Dash - A New Game Coming Soon!
-      </div>
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col items-center justify-center p-4 transition-colors duration-300">
-        <main>
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col items-center justify-center p-4 transition-colors duration-300 relative">
+        <main className="w-full flex justify-center">
           <Routes>
             <Route
               path="/"
@@ -212,6 +209,7 @@ const App: React.FC = () => {
             />
           </Routes>
         </main>
+        
         <Analytics />
         <SpeedInsights />
       </div>
@@ -257,12 +255,17 @@ const SelectionScreenWrapper: React.FC<SelectionScreenWrapperProps> = ({
   );
 
   return (
-    <SelectionScreen
-      onStartQuiz={handleStartQuizClick}
-      initialSettings={initialSettings}
-      isDarkMode={isDarkMode}
-      toggleDarkMode={toggleDarkMode}
-    />
+    <>
+      <SelectionScreen
+        onStartQuiz={handleStartQuizClick}
+        initialSettings={initialSettings}
+        isDarkMode={isDarkMode}
+        toggleDarkMode={toggleDarkMode}
+      />
+      <div className="absolute right-8 top-8 hidden 2xl:block">
+        <MathDashAd />
+      </div>
+    </>
   );
 };
 
