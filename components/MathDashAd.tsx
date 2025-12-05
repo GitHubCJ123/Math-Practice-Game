@@ -2,7 +2,7 @@ import React from 'react';
 
 export const MathDashAd: React.FC = () => {
   return (
-    <div className="w-[500px]">
+    <div className="w-full max-w-[500px]">
       <div className="sticky top-6 group relative">
         {/* Neon Glow Effect Background */}
         <div className="absolute -inset-1 bg-gradient-to-r from-pink-600 to-purple-600 rounded-2xl blur opacity-75 group-hover:opacity-100 transition duration-1000 group-hover:duration-200 animate-pulse"></div>

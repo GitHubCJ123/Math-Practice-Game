@@ -255,17 +255,24 @@ const SelectionScreenWrapper: React.FC<SelectionScreenWrapperProps> = ({
   );
 
   return (
-    <>
+    <div className="flex flex-col items-center w-full">
       <SelectionScreen
         onStartQuiz={handleStartQuizClick}
         initialSettings={initialSettings}
         isDarkMode={isDarkMode}
         toggleDarkMode={toggleDarkMode}
       />
+      
+      {/* Ad for large screens - absolute positioned */}
       <div className="absolute right-8 top-8 hidden 2xl:block">
         <MathDashAd />
       </div>
-    </>
+      
+      {/* Ad for smaller screens - flows below content */}
+      <div className="block 2xl:hidden mt-12 mb-8 w-full flex justify-center px-4">
+        <MathDashAd />
+      </div>
+    </div>
   );
 };
 
