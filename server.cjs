@@ -44,13 +44,6 @@ const containsLink = (text) => {
   return linkPattern.test(text);
 };
 
-const getCurrentMonthBoundsUtc = () => {
-  const now = new Date();
-  const monthStartUtc = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0, 0));
-  const nextMonthStartUtc = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1, 0, 0, 0, 0));
-  return { monthStartUtc, nextMonthStartUtc };
-};
-
 
 // --- Test-Only Endpoint for DB Reset ---
 if (process.env.NODE_ENV === 'test') {
@@ -79,17 +72,16 @@ if (process.env.NODE_ENV === 'test') {
 
 
 // --- Scheduled Job for Leaderboard Reset ---
-// Run monthly on the 1st at 05:00 UTC to mirror production timing.
-cron.schedule('0 0 5 1 * *', () => {
-  console.log('Running scheduled leaderboard reset for previous month...');
-  const { monthStartUtc } = getCurrentMonthBoundsUtc();
+// Schedule to run daily at 23:59:59 UTC. The function will check if it's the last day of the month.
+cron.schedule('59 59 23 * * *', () => {
+  console.log('Running scheduled leaderboard reset...');
   const connection = new Connection(dbConfig);
   connection.on('connect', (err) => {
     if (err) {
       console.error('Scheduled Leaderboard Reset: Connection Error', err);
       return;
     }
-    const request = new Request('DELETE FROM LeaderboardScores WHERE CreatedAt < @monthStartUtc;', (err) => {
+    const request = new Request('DELETE FROM LeaderboardScores;', (err) => {
       if (err) {
         console.error('Scheduled Leaderboard Reset: Query Error', err);
         return;
@@ -97,7 +89,6 @@ cron.schedule('0 0 5 1 * *', () => {
       console.log('Scheduled Leaderboard Reset: LeaderboardScores table cleared.');
       connection.close();
     });
-    request.addParameter('monthStartUtc', TYPES.DateTime2, monthStartUtc);
     connection.execSql(request);
   });
   connection.connect();
@@ -125,8 +116,6 @@ app.get('/api/get-leaderboard', (req, res) => {
       SELECT TOP 5 PlayerName, Score
       FROM LeaderboardScores
       WHERE OperationType = @operationType
-        AND CreatedAt >= @monthStartUtc
-        AND CreatedAt < @nextMonthStartUtc
       ORDER BY Score ASC;
     `;
 
@@ -145,9 +134,6 @@ app.get('/api/get-leaderboard', (req, res) => {
     });
 
     request.addParameter('operationType', TYPES.NVarChar, operationType);
-    const { monthStartUtc, nextMonthStartUtc } = getCurrentMonthBoundsUtc();
-    request.addParameter('monthStartUtc', TYPES.DateTime2, monthStartUtc);
-    request.addParameter('nextMonthStartUtc', TYPES.DateTime2, nextMonthStartUtc);
     connection.execSql(request);
   });
 
