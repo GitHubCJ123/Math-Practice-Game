@@ -4,6 +4,8 @@ const express = require('express');
 const cors = require('cors');
 const { Connection, Request, TYPES } = require('tedious');
 const cron = require('node-cron'); // Added for scheduled job
+const { DateTime } = require('luxon');
+const { OpenAIClient, AzureKeyCredential } = require('@azure/openai');
 
 const app = express();
 const port = 3001;
@@ -44,6 +46,80 @@ const containsLink = (text) => {
   return linkPattern.test(text);
 };
 
+const getCurrentEasternMonthBounds = () => {
+  const nowEastern = DateTime.now().setZone('America/New_York');
+  const start = nowEastern.startOf('month');
+  const end = start.plus({ months: 1 });
+  return {
+    monthStartUtc: start.toUTC().toJSDate(),
+    nextMonthStartUtc: end.toUTC().toJSDate(),
+  };
+};
+
+const buildPrompt = ({ num1, num2, operation, answer }) => {
+  switch (operation) {
+    case 'multiplication':
+    case 'division':
+    case 'squares':
+    case 'square-roots': {
+      const problemString =
+        operation === 'multiplication'
+          ? `${num1} × ${num2}`
+          : operation === 'division'
+            ? `${num1} ÷ ${num2}`
+            : operation === 'squares'
+              ? `${num1}²`
+              : `√${num1}`;
+      return `You are a math speed coach. A student needs to solve "${problemString}" quickly.
+1) Briefly explain the standard method.
+2) Provide a mental math trick or shortcut to solve it faster.
+Keep the entire explanation concise and encouraging. The correct answer is ${answer}.`;
+    }
+    case 'fraction-to-decimal':
+      return `You are a math speed coach. A student needs to convert the fraction ${num1}/${num2} to a decimal.
+1) Briefly explain the long division method (numerator divided by denominator).
+2) Explain how to handle repeating decimals by rounding to three decimal places.
+Keep the explanation concise and clear. The correct answer is ${answer}.`;
+    case 'decimal-to-fraction':
+      return `You are a math speed coach. A student needs to convert the decimal ${num1} to a fraction in simplest form.
+1) Explain how to convert the decimal to a fraction based on its place value (e.g., 0.75 = 75/100).
+2) Explain how to simplify the fraction to its lowest terms by finding the greatest common divisor.
+Keep the explanation concise and clear. The correct answer is ${answer}.`;
+    default:
+      return `The correct answer is ${answer}. Keep trying!`;
+  }
+};
+
+const getExplanationConfig = () => {
+  const apiKey =
+    process.env.AZURE_API_KEY ||
+    process.env.AZURE_OPENAI_API_KEY ||
+    process.env.VITE_AZURE_API_KEY;
+  const endpoint =
+    process.env.AZURE_ENDPOINT ||
+    process.env.AZURE_OPENAI_ENDPOINT ||
+    process.env.VITE_AZURE_ENDPOINT;
+  const deployment =
+    process.env.AZURE_DEPLOYMENT_NAME ||
+    process.env.AZURE_OPENAI_DEPLOYMENT_NAME ||
+    process.env.VITE_AZURE_DEPLOYMENT_NAME;
+  return { apiKey, endpoint, deployment };
+};
+
+const ALLOWED_OPERATIONS = new Set([
+  'multiplication',
+  'division',
+  'squares',
+  'square-roots',
+  'fraction-to-decimal',
+  'decimal-to-fraction',
+]);
+
+const requiresNum2 = (operation) =>
+  operation === 'multiplication' ||
+  operation === 'division' ||
+  operation === 'fraction-to-decimal';
+
 
 // --- Test-Only Endpoint for DB Reset ---
 if (process.env.NODE_ENV === 'test') {
@@ -72,16 +148,17 @@ if (process.env.NODE_ENV === 'test') {
 
 
 // --- Scheduled Job for Leaderboard Reset ---
-// Schedule to run daily at 23:59:59 UTC. The function will check if it's the last day of the month.
-cron.schedule('59 59 23 * * *', () => {
-  console.log('Running scheduled leaderboard reset...');
+// Run monthly on the 1st at 05:00 UTC to mirror production timing (Eastern month boundaries).
+cron.schedule('0 0 5 1 * *', () => {
+  console.log('Running scheduled leaderboard reset for previous month...');
+  const { monthStartUtc } = getCurrentEasternMonthBounds();
   const connection = new Connection(dbConfig);
   connection.on('connect', (err) => {
     if (err) {
       console.error('Scheduled Leaderboard Reset: Connection Error', err);
       return;
     }
-    const request = new Request('DELETE FROM LeaderboardScores;', (err) => {
+    const request = new Request('DELETE FROM LeaderboardScores WHERE CreatedAt < @monthStartUtc;', (err) => {
       if (err) {
         console.error('Scheduled Leaderboard Reset: Query Error', err);
         return;
@@ -89,6 +166,7 @@ cron.schedule('59 59 23 * * *', () => {
       console.log('Scheduled Leaderboard Reset: LeaderboardScores table cleared.');
       connection.close();
     });
+    request.addParameter('monthStartUtc', TYPES.DateTime2, monthStartUtc);
     connection.execSql(request);
   });
   connection.connect();
@@ -116,6 +194,8 @@ app.get('/api/get-leaderboard', (req, res) => {
       SELECT TOP 5 PlayerName, Score
       FROM LeaderboardScores
       WHERE OperationType = @operationType
+        AND CreatedAt >= @monthStartUtc
+        AND CreatedAt < @nextMonthStartUtc
       ORDER BY Score ASC;
     `;
 
@@ -134,6 +214,9 @@ app.get('/api/get-leaderboard', (req, res) => {
     });
 
     request.addParameter('operationType', TYPES.NVarChar, operationType);
+    const { monthStartUtc, nextMonthStartUtc } = getCurrentEasternMonthBounds();
+    request.addParameter('monthStartUtc', TYPES.DateTime2, monthStartUtc);
+    request.addParameter('nextMonthStartUtc', TYPES.DateTime2, nextMonthStartUtc);
     connection.execSql(request);
   });
 
@@ -157,8 +240,8 @@ app.get('/api/check-score', (req, res) => {
 
     const sql = `
       SELECT 
-        (SELECT COUNT(*) FROM LeaderboardScores WHERE OperationType = @operationType) as totalScores,
-        (SELECT COUNT(*) FROM LeaderboardScores WHERE OperationType = @operationType AND Score < @score) as betterScores;
+        (SELECT COUNT(*) FROM LeaderboardScores WHERE OperationType = @operationType AND CreatedAt >= @monthStartUtc AND CreatedAt < @nextMonthStartUtc) as totalScores,
+        (SELECT COUNT(*) FROM LeaderboardScores WHERE OperationType = @operationType AND Score < @score AND CreatedAt >= @monthStartUtc AND CreatedAt < @nextMonthStartUtc) as betterScores;
     `;
 
     const request = new Request(sql, (err, rowCount, rows) => {
@@ -177,6 +260,9 @@ app.get('/api/check-score', (req, res) => {
 
     request.addParameter('operationType', TYPES.NVarChar, operationType);
     request.addParameter('score', TYPES.Int, scoreNum);
+    const { monthStartUtc, nextMonthStartUtc } = getCurrentEasternMonthBounds();
+    request.addParameter('monthStartUtc', TYPES.DateTime2, monthStartUtc);
+    request.addParameter('nextMonthStartUtc', TYPES.DateTime2, nextMonthStartUtc);
     connection.execSql(request);
   });
 
@@ -281,6 +367,48 @@ app.post('/api/submit-score', (req, res) => {
   });
 
   connection.connect();
+});
+
+// --- AI Explanation Endpoint (local/testing parity) ---
+app.post('/api/get-explanation', async (req, res) => {
+  const { num1, num2, operation, answer } = req.body || {};
+
+  const num2Needed = typeof operation === 'string' && requiresNum2(operation);
+
+  if (
+    typeof num1 !== 'number' ||
+    typeof operation !== 'string' ||
+    !ALLOWED_OPERATIONS.has(operation) ||
+    answer === undefined ||
+    (num2Needed && typeof num2 !== 'number') ||
+    (!num2Needed && num2 !== undefined && typeof num2 !== 'number')
+  ) {
+    return res.status(400).json({ message: 'Invalid request payload.' });
+  }
+
+  const { apiKey, endpoint, deployment } = getExplanationConfig();
+  if (!apiKey || !endpoint || !deployment) {
+    console.error('[local get-explanation] Missing Azure OpenAI configuration.');
+    return res.status(200).json({ explanation: `The correct answer is ${answer}. Keep trying!` });
+  }
+
+  const prompt = buildPrompt({ num1, num2, operation, answer });
+
+  try {
+    const client = new OpenAIClient(endpoint, new AzureKeyCredential(apiKey));
+    const response = await client.getChatCompletions(
+      deployment,
+      [{ role: 'user', content: prompt }],
+      { maxTokens: 200 }
+    );
+    const text =
+      response.choices?.[0]?.message?.content?.trim() ||
+      `The correct answer is ${answer}. Keep trying!`;
+    return res.status(200).json({ explanation: text });
+  } catch (error) {
+    console.error('[local get-explanation] Error generating explanation:', error);
+    return res.status(200).json({ explanation: `The correct answer is ${answer}. Keep trying!` });
+  }
 });
 
 

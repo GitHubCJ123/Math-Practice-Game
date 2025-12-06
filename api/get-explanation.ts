@@ -97,12 +97,18 @@ export default async function handler(req, res) {
   const prompt = buildPrompt({ num1, num2, operation, answer });
 
   try {
+    // Hard timeout so the client doesn't hang forever
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 10_000);
+
     const client = new OpenAIClient(endpoint, new AzureKeyCredential(apiKey));
     const response = await client.getChatCompletions(
       deployment,
       [{ role: "user", content: prompt }],
-      { maxTokens: 200 }
+      { maxTokens: 200, signal: controller.signal }
     );
+
+    clearTimeout(timer);
 
     const text =
       response.choices?.[0]?.message?.content?.trim() ||

@@ -13,11 +13,15 @@ const getExplanation = async (
   operation: string,
   answer: string | number
 ): Promise<string> => {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10_000);
+
   try {
     const response = await fetch('/api/get-explanation', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ num1, num2, operation, answer }),
+      signal: controller.signal,
     });
 
     if (!response.ok) {
@@ -29,6 +33,8 @@ const getExplanation = async (
   } catch (error) {
     console.error('Error fetching explanation:', error);
     return buildFallbackExplanation(answer);
+  } finally {
+    clearTimeout(timeout);
   }
 };
 
