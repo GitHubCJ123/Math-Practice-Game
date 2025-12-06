@@ -116,7 +116,7 @@ export default async function handler(req, res) {
         { maxTokens: 200 }
       ),
       new Promise<never>((_, reject) => {
-        timeoutId = setTimeout(() => reject(new Error("AI request timed out")), 10_000);
+        timeoutId = setTimeout(() => reject(new Error("AI request timed out")), 20_000);
       }),
     ]);
 
