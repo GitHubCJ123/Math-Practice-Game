@@ -127,9 +127,11 @@ export default async function handler(req, res) {
     return res.status(200).json({ explanation: text });
   } catch (error) {
     console.error("[api/get-explanation] Error generating explanation:", error);
-    return res.status(200).json({ explanation: DEFAULT_FALLBACK(answer) });
+    const status = error instanceof Error && error.message.includes("timed out")
+      ? 504
+      : 500;
+    return res.status(status).json({ message: "AI explanation failed", explanation: DEFAULT_FALLBACK(answer) });
   } finally {
     if (timeoutId) clearTimeout(timeoutId);
   }
 }
- 
