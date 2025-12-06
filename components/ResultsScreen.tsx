@@ -1,85 +1,36 @@
 import React, { useState, useEffect } from 'react';
-import { OpenAIClient, AzureKeyCredential } from '@azure/openai';
 import type { Operation, Question, HighScores, AllQuizStats } from '../types';
 import { DEFAULT_QUESTION_COUNT } from '../types';
 import { CheckCircleIcon, XCircleIcon, StarIcon, TrophyIcon } from './icons';
 import { feedbackMessages } from '../lib/feedbackMessages';
 
-let ai: OpenAIClient | null = null;
+const buildFallbackExplanation = (answer: string | number) =>
+  `The correct answer is ${answer}. Keep trying!`;
 
-async function getAiInstance(): Promise<OpenAIClient | null> {
-  if (ai) {
-    return ai;
-  }
+const getExplanation = async (
+  num1: number,
+  num2: number | undefined,
+  operation: string,
+  answer: string | number
+): Promise<string> => {
   try {
-    const apiKey = import.meta.env.VITE_AZURE_API_KEY;
-    const apiEndpoint = import.meta.env.VITE_AZURE_ENDPOINT;
+    const response = await fetch('/api/get-explanation', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ num1, num2, operation, answer }),
+    });
 
-    if (!apiKey || !apiEndpoint) {
-      console.error("Azure API key or endpoint is not configured. AI features will be disabled.");
-      return null;
+    if (!response.ok) {
+      throw new Error('Failed to fetch explanation');
     }
-    
-    ai = new OpenAIClient(apiEndpoint, new AzureKeyCredential(apiKey));
-    return ai;
+
+    const data = await response.json();
+    return data.explanation || buildFallbackExplanation(answer);
   } catch (error) {
-    console.error("Failed to initialize Azure OpenAI Client. AI features will be disabled.", error);
-    return null;
+    console.error('Error fetching explanation:', error);
+    return buildFallbackExplanation(answer);
   }
-}
-
-const getExplanation = async (num1: number, num2: number | undefined, operation: string, answer: string | number): Promise<string> => {
-    let prompt = '';
-
-    switch(operation) {
-        case 'multiplication':
-        case 'division':
-        case 'squares':
-        case 'square-roots':
-            const problemString = operation === 'multiplication' ? `${num1} × ${num2}` :
-                                  operation === 'division' ? `${num1} ÷ ${num2}` :
-                                  operation === 'squares' ? `${num1}²` : `√${num1}`;
-            prompt = `You are a math speed coach. A student needs to solve "${problemString}" quickly. 
-            1. Briefly explain the standard method.
-            2. Provide a mental math trick or shortcut to solve it faster. For example, for 99÷9, you could explain that 9*10=90, and one more 9 makes 99, so the answer is 11.
-            Keep the entire explanation concise and encouraging. The correct answer is ${answer}.`;
-            break;
-
-        case 'fraction-to-decimal':
-            prompt = `You are a math speed coach. A student needs to convert the fraction ${num1}/${num2} to a decimal.
-            1. Briefly explain the long division method (numerator divided by denominator).
-            2. Explain how to handle repeating decimals by rounding to three decimal places.
-            Keep the explanation concise and clear. The correct answer is ${answer}.`;
-            break;
-
-        case 'decimal-to-fraction':
-            prompt = `You are a math speed coach. A student needs to convert the decimal ${num1} to a fraction in simplest form.
-            1. Explain how to convert the decimal to a fraction based on its place value (e.g., 0.75 = 75/100).
-            2. Explain how to simplify the fraction to its lowest terms by finding the greatest common divisor.
-            Keep the explanation concise and clear. The correct answer is ${answer}.`;
-            break;
-            
-        default:
-            return "Sorry, an explanation could not be generated for this problem.";
-    }
-    
-    const client = await getAiInstance();
-    if (!client) return `The correct answer is ${answer}. Keep trying!`;
-
-    try {
-        const deploymentName = import.meta.env.VITE_AZURE_DEPLOYMENT_NAME;
-        if (!deploymentName) {
-            console.error("Azure deployment name is not configured.");
-            return `The correct answer is ${answer}. Keep trying!`;
-        }
-        const { choices } = await client.getChatCompletions(deploymentName, [{ role: "user", content: prompt }]);
-        
-        return choices[0].message?.content || `The correct answer is ${answer}. Keep trying!`;
-    } catch (error) {
-        console.error("Error generating explanation:", error);
-        return `The correct answer is ${answer}. Keep trying!`;
-    }
-}
+};
 
 const getFeedbackMessage = (correctCount: number, totalQuestions: number, timeTaken: number): string => {
     const score = correctCount / totalQuestions;
@@ -134,6 +85,11 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({ questions, userAns
   const [errorMessage, setErrorMessage] = useState('');
 
   const { operation, selectedNumbers } = quizSettings;
+  const isConversionMode = operation === 'fraction-to-decimal' || operation === 'decimal-to-fraction';
+  const numbersForOperation = operation === 'squares' || operation === 'square-roots'
+    ? Array.from({ length: 20 }, (_, i) => i + 1)
+    : Array.from({ length: 12 }, (_, i) => i + 1);
+  const allNumbersSelected = isConversionMode ? true : selectedNumbers.length === numbersForOperation.length;
 
   type ExplanationState = {
     [key: number]: {
@@ -161,14 +117,6 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({ questions, userAns
   useEffect(() => {
     // Check if score is a top score
     const checkScore = async () => {
-      const isConversionMode = operation === 'fraction-to-decimal' || operation === 'decimal-to-fraction';
-      
-      const numbersForOperation = operation === 'squares' || operation === 'square-roots'
-        ? Array.from({ length: 20 }, (_, i) => i + 1)
-        : Array.from({ length: 12 }, (_, i) => i + 1);
-
-      const allNumbersSelected = selectedNumbers.length === numbersForOperation.length;
-      
       // Eligibility for leaderboard: perfect score, all numbers selected (for non-conversion modes), and exactly 10 questions
       const hasDefaultQuestionCount = questions.length === DEFAULT_QUESTION_COUNT;
       const isEligible = correctCount === questions.length && 
@@ -193,7 +141,14 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({ questions, userAns
             operation,
             scoreInMs,
           });
-          const response = await fetch(`/api/check-score?operationType=${operation}&score=${scoreInMs}`);
+          const params = new URLSearchParams({
+            operationType: operation,
+            score: String(scoreInMs),
+            questionCount: String(questions.length),
+            selectedNumbersCount: String(selectedNumbers.length),
+            allNumbersSelected: String(allNumbersSelected),
+          });
+          const response = await fetch(`/api/check-score?${params.toString()}`);
           const data = await response.json();
           console.log('[ResultsScreen] check-score response', data);
           setIsTopScore(data.isTopScore);
@@ -286,6 +241,9 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({ questions, userAns
           playerName: playerName.trim(),
           score: scoreInMs,
           operationType: operation,
+          questionCount: questions.length,
+          selectedNumbersCount: selectedNumbers.length,
+          allNumbersSelected,
         }),
       });
 
