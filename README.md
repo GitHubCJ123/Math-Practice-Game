@@ -43,6 +43,7 @@ This is a simple game to help users practice various math operations like multip
     AZURE_DB_USER="your-db-user"
     AZURE_DB_PASSWORD="your-db-password"
     ```
+    Optional: add `VITE_GA_ID="G-XXXXXXX"` to enable Google Analytics (respects the browser Do Not Track setting and won’t load if unset).
 3.  **Run the Local Server**:
     `npm run server`
 4.  **Run the Frontend App**:

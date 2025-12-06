@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import type { Operation, Question } from './types';
 import { DEFAULT_QUESTION_COUNT } from './types';
 import { SelectionScreen } from './components/SelectionScreen';
@@ -9,6 +9,7 @@ import { MathDashAd } from './components/MathDashAd';
 import { conversions } from './lib/conversions';
 import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/react";
+import { trackPageView } from './lib/ga';
 
 const App: React.FC = () => {
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -161,6 +162,7 @@ const App: React.FC = () => {
 
   return (
     <BrowserRouter>
+      <RouteChangeTracker />
       <div className="w-full bg-blue-600 text-white text-center py-2 font-bold">
         Multiplayer Mode Coming Soon!
       </div>
@@ -215,6 +217,16 @@ const App: React.FC = () => {
       </div>
     </BrowserRouter>
   );
+};
+
+const RouteChangeTracker: React.FC = () => {
+  const location = useLocation();
+
+  useEffect(() => {
+    trackPageView(location.pathname + location.search);
+  }, [location.pathname, location.search]);
+
+  return null;
 };
 
 interface SelectionScreenWrapperProps {
