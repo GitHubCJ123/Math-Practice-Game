@@ -12,6 +12,8 @@ const LEADERBOARD_SUPPORTED_OPERATIONS = new Set<Operation>([
   'square-roots',
   'fraction-to-decimal',
   'decimal-to-fraction',
+  'fraction-to-percent',
+  'percent-to-fraction',
 ]);
 
 const buildFallbackExplanation = (answer: string | number) =>

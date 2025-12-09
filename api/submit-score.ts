@@ -11,6 +11,8 @@ const ALLOWED_OPERATIONS = new Set([
   "square-roots",
   "fraction-to-decimal",
   "decimal-to-fraction",
+  "fraction-to-percent",
+  "percent-to-fraction",
 ]);
 
 const BAD_WORDS = [

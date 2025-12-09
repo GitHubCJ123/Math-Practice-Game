@@ -181,7 +181,8 @@ const getOperationDisplayName = (op: Operation) => {
 
 const operations: Operation[] = [
     'multiplication', 'division', 'squares', 'square-roots',
-    'fraction-to-decimal', 'decimal-to-fraction'
+    'fraction-to-decimal', 'decimal-to-fraction',
+    'fraction-to-percent', 'percent-to-fraction'
 ];
 
 const HallOfFameDisplay: React.FC = () => {
@@ -326,7 +327,7 @@ const HallOfFameDisplay: React.FC = () => {
                                         <p className="text-sm text-slate-500 dark:text-slate-400">{(champion.score / 1000).toFixed(3)}s</p>
                                     </>
                                 ) : (
-                                    <p className="text-sm text-slate-500 dark:text-slate-400">-</p>
+                                    <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">N/A</p>
                                 )}
                             </div>
                         );
