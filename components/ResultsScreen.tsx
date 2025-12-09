@@ -3,6 +3,16 @@ import type { Operation, Question, HighScores, AllQuizStats } from '../types';
 import { DEFAULT_QUESTION_COUNT } from '../types';
 import { CheckCircleIcon, XCircleIcon, StarIcon, TrophyIcon } from './icons';
 import { feedbackMessages } from '../lib/feedbackMessages';
+import { formatPercentString } from '../lib/conversions';
+
+const LEADERBOARD_SUPPORTED_OPERATIONS = new Set<Operation>([
+  'multiplication',
+  'division',
+  'squares',
+  'square-roots',
+  'fraction-to-decimal',
+  'decimal-to-fraction',
+]);
 
 const buildFallbackExplanation = (answer: string | number) =>
   `The correct answer is ${answer}. Keep trying!`;
@@ -91,7 +101,11 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({ questions, userAns
   const [errorMessage, setErrorMessage] = useState('');
 
   const { operation, selectedNumbers } = quizSettings;
-  const isConversionMode = operation === 'fraction-to-decimal' || operation === 'decimal-to-fraction';
+  const isConversionMode =
+    operation === 'fraction-to-decimal' ||
+    operation === 'decimal-to-fraction' ||
+    operation === 'fraction-to-percent' ||
+    operation === 'percent-to-fraction';
   const numbersForOperation = operation === 'squares' || operation === 'square-roots'
     ? Array.from({ length: 20 }, (_, i) => i + 1)
     : Array.from({ length: 12 }, (_, i) => i + 1);
@@ -105,12 +119,34 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({ questions, userAns
   };
   const [explanations, setExplanations] = useState<ExplanationState>({});
   
-  const results = questions.map((q, i) => {
-    let userAnswer = userAnswers[i]?.trim();
-    if (q.operation === 'fraction-to-decimal' && userAnswer?.startsWith('.')) {
-        userAnswer = '0' + userAnswer;
+  const normalizePercentAnswer = (value: string) => {
+    const trimmed = value.trim();
+    const numericPart = trimmed.replace(/[^0-9.]/g, '');
+    if (!numericPart) return trimmed;
+    const numericValue = parseFloat(numericPart);
+    if (Number.isNaN(numericValue)) return trimmed;
+    return formatPercentString(numericValue / 100);
+  };
+
+  const normalizeAnswerForComparison = (value: string | number, question: Question) => {
+    const strValue = String(value ?? '').trim();
+    if (!strValue) return '';
+
+    if (question.operation === 'fraction-to-decimal') {
+        return strValue.startsWith('.') ? `0${strValue}` : strValue;
     }
-    const isCorrect = userAnswer === String(q.answer);
+
+    if (question.operation === 'fraction-to-percent') {
+        return normalizePercentAnswer(strValue);
+    }
+
+    return strValue;
+  };
+
+  const results = questions.map((q, i) => {
+    const expectedAnswer = normalizeAnswerForComparison(q.answer, q);
+    const normalizedUserAnswer = normalizeAnswerForComparison(userAnswers[i] ?? '', q);
+    const isCorrect = normalizedUserAnswer === expectedAnswer;
     return {
         question: q,
         userAnswer: userAnswers[i],
@@ -125,10 +161,12 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({ questions, userAns
     const checkScore = async () => {
       // Eligibility for leaderboard: perfect score, all numbers selected (for non-conversion modes), and exactly 10 questions
       const hasDefaultQuestionCount = questions.length === DEFAULT_QUESTION_COUNT;
-      const isEligible = correctCount === questions.length && 
-                         questions.length > 0 && 
+      const isLeaderboardOperation = LEADERBOARD_SUPPORTED_OPERATIONS.has(operation);
+      const meetsScoreRequirements = correctCount === questions.length &&
+                         questions.length > 0 &&
                          hasDefaultQuestionCount &&
                          (isConversionMode || allNumbersSelected);
+      const isEligible = isLeaderboardOperation && meetsScoreRequirements;
 
       console.log('[ResultsScreen] Leaderboard eligibility check', {
         operation,
@@ -137,6 +175,7 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({ questions, userAns
         isConversionMode,
         allNumbersSelected,
         hasDefaultQuestionCount,
+        isLeaderboardOperation,
         isEligible,
       });
 

@@ -108,25 +108,44 @@ export const QuizScreen: React.FC<QuizScreenProps> = ({ questions, timeLimit, on
      // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timerRunning, timeLimit, onFinishQuiz]);
 
+  const normalizeDecimalInput = (input: string) => {
+    const cleaned = input.replace(/[^0-9.]/g, '');
+    const firstDotIndex = cleaned.indexOf('.');
+    if (firstDotIndex === -1) {
+      // No decimal point
+      return cleaned;
+    }
+    // Keep everything before first dot, the first dot, and everything after (up to next dot)
+    const head = cleaned.substring(0, firstDotIndex);
+    const afterFirstDot = cleaned.substring(firstDotIndex + 1);
+    // Remove any additional decimal points from the tail
+    const tail = afterFirstDot.replace(/\./g, '');
+    // If the original input ended with a dot and tail is empty, preserve the dot
+    const endsWithDot = cleaned.endsWith('.');
+    if (endsWithDot && tail === '') {
+      return `${head}.`;
+    }
+    return tail ? `${head}.${tail}` : head;
+  };
+
   const handleAnswerChange = (index: number, value: string) => {
     const newAnswers = [...answers];
     const operation = questions[index].operation;
     
     let filteredValue = value;
-    if (operation === 'decimal-to-fraction') {
+    if (operation === 'decimal-to-fraction' || operation === 'percent-to-fraction') {
         // Allow numbers and a single '/'
         filteredValue = value.replace(/[^0-9/]/g, '');
         const parts = filteredValue.split('/');
         if (parts.length > 2) {
             filteredValue = `${parts[0]}/${parts.slice(1).join('')}`;
         }
+    } else if (operation === 'fraction-to-percent') {
+        // Allow numbers and one decimal point; we append the % later in results display
+        filteredValue = normalizeDecimalInput(value);
     } else {
         // Allow numbers and a single '.' for other modes (including fraction-to-decimal)
-        filteredValue = value.replace(/[^0-9.]/g, '');
-        const parts = filteredValue.split('.');
-        if (parts.length > 2) {
-            filteredValue = `${parts[0]}.${parts.slice(1).join('')}`;
-        }
+        filteredValue = normalizeDecimalInput(value);
     }
     
     newAnswers[index] = filteredValue;
@@ -172,7 +191,11 @@ export const QuizScreen: React.FC<QuizScreenProps> = ({ questions, timeLimit, on
   const remainingTime = timeLimit > 0 ? timeLimit - elapsedTime : Infinity;
   const isTimeLow = remainingTime <= 10;
 
-  const isConversionMode = questions[0]?.operation === 'fraction-to-decimal' || questions[0]?.operation === 'decimal-to-fraction';
+  const isConversionMode =
+    questions[0]?.operation === 'fraction-to-decimal' ||
+    questions[0]?.operation === 'decimal-to-fraction' ||
+    questions[0]?.operation === 'fraction-to-percent' ||
+    questions[0]?.operation === 'percent-to-fraction';
 
 
   return (
@@ -201,9 +224,14 @@ export const QuizScreen: React.FC<QuizScreenProps> = ({ questions, timeLimit, on
                     Note: For repeating decimals, please enter the first three decimal places (e.g., for 1/3, enter 0.333).
                 </p>
             )}
-            {questions[0]?.operation === 'decimal-to-fraction' && (
+            {(questions[0]?.operation === 'decimal-to-fraction' || questions[0]?.operation === 'percent-to-fraction') && (
                 <p className="text-center text-slate-500 dark:text-slate-400 mb-6 -mt-2">
                     Note: All fractions must be in simplest form.
+                </p>
+            )}
+            {questions[0]?.operation === 'fraction-to-percent' && (
+                <p className="text-center text-slate-500 dark:text-slate-400 mb-6 -mt-2">
+                    Note: Enter the percent as a number; the % will be added for you (e.g., type 33.3 for 33.3%).
                 </p>
             )}
             
@@ -227,7 +255,7 @@ export const QuizScreen: React.FC<QuizScreenProps> = ({ questions, timeLimit, on
                                <input
                                     ref={el => { inputRefs.current[index] = el; }}
                                     type="text"
-                                    inputMode={q.operation === 'decimal-to-fraction' ? 'text' : 'numeric'}
+                                    inputMode={(q.operation === 'decimal-to-fraction' || q.operation === 'fraction-to-percent' || q.operation === 'percent-to-fraction') ? 'text' : 'numeric'}
                                     value={answers[index]}
                                     onChange={(e) => handleAnswerChange(index, e.target.value)}
                                     onKeyDown={(e) => handleKeyDown(e, index)}

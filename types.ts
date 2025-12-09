@@ -1,5 +1,13 @@
 
-export type Operation = 'multiplication' | 'division' | 'squares' | 'square-roots' | 'fraction-to-decimal' | 'decimal-to-fraction';
+export type Operation =
+  | 'multiplication'
+  | 'division'
+  | 'squares'
+  | 'square-roots'
+  | 'fraction-to-decimal'
+  | 'decimal-to-fraction'
+  | 'fraction-to-percent'
+  | 'percent-to-fraction';
 
 export const DEFAULT_QUESTION_COUNT = 10;
 export const MIN_QUESTION_COUNT = 5;

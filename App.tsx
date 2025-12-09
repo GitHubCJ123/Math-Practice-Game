@@ -6,7 +6,7 @@ import { SelectionScreen } from './components/SelectionScreen';
 import { QuizScreen } from './components/QuizScreen';
 import { ResultsScreen } from './components/ResultsScreen';
 import { MathDashAd } from './components/MathDashAd';
-import { conversions } from './lib/conversions';
+import { conversions, formatPercentString } from './lib/conversions';
 import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/react";
 import { trackPageView } from './lib/ga';
@@ -47,27 +47,56 @@ const App: React.FC = () => {
     const newQuestions: Question[] = [];
     const questionSet = new Set<string>();
 
-    if (operation === 'fraction-to-decimal' || operation === 'decimal-to-fraction') {
+    if (
+      operation === 'fraction-to-decimal' ||
+      operation === 'decimal-to-fraction' ||
+      operation === 'fraction-to-percent' ||
+      operation === 'percent-to-fraction'
+    ) {
         const shuffledConversions = [...conversions].sort(() => 0.5 - Math.random());
-        const selectedConversions = shuffledConversions.slice(0, questionCount);
+        const selectedConversions = shuffledConversions.slice(0, Math.min(questionCount, conversions.length));
 
         selectedConversions.forEach(conv => {
-            if (operation === 'fraction-to-decimal') {
-                newQuestions.push({
-                    operation,
-                    display: conv.fractionString,
-                    answer: conv.decimalString,
-                    num1: conv.numerator,
-                    num2: conv.denominator,
-                });
-            } else { // decimal-to-fraction
-                newQuestions.push({
-                    operation,
-                    display: conv.decimalString,
-                    answer: conv.fractionString,
-                    num1: conv.decimal,
-                });
+          switch (operation) {
+            case 'fraction-to-decimal':
+              newQuestions.push({
+                  operation,
+                  display: conv.fractionString,
+                  answer: conv.decimalString,
+                  num1: conv.numerator,
+                  num2: conv.denominator,
+              });
+              break;
+            case 'decimal-to-fraction':
+              newQuestions.push({
+                  operation,
+                  display: conv.decimalString,
+                  answer: conv.fractionString,
+                  num1: conv.decimal,
+              });
+              break;
+            case 'fraction-to-percent': {
+              const percentString = formatPercentString(conv.decimal);
+              newQuestions.push({
+                  operation,
+                  display: conv.fractionString,
+                  answer: percentString,
+                  num1: conv.numerator,
+                  num2: conv.denominator,
+              });
+              break;
             }
+            case 'percent-to-fraction': {
+              const percentString = formatPercentString(conv.decimal);
+              newQuestions.push({
+                  operation,
+                  display: percentString,
+                  answer: conv.fractionString,
+                  num1: percentString.endsWith('%') ? parseFloat(percentString.slice(0, -1)) : conv.decimal * 100,
+              });
+              break;
+            }
+          }
         });
         return newQuestions;
     }

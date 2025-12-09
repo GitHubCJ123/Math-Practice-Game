@@ -7,6 +7,8 @@ const ALLOWED_OPERATIONS = [
   "square-roots",
   "fraction-to-decimal",
   "decimal-to-fraction",
+  "fraction-to-percent",
+  "percent-to-fraction",
 ];
 
 type ExplainPayload = {
@@ -22,7 +24,8 @@ const DEFAULT_FALLBACK = (answer: string | number) =>
 const requiresNum2 = (operation: string) =>
   operation === "multiplication" ||
   operation === "division" ||
-  operation === "fraction-to-decimal";
+  operation === "fraction-to-decimal" ||
+  operation === "fraction-to-percent";
 
 function buildPrompt({ num1, num2, operation, answer }: ExplainPayload): string {
   switch (operation) {
@@ -52,6 +55,16 @@ Keep the explanation concise and clear. The correct answer is ${answer}.`;
       return `You are a math speed coach. A student needs to convert the decimal ${num1} to a fraction in simplest form.
 1) Explain how to convert the decimal to a fraction based on its place value (e.g., 0.75 = 75/100).
 2) Explain how to simplify the fraction to its lowest terms by finding the greatest common divisor.
+Keep the explanation concise and clear. The correct answer is ${answer}.`;
+    case "fraction-to-percent":
+      return `You are a math speed coach. A student needs to convert the fraction ${num1}/${num2} to a percent.
+1) Explain dividing the numerator by the denominator to get a decimal.
+2) Explain multiplying by 100 to get a percent and rounding repeating values to one decimal place (e.g., 1/3 ≈ 33.3%).
+Keep the explanation concise and clear. The correct answer is ${answer}.`;
+    case "percent-to-fraction":
+      return `You are a math speed coach. A student needs to convert ${num1}% to a fraction in simplest form.
+1) Explain writing the percent as a fraction over 100 (or 1000 for one decimal place).
+2) Explain simplifying the fraction using the greatest common divisor.
 Keep the explanation concise and clear. The correct answer is ${answer}.`;
     default:
       return DEFAULT_FALLBACK(answer);

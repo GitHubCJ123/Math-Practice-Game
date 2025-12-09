@@ -173,6 +173,8 @@ const getOperationDisplayName = (op: Operation) => {
         case 'square-roots': return 'Square Roots';
         case 'fraction-to-decimal': return 'Fraction → Decimal';
         case 'decimal-to-fraction': return 'Decimal → Fraction';
+    case 'fraction-to-percent': return 'Fraction → Percent';
+    case 'percent-to-fraction': return 'Percent → Fraction';
         default: return '';
     }
 };
@@ -402,6 +404,8 @@ const GlobalLeaderboard: React.FC = () => {
       case 'square-roots': return 'Square Roots';
       case 'fraction-to-decimal': return 'Fraction → Decimal';
       case 'decimal-to-fraction': return 'Decimal → Fraction';
+      case 'fraction-to-percent': return 'Fraction → Percent';
+      case 'percent-to-fraction': return 'Percent → Fraction';
       default: return '';
     }
   };
@@ -570,7 +574,12 @@ export const SelectionScreen: React.FC<SelectionScreenProps> = ({ onStartQuiz, i
   const [questionCount, setQuestionCount] = useState<number>(initialSettings?.questionCount ?? DEFAULT_QUESTION_COUNT);
   const [showStats, setShowStats] = useState(false);
 
-  const isConversionMode = operation === 'fraction-to-decimal' || operation === 'decimal-to-fraction';
+  const isConversionMode =
+    operation === 'fraction-to-decimal' ||
+    operation === 'decimal-to-fraction' ||
+    operation === 'fraction-to-percent' ||
+    operation === 'percent-to-fraction';
+  const isLeaderboardOperation = operations.includes(operation);
   const maxQuestions = isConversionMode ? MAX_CONVERSION_QUESTION_COUNT : MAX_QUESTION_COUNT;
 
   const standardTimeValues = timeOptions.map(o => o.value);
@@ -602,11 +611,9 @@ export const SelectionScreen: React.FC<SelectionScreenProps> = ({ onStartQuiz, i
   useEffect(() => {
     setSelectedNumbers([]);
     // Reset question count if it exceeds max for new operation
-    const newMax = (operation === 'fraction-to-decimal' || operation === 'decimal-to-fraction') 
-      ? MAX_CONVERSION_QUESTION_COUNT 
-      : MAX_QUESTION_COUNT;
+    const newMax = isConversionMode ? MAX_CONVERSION_QUESTION_COUNT : MAX_QUESTION_COUNT;
     setQuestionCount(prev => prev > newMax ? newMax : prev);
-  }, [operation]);
+  }, [operation, isConversionMode]);
 
   const needsAtLeastTen = (operation === 'squares' || operation === 'square-roots') && selectedNumbers.length > 0 && selectedNumbers.length < 10;
 
@@ -669,7 +676,7 @@ export const SelectionScreen: React.FC<SelectionScreenProps> = ({ onStartQuiz, i
 
         <div className="space-y-8">
             <Section title="Pick Your Operation" step={1}>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     <button onClick={() => setOperation('multiplication')} className={`px-6 py-3 text-lg font-semibold rounded-lg transition-all duration-200 border-2 ${operation === 'multiplication' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700 hover:border-blue-500 dark:hover:border-blue-500'}`}>
                         Multiplication (×)
                     </button>
@@ -687,6 +694,12 @@ export const SelectionScreen: React.FC<SelectionScreenProps> = ({ onStartQuiz, i
                     </button>
                     <button onClick={() => setOperation('decimal-to-fraction')} className={`px-6 py-3 text-lg font-semibold rounded-lg transition-all duration-200 border-2 ${operation === 'decimal-to-fraction' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700 hover:border-blue-500 dark:hover:border-blue-500'}`}>
                         Decimal → Fraction
+                    </button>
+                    <button onClick={() => setOperation('fraction-to-percent')} className={`px-6 py-3 text-lg font-semibold rounded-lg transition-all duration-200 border-2 ${operation === 'fraction-to-percent' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700 hover:border-blue-500 dark:hover:border-blue-500'}`}>
+                        Fraction → Percent
+                    </button>
+                    <button onClick={() => setOperation('percent-to-fraction')} className={`px-6 py-3 text-lg font-semibold rounded-lg transition-all duration-200 border-2 ${operation === 'percent-to-fraction' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700 hover:border-blue-500 dark:hover:border-blue-500'}`}>
+                        Percent → Fraction
                     </button>
                 </div>
             </Section>
@@ -812,7 +825,7 @@ export const SelectionScreen: React.FC<SelectionScreenProps> = ({ onStartQuiz, i
                             </button>
                         ))}
                     </div>
-                    {questionCount !== DEFAULT_QUESTION_COUNT && (
+                    {questionCount !== DEFAULT_QUESTION_COUNT && isLeaderboardOperation && (
                         <p className="text-center text-amber-600 dark:text-amber-400 font-semibold text-sm animate-fade-in">
                             ⚠️ To qualify for the leaderboard, you must use {DEFAULT_QUESTION_COUNT} questions.
                         </p>

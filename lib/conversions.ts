@@ -6,6 +6,15 @@ export interface Conversion {
   decimalString: string;
 }
 
+// Helper to keep percent formatting consistent across the app
+export const formatPercentString = (decimal: number) => {
+  const percentValue = Number((decimal * 100).toFixed(1));
+  if (Number.isInteger(percentValue)) {
+    return `${percentValue.toFixed(0)}%`;
+  }
+  return `${percentValue.toFixed(1)}%`;
+};
+
 export const conversions: Conversion[] = [
   { numerator: 1, denominator: 2, decimal: 0.5, fractionString: '1/2', decimalString: '0.5' },
   { numerator: 1, denominator: 3, decimal: 0.333, fractionString: '1/3', decimalString: '0.333' },
