@@ -9,6 +9,7 @@ const ALLOWED_OPERATIONS = [
   "decimal-to-fraction",
   "fraction-to-percent",
   "percent-to-fraction",
+  "negative-numbers",
 ];
 
 type ExplainPayload = {
@@ -25,7 +26,8 @@ const requiresNum2 = (operation: string) =>
   operation === "multiplication" ||
   operation === "division" ||
   operation === "fraction-to-decimal" ||
-  operation === "fraction-to-percent";
+  operation === "fraction-to-percent" ||
+  operation === "negative-numbers";
 
 function buildPrompt({ num1, num2, operation, answer }: ExplainPayload): string {
   switch (operation) {
@@ -66,6 +68,21 @@ Keep the explanation concise and clear. The correct answer is ${answer}.`;
 1) Explain writing the percent as a fraction over 100 (or 1000 for one decimal place).
 2) Explain simplifying the fraction using the greatest common divisor.
 Keep the explanation concise and clear. The correct answer is ${answer}.`;
+    case "negative-numbers": {
+      if (num2 === undefined) {
+        return DEFAULT_FALLBACK(answer);
+      }
+      // Determine if it's addition or subtraction by checking the answer
+      const isAddition = Number(answer) === num1 + num2;
+      const operator = isAddition ? "+" : "-";
+      // Format the second operand with parentheses if negative
+      const secondOperand = num2 < 0 ? `(${num2})` : `${num2}`;
+      const problemString = `${num1} ${operator} ${secondOperand}`;
+      return `You are a math speed coach. A student needs to solve "${problemString}" quickly.
+1) Briefly explain how to work with negative numbers (adding negatives, subtracting negatives, etc.).
+2) Provide a mental math trick or shortcut to solve it faster.
+Keep the entire explanation concise and encouraging. The correct answer is ${answer}.`;
+    }
     default:
       return DEFAULT_FALLBACK(answer);
   }

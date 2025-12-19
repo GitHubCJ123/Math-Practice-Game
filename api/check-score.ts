@@ -11,6 +11,7 @@ const ALLOWED_OPERATIONS = new Set([
   "decimal-to-fraction",
   "fraction-to-percent",
   "percent-to-fraction",
+  "negative-numbers",
 ]);
 
 const RATE_LIMIT_WINDOW_MS = 60_000;
@@ -32,8 +33,8 @@ function allowRequest(key: string) {
 }
 
 function isEligible(operationType: string, questionCount: number, selectedNumbersCount: number, allNumbersSelected: boolean) {
-  const requiresAllNumbers = operationType === "multiplication" || operationType === "division" || operationType === "squares" || operationType === "square-roots";
-  const expectedCount = operationType === "squares" || operationType === "square-roots" ? 20 : 12;
+  const requiresAllNumbers = operationType === "multiplication" || operationType === "division" || operationType === "squares" || operationType === "square-roots" || operationType === "negative-numbers";
+  const expectedCount = operationType === "squares" || operationType === "square-roots" ? 20 : operationType === "negative-numbers" ? 10 : 12;
 
   if (questionCount !== 10) {
     return false;
