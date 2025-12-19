@@ -143,6 +143,17 @@ export const QuizScreen: React.FC<QuizScreenProps> = ({ questions, timeLimit, on
     } else if (operation === 'fraction-to-percent') {
         // Allow numbers and one decimal point; we append the % later in results display
         filteredValue = normalizeDecimalInput(value);
+    } else if (operation === 'negative-numbers') {
+        // Allow numbers and an optional leading minus sign
+        filteredValue = value.replace(/[^0-9-]/g, '');
+        // Only allow minus at the start
+        if (filteredValue.includes('-')) {
+            const hasMinus = filteredValue.startsWith('-');
+            filteredValue = filteredValue.replace(/-/g, '');
+            if (hasMinus) {
+                filteredValue = '-' + filteredValue;
+            }
+        }
     } else {
         // Allow numbers and a single '.' for other modes (including fraction-to-decimal)
         filteredValue = normalizeDecimalInput(value);
@@ -184,6 +195,7 @@ export const QuizScreen: React.FC<QuizScreenProps> = ({ questions, timeLimit, on
       case 'division': return '÷';
       case 'squares': return '²';
       case 'square-roots': return '√';
+      case 'negative-numbers': return '±';
       default: return '?';
     }
   };
@@ -196,6 +208,10 @@ export const QuizScreen: React.FC<QuizScreenProps> = ({ questions, timeLimit, on
     questions[0]?.operation === 'decimal-to-fraction' ||
     questions[0]?.operation === 'fraction-to-percent' ||
     questions[0]?.operation === 'percent-to-fraction';
+
+  const usesDisplayProperty =
+    isConversionMode ||
+    questions[0]?.operation === 'negative-numbers';
 
 
   return (
@@ -241,8 +257,8 @@ export const QuizScreen: React.FC<QuizScreenProps> = ({ questions, timeLimit, on
                         <div key={index} className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
                             <span className="text-slate-500 dark:text-slate-400 font-bold w-6 text-right">{index + 1}.</span>
                             <div className="flex items-center gap-2 text-2xl font-bold text-slate-700 dark:text-slate-200 w-full">
-                               {isConversionMode ? (
-                                    <span className="w-24 text-center">{q.display}</span>
+                               {usesDisplayProperty ? (
+                                    <span className="w-32 text-center">{q.display}</span>
                                 ) : (
                                     <>
                                         {q.operation === 'square-roots' && <span>{getOperationSymbol(q.operation)}</span>}

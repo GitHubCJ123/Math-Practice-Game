@@ -133,13 +133,56 @@ const App: React.FC = () => {
           answer: baseNum * baseNum,
         };
         questionKey = `${baseNum}^2`;
-      } else { // square-roots
+      } else if (operation === 'square-roots') {
         question = {
           num1: baseNum * baseNum,
           operation,
           answer: baseNum,
         };
         questionKey = `sqrt(${baseNum*baseNum})`;
+      } else { // negative-numbers
+        // Pick a second number from selected numbers
+        const secondNum = selectedNumbers[Math.floor(Math.random() * selectedNumbers.length)];
+        
+        // Randomly determine signs for each operand (-1 or 1)
+        const sign1 = Math.random() < 0.5 ? -1 : 1;
+        const sign2 = Math.random() < 0.5 ? -1 : 1;
+        
+        // Randomly choose addition or subtraction
+        const isAddition = Math.random() < 0.5;
+        
+        const operand1 = baseNum * sign1;
+        const operand2 = secondNum * sign2;
+        
+        let answer: number;
+        let displayString: string;
+        
+        if (isAddition) {
+          answer = operand1 + operand2;
+          // Format: "a + b" or "a + (-b)"
+          if (operand2 >= 0) {
+            displayString = `${operand1} + ${operand2}`;
+          } else {
+            displayString = `${operand1} + (${operand2})`;
+          }
+        } else {
+          answer = operand1 - operand2;
+          // Format: "a - b" or "a - (-b)"
+          if (operand2 >= 0) {
+            displayString = `${operand1} - ${operand2}`;
+          } else {
+            displayString = `${operand1} - (${operand2})`;
+          }
+        }
+        
+        question = {
+          num1: operand1,
+          num2: operand2,
+          operation,
+          answer,
+          display: displayString,
+        };
+        questionKey = displayString;
       }
 
       if (!questionSet.has(questionKey)) {

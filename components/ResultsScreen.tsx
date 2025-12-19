@@ -14,6 +14,7 @@ const LEADERBOARD_SUPPORTED_OPERATIONS = new Set<Operation>([
   'decimal-to-fraction',
   'fraction-to-percent',
   'percent-to-fraction',
+  'negative-numbers',
 ]);
 
 const buildFallbackExplanation = (answer: string | number) =>
@@ -110,6 +111,8 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({ questions, userAns
     operation === 'percent-to-fraction';
   const numbersForOperation = operation === 'squares' || operation === 'square-roots'
     ? Array.from({ length: 20 }, (_, i) => i + 1)
+    : operation === 'negative-numbers'
+    ? Array.from({ length: 10 }, (_, i) => i + 1)
     : Array.from({ length: 12 }, (_, i) => i + 1);
   const allNumbersSelected = isConversionMode ? true : selectedNumbers.length === numbersForOperation.length;
 
@@ -331,6 +334,7 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({ questions, userAns
       case 'division': return '÷';
       case 'squares': return '²';
       case 'square-roots': return '√';
+      case 'negative-numbers': return '±';
       default: return '?';
     }
   };

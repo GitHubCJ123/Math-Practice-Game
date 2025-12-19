@@ -173,8 +173,9 @@ const getOperationDisplayName = (op: Operation) => {
         case 'square-roots': return 'Square Roots';
         case 'fraction-to-decimal': return 'Fraction → Decimal';
         case 'decimal-to-fraction': return 'Decimal → Fraction';
-    case 'fraction-to-percent': return 'Fraction → Percent';
-    case 'percent-to-fraction': return 'Percent → Fraction';
+        case 'fraction-to-percent': return 'Fraction → Percent';
+        case 'percent-to-fraction': return 'Percent → Fraction';
+        case 'negative-numbers': return 'Negative Numbers';
         default: return '';
     }
 };
@@ -182,7 +183,8 @@ const getOperationDisplayName = (op: Operation) => {
 const operations: Operation[] = [
     'multiplication', 'division', 'squares', 'square-roots',
     'fraction-to-decimal', 'decimal-to-fraction',
-    'fraction-to-percent', 'percent-to-fraction'
+    'fraction-to-percent', 'percent-to-fraction',
+    'negative-numbers'
 ];
 
 const HallOfFameDisplay: React.FC = () => {
@@ -407,6 +409,7 @@ const GlobalLeaderboard: React.FC = () => {
       case 'decimal-to-fraction': return 'Decimal → Fraction';
       case 'fraction-to-percent': return 'Fraction → Percent';
       case 'percent-to-fraction': return 'Percent → Fraction';
+      case 'negative-numbers': return 'Negative Numbers';
       default: return '';
     }
   };
@@ -607,6 +610,8 @@ export const SelectionScreen: React.FC<SelectionScreenProps> = ({ onStartQuiz, i
 
   const numbers = operation === 'squares' || operation === 'square-roots'
     ? Array.from({ length: 20 }, (_, i) => i + 1)
+    : operation === 'negative-numbers'
+    ? Array.from({ length: 10 }, (_, i) => i + 1)
     : Array.from({ length: 12 }, (_, i) => i + 1);
 
   useEffect(() => {
@@ -701,6 +706,9 @@ export const SelectionScreen: React.FC<SelectionScreenProps> = ({ onStartQuiz, i
                     </button>
                     <button onClick={() => setOperation('percent-to-fraction')} className={`px-6 py-3 text-lg font-semibold rounded-lg transition-all duration-200 border-2 ${operation === 'percent-to-fraction' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700 hover:border-blue-500 dark:hover:border-blue-500'}`}>
                         Percent → Fraction
+                    </button>
+                    <button onClick={() => setOperation('negative-numbers')} className={`px-6 py-3 text-lg font-semibold rounded-lg transition-all duration-200 border-2 ${operation === 'negative-numbers' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700 hover:border-blue-500 dark:hover:border-blue-500'}`}>
+                        Negative Numbers (±)
                     </button>
                 </div>
             </Section>
