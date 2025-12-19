@@ -144,15 +144,62 @@ const App: React.FC = () => {
         // Pick a second number from selected numbers
         const secondNum = selectedNumbers[Math.floor(Math.random() * selectedNumbers.length)];
         
-        // Randomly determine signs for each operand (-1 or 1)
-        const sign1 = Math.random() < 0.5 ? -1 : 1;
-        const sign2 = Math.random() < 0.5 ? -1 : 1;
+        // Problem types that ensure at least one negative is involved:
+        // 0: negative + positive (e.g., -5 + 3)
+        // 1: positive + negative (e.g., 5 + (-3))
+        // 2: negative + negative (e.g., -5 + (-3))
+        // 3: negative - positive (e.g., -5 - 3)
+        // 4: positive - negative (e.g., 5 - (-3))
+        // 5: negative - negative (e.g., -5 - (-3))
+        // 6: positive - larger positive (e.g., 3 - 7 = -4)
+        const problemType = Math.floor(Math.random() * 7);
         
-        // Randomly choose addition or subtraction
-        const isAddition = Math.random() < 0.5;
+        let operand1: number;
+        let operand2: number;
+        let isAddition: boolean;
         
-        const operand1 = baseNum * sign1;
-        const operand2 = secondNum * sign2;
+        switch (problemType) {
+          case 0: // negative + positive
+            operand1 = -baseNum;
+            operand2 = secondNum;
+            isAddition = true;
+            break;
+          case 1: // positive + negative
+            operand1 = baseNum;
+            operand2 = -secondNum;
+            isAddition = true;
+            break;
+          case 2: // negative + negative
+            operand1 = -baseNum;
+            operand2 = -secondNum;
+            isAddition = true;
+            break;
+          case 3: // negative - positive
+            operand1 = -baseNum;
+            operand2 = secondNum;
+            isAddition = false;
+            break;
+          case 4: // positive - negative
+            operand1 = baseNum;
+            operand2 = -secondNum;
+            isAddition = false;
+            break;
+          case 5: // negative - negative
+            operand1 = -baseNum;
+            operand2 = -secondNum;
+            isAddition = false;
+            break;
+          default: // positive - larger positive (ensures negative result)
+            operand1 = Math.min(baseNum, secondNum);
+            operand2 = Math.max(baseNum, secondNum);
+            // Only use this type if they're different, otherwise fall back
+            if (operand1 === operand2) {
+              operand1 = -baseNum;
+              operand2 = secondNum;
+            }
+            isAddition = false;
+            break;
+        }
         
         let answer: number;
         let displayString: string;
