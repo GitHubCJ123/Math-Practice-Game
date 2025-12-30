@@ -3,6 +3,7 @@ import { getPool } from "./db-pool.js";
 import { getCurrentEasternMonthBounds } from "./time-utils.js";
 
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const CACHE_CONTROL_HEADER = "public, max-age=300";
 let leaderboardCache: Record<string, { expiresAt: number; payload: any[] }> = {};
 
 /**
@@ -36,6 +37,7 @@ export default async function handler(req, res) {
     const cached = leaderboardCache[operationType];
     if (cached && cached.expiresAt > now) {
       console.log(`[api/get-leaderboard] Serving from cache for ${operationType}.`);
+      res.setHeader('Cache-Control', CACHE_CONTROL_HEADER);
       return res.status(200).json(cached.payload);
     }
     
@@ -67,6 +69,7 @@ export default async function handler(req, res) {
       payload: leaderboard,
     };
 
+    res.setHeader('Cache-Control', CACHE_CONTROL_HEADER);
     return res.status(200).json(leaderboard);
   } catch (error) {
     console.error("[api/get-leaderboard] Error handling request", error);

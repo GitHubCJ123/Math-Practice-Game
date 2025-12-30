@@ -1,6 +1,8 @@
 import sql from "mssql";
 import { getPool } from "./db-pool.js";
 
+const CACHE_CONTROL_HEADER = "public, max-age=300";
+
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
     return res.status(405).json({ message: 'Method Not Allowed' });
@@ -38,6 +40,7 @@ export default async function handler(req, res) {
       score: row.Score,
     }));
 
+    res.setHeader('Cache-Control', CACHE_CONTROL_HEADER);
     return res.status(200).json(hallOfFame);
   } catch (error) {
     console.error('[api/get-hall-of-fame] Error handling request', error);
