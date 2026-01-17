@@ -1,8 +1,7 @@
-import sql from "mssql";
-import { getPool } from "./db-pool.js";
+import { getSupabase } from "./db-pool.js";
 
-const CACHE_TTL_MS = 5 * 60 * 1000;
-const CACHE_CONTROL_HEADER = "public, max-age=300";
+const CACHE_TTL_MS = 60 * 1000; // 1 minute
+const CACHE_CONTROL_HEADER = "public, max-age=60";
 
 let cache: { expiresAt: number; payload: Record<number, number[]> } | null = null;
 
@@ -24,16 +23,27 @@ export default async function handler(req, res) {
 
   try {
     console.log('[api/get-hall-of-fame-dates] Fetching from database...');
-    const pool = await getPool();
-    const result = await pool.request().query(`
-      SELECT DISTINCT Year, Month
-      FROM HallOfFame
-      ORDER BY Year DESC, Month DESC;
-    `);
+    const supabase = getSupabase();
 
-    const grouped = result.recordset.reduce<Record<number, number[]>>((acc, row) => {
-      const year = row.Year as number;
-      const month = row.Month as number;
+    const { data, error } = await supabase
+      .from('hall_of_fame')
+      .select('year, month')
+      .order('year', { ascending: false })
+      .order('month', { ascending: false });
+
+    if (error) {
+      throw error;
+    }
+
+    // Get distinct year/month combinations
+    const seen = new Set<string>();
+    const grouped = (data || []).reduce<Record<number, number[]>>((acc, row) => {
+      const key = `${row.year}-${row.month}`;
+      if (seen.has(key)) return acc;
+      seen.add(key);
+      
+      const year = row.year as number;
+      const month = row.month as number;
       if (!acc[year]) {
         acc[year] = [];
       }

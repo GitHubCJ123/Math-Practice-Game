@@ -1,5 +1,4 @@
-import sql from "mssql";
-import { getPool } from "./db-pool.js";
+import { getSupabase } from "./db-pool.js";
 import { getCurrentEasternMonthBounds } from "./time-utils.js";
 
 const ALLOWED_OPERATIONS = new Set([
@@ -91,26 +90,23 @@ export default async function handler(req, res) {
 
   try {
     const { startUtc, endUtc } = getCurrentEasternMonthBounds();
-    const pool = await getPool();
-    const request = pool.request();
-    request.input('operationType', sql.NVarChar, operationType);
-    request.input('score', sql.Int, scoreNum);
-    request.input('monthStartUtc', sql.DateTime2, startUtc);
-    request.input('nextMonthStartUtc', sql.DateTime2, endUtc);
+    const supabase = getSupabase();
 
-    const result = await request.query(`
-      SELECT
-        SUM(CASE WHEN Score < @score THEN 1 ELSE 0 END) AS BetterScores,
-        COUNT(*) AS TotalScores
-      FROM LeaderboardScores
-      WHERE OperationType = @operationType
-        AND CreatedAt >= @monthStartUtc
-        AND CreatedAt < @nextMonthStartUtc;
-    `);
+    // Get count of scores and count of scores better than submitted
+    const { data, error } = await supabase
+      .from('leaderboard_scores')
+      .select('score')
+      .eq('operation_type', operationType)
+      .gte('created_at', startUtc.toISOString())
+      .lt('created_at', endUtc.toISOString());
 
-    const row = result.recordset[0] ?? { BetterScores: 0, TotalScores: 0 };
-    const totalScores = row.TotalScores ?? 0;
-    const betterScores = row.BetterScores ?? 0;
+    if (error) {
+      throw error;
+    }
+
+    const scores = data || [];
+    const totalScores = scores.length;
+    const betterScores = scores.filter(row => row.score < scoreNum).length;
 
     const isTopScore = totalScores < 5 || betterScores < 5;
 

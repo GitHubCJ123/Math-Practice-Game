@@ -1,7 +1,6 @@
-import sql from "mssql";
-import { getPool } from "./db-pool.js";
+import { getSupabase } from "./db-pool.js";
 
-const CACHE_CONTROL_HEADER = "public, max-age=300";
+const CACHE_CONTROL_HEADER = "public, max-age=60";
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
@@ -22,22 +21,23 @@ export default async function handler(req, res) {
   }
 
   try {
-    const pool = await getPool();
-    const request = pool.request();
-    request.input('operationType', sql.NVarChar, operationType);
-    request.input('year', sql.Int, yearNum);
-    request.input('month', sql.Int, monthNum);
+    const supabase = getSupabase();
 
-    const result = await request.query(`
-      SELECT PlayerName, Score
-      FROM HallOfFame
-      WHERE OperationType = @operationType AND Year = @year AND Month = @month
-      ORDER BY Score ASC;
-    `);
+    const { data, error } = await supabase
+      .from('hall_of_fame')
+      .select('player_name, score')
+      .eq('operation_type', operationType)
+      .eq('year', yearNum)
+      .eq('month', monthNum)
+      .order('score', { ascending: true });
 
-    const hallOfFame = result.recordset.map((row) => ({
-      playerName: row.PlayerName,
-      score: row.Score,
+    if (error) {
+      throw error;
+    }
+
+    const hallOfFame = (data || []).map((row) => ({
+      playerName: row.player_name,
+      score: row.score,
     }));
 
     res.setHeader('Cache-Control', CACHE_CONTROL_HEADER);

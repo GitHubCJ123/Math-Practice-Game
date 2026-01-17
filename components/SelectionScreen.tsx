@@ -469,7 +469,7 @@ const GlobalLeaderboard: React.FC = () => {
         title={getOperationDisplayName(activeTab)} 
         scores={scores} 
         isLoading={isLoading} 
-        subtitle="Scores for the current month (updates every 5 minutes)"
+        subtitle="Scores for the current month (updates every minute)"
       />
     </div>
   );

@@ -19,6 +19,7 @@ import { fileURLToPath, pathToFileURL } from 'url';
 
         console.log('[API Server] Loading routes...');
         const apiFiles = globSync('**/*.ts', { cwd: __dirname });
+        console.log('[API Server] Found files:', apiFiles);
 
         for (const file of apiFiles) {
             if (file.includes('server.ts')) continue;
@@ -26,6 +27,7 @@ import { fileURLToPath, pathToFileURL } from 'url';
 
             const routeName = path.basename(file, '.ts');
             const fullPath = path.join(__dirname, file);
+            console.log(`[API Server] Loading route: ${routeName}`);
 
             try {
                 // Convert the Windows file path to a valid file:// URL for ESM import
@@ -34,6 +36,7 @@ import { fileURLToPath, pathToFileURL } from 'url';
 
                 if (typeof routeHandler === 'function') {
                     app.all(`/api/${routeName}`, routeHandler);
+                    console.log(`[API Server] ✓ Loaded: /api/${routeName}`);
                 } else {
                     console.warn(`[API Server] Could not load route ${routeName}: default export is not a function.`);
                 }

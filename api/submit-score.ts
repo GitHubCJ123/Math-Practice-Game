@@ -1,5 +1,4 @@
-import sql from "mssql";
-import { getPool } from "./db-pool.js";
+import { getSupabase } from "./db-pool.js";
 import { getCurrentEasternMonthBounds } from "./time-utils.js";
 import { clearHallOfFameDatesCache } from "./get-hall-of-fame-dates.js";
 import { clearLeaderboardCache } from "./get-leaderboard.js";
@@ -113,43 +112,40 @@ export default async function handler(req, res) {
   const { startUtc, endUtc } = getCurrentEasternMonthBounds();
   let scoreChanged = false;
 
-  let transaction: sql.Transaction | null = null;
   try {
-    const pool = await getPool();
-    transaction = new sql.Transaction(pool);
-    await transaction.begin();
+    const supabase = getSupabase();
 
-    const checkRequest = new sql.Request(transaction);
-    checkRequest.input('playerName', sql.NVarChar, playerName);
-    checkRequest.input('operationType', sql.NVarChar, operationType);
-    checkRequest.input('monthStartUtc', sql.DateTime2, startUtc);
-    checkRequest.input('nextMonthStartUtc', sql.DateTime2, endUtc);
+    // Check for existing score this month
+    const { data: existingRecords, error: checkError } = await supabase
+      .from('leaderboard_scores')
+      .select('id, score')
+      .eq('player_name', playerName)
+      .eq('operation_type', operationType)
+      .gte('created_at', startUtc.toISOString())
+      .lt('created_at', endUtc.toISOString())
+      .order('score', { ascending: true })
+      .order('created_at', { ascending: true })
+      .limit(1);
 
-    const existingResult = await checkRequest.query(`
-      SELECT TOP 1 Id, Score
-      FROM LeaderboardScores
-      WHERE PlayerName = @playerName
-        AND OperationType = @operationType
-        AND CreatedAt >= @monthStartUtc
-        AND CreatedAt < @nextMonthStartUtc
-      ORDER BY Score ASC, CreatedAt ASC;
-    `);
+    if (checkError) {
+      throw checkError;
+    }
 
     let responseStatus = 201;
     let responsePayload = { message: 'Score submitted successfully!' };
 
-    if (existingResult.recordset.length > 0) {
-      const existingRecord = existingResult.recordset[0];
+    if (existingRecords && existingRecords.length > 0) {
+      const existingRecord = existingRecords[0];
       console.log('[api/submit-score] Found current month record', existingRecord);
-      if (scoreNum < existingRecord.Score) {
-        const updateRequest = new sql.Request(transaction);
-        updateRequest.input('score', sql.Int, scoreNum);
-        updateRequest.input('existingId', sql.Int, existingRecord.Id);
-        await updateRequest.query(`
-          UPDATE LeaderboardScores
-          SET Score = @score, CreatedAt = SYSUTCDATETIME()
-          WHERE Id = @existingId;
-        `);
+      if (scoreNum < existingRecord.score) {
+        const { error: updateError } = await supabase
+          .from('leaderboard_scores')
+          .update({ score: scoreNum, created_at: new Date().toISOString() })
+          .eq('id', existingRecord.id);
+
+        if (updateError) {
+          throw updateError;
+        }
         responseStatus = 200;
         responsePayload = { message: 'Score updated successfully!' };
         scoreChanged = true;
@@ -159,31 +155,27 @@ export default async function handler(req, res) {
       }
     } else {
       console.log('[api/submit-score] No current month record, inserting new score');
-      const insertRequest = new sql.Request(transaction);
-      insertRequest.input('playerName', sql.NVarChar, playerName);
-      insertRequest.input('score', sql.Int, scoreNum);
-      insertRequest.input('operationType', sql.NVarChar, operationType);
-      await insertRequest.query(`
-        INSERT INTO LeaderboardScores (PlayerName, Score, OperationType, CreatedAt)
-        VALUES (@playerName, @score, @operationType, SYSUTCDATETIME());
-      `);
+      const { error: insertError } = await supabase
+        .from('leaderboard_scores')
+        .insert({
+          player_name: playerName,
+          score: scoreNum,
+          operation_type: operationType,
+          created_at: new Date().toISOString(),
+        });
+
+      if (insertError) {
+        throw insertError;
+      }
       scoreChanged = true;
     }
 
-    await transaction.commit();
     if (scoreChanged) {
       clearHallOfFameDatesCache();
       clearLeaderboardCache(operationType);
     }
     return res.status(responseStatus).json(responsePayload);
   } catch (error) {
-    if (transaction) {
-      try {
-        await transaction.rollback();
-      } catch (rollbackError) {
-        console.error('[api/submit-score] Failed to rollback transaction', rollbackError);
-      }
-    }
     console.error('[api/submit-score] Error handling request', error);
     return res.status(500).json({ message: 'DB Error', error: error.message });
   }

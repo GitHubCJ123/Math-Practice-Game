@@ -1,9 +1,8 @@
-import sql from "mssql";
-import { getPool } from "./db-pool.js";
+import { getSupabase } from "./db-pool.js";
 import { getCurrentEasternMonthBounds } from "./time-utils.js";
 
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
-const CACHE_CONTROL_HEADER = "public, max-age=300";
+const CACHE_TTL_MS = 60 * 1000; // 1 minute
+const CACHE_CONTROL_HEADER = "public, max-age=60";
 let leaderboardCache: Record<string, { expiresAt: number; payload: any[] }> = {};
 
 /**
@@ -43,25 +42,25 @@ export default async function handler(req, res) {
     
     console.log(`[api/get-leaderboard] Fetching from database for ${operationType}...`);
     const { startUtc, endUtc } = getCurrentEasternMonthBounds();
-    const pool = await getPool();
-    const request = pool.request();
-    request.input("operationType", sql.NVarChar, operationType);
-    request.input("monthStartUtc", sql.DateTime2, startUtc);
-    request.input("nextMonthStartUtc", sql.DateTime2, endUtc);
+    const supabase = getSupabase();
 
-    const query = `
-      SELECT TOP 5 PlayerName, Score
-      FROM LeaderboardScores
-      WHERE OperationType = @operationType
-        AND CreatedAt >= @monthStartUtc
-        AND CreatedAt < @nextMonthStartUtc
-      ORDER BY Score ASC, CreatedAt ASC;
-    `;
+    const { data, error } = await supabase
+      .from('leaderboard_scores')
+      .select('player_name, score')
+      .eq('operation_type', operationType)
+      .gte('created_at', startUtc.toISOString())
+      .lt('created_at', endUtc.toISOString())
+      .order('score', { ascending: true })
+      .order('created_at', { ascending: true })
+      .limit(5);
 
-    const result = await request.query(query);
-    const leaderboard = result.recordset.map((row) => ({
-      playerName: row.PlayerName,
-      score: row.Score,
+    if (error) {
+      throw error;
+    }
+
+    const leaderboard = (data || []).map((row) => ({
+      playerName: row.player_name,
+      score: row.score,
     }));
 
     leaderboardCache[operationType] = {

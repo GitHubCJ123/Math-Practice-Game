@@ -1,60 +1,28 @@
-import sql, { ConnectionPool, config as SqlConfig } from "mssql";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
-type AzureSqlConfig = SqlConfig & {
-  options: NonNullable<SqlConfig["options"]> & {
-    encrypt: true;
-    trustServerCertificate?: boolean;
-  };
-  pool: NonNullable<SqlConfig["pool"]>;
-};
+let supabase: SupabaseClient | null = null;
 
-const poolSize = Number(process.env.AZURE_DB_POOL_MAX ?? "10");
+export function getSupabase(): SupabaseClient {
+  if (!supabase) {
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-const config: AzureSqlConfig = {
-  user: process.env.AZURE_DB_USER,
-  password: process.env.AZURE_DB_PASSWORD,
-  server: process.env.AZURE_SERVER_NAME as string,
-  database: process.env.AZURE_DB_NAME,
-  options: {
-    encrypt: true,
-    trustServerCertificate: false,
-  },
-  pool: {
-    max: Number.isFinite(poolSize) ? poolSize : 10,
-    min: 0,
-    idleTimeoutMillis: 30000,
-  },
-};
+    if (!supabaseUrl || !supabaseServiceKey) {
+      throw new Error("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY environment variables are required");
+    }
 
-if (!config.user || !config.password || !config.server || !config.database) {
-  throw new Error("Database configuration environment variables are missing");
-}
-
-type GlobalWithPool = typeof global & {
-  __mssqlPool?: Promise<ConnectionPool>;
-};
-
-const globalWithPool = global as GlobalWithPool;
-
-export function getPool(): Promise<ConnectionPool> {
-  if (!globalWithPool.__mssqlPool) {
-    globalWithPool.__mssqlPool = sql.connect(config);
-    globalWithPool.__mssqlPool.catch((err) => {
-      globalWithPool.__mssqlPool = undefined;
-      console.error("[db-pool] Failed to establish SQL pool", err);
-      throw err;
+    // Use service role key for server-side operations (bypasses RLS)
+    supabase = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
     });
   }
-
-  return globalWithPool.__mssqlPool;
+  return supabase;
 }
 
-export async function closePool() {
-  if (globalWithPool.__mssqlPool) {
-    const pool = await globalWithPool.__mssqlPool;
-    await pool.close();
-    globalWithPool.__mssqlPool = undefined;
-  }
-}
+// Legacy export for compatibility during migration
+export const getPool = getSupabase;
 
 
