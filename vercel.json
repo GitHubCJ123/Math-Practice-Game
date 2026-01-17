@@ -1,7 +1,8 @@
 {
   "functions": {
     "api/**/*.ts": {
-      "memory": 1024
+      "memory": 1024,
+      "includeFiles": ["lib/api/**", "types.ts"]
     }
   },
   "rewrites": [

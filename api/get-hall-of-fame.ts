@@ -1,4 +1,4 @@
-import { getSupabase } from "./_lib/db-pool.js";
+import { getSupabase } from "../lib/api/db-pool.js";
 
 const CACHE_CONTROL_HEADER = "public, max-age=60";
 

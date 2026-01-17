@@ -1,5 +1,5 @@
-import { getSupabase } from "./_lib/db-pool.js";
-import { getCurrentEasternMonthBounds } from "./_lib/time-utils.js";
+import { getSupabase } from "../lib/api/db-pool.js";
+import { getCurrentEasternMonthBounds } from "../lib/api/time-utils.js";
 
 const ALLOWED_OPERATIONS = new Set([
   "multiplication",

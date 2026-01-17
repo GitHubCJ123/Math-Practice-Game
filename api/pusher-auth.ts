@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { getPusher } from "./_lib/pusher";
+import { getPusher } from "../lib/api/pusher";
 
 // Pusher auth endpoint for presence channels
 export default async function handler(req: VercelRequest, res: VercelResponse) {

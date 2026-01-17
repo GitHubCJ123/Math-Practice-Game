@@ -1,5 +1,5 @@
-import { getSupabase } from "./_lib/db-pool.js";
-import { getCurrentEasternMonthBounds } from "./_lib/time-utils.js";
+import { getSupabase } from "../lib/api/db-pool.js";
+import { getCurrentEasternMonthBounds } from "../lib/api/time-utils.js";
 
 const CACHE_TTL_MS = 60 * 1000; // 1 minute
 const CACHE_CONTROL_HEADER = "public, max-age=60";
