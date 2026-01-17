@@ -156,9 +156,9 @@ async function handleCreateRoom(body: any, res: VercelResponse) {
 
   const room = createRoomInStore(odId, odName.substring(0, 20), false);
 
-  const baseUrl = process.env.VERCEL_URL
-    ? `https://${process.env.VERCEL_URL}`
-    : process.env.BASE_URL || "http://localhost:3000";
+  // Use BASE_URL if set (for custom domains), otherwise fall back to VERCEL_URL or localhost
+  const baseUrl = process.env.BASE_URL 
+    || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
   const joinUrl = `${baseUrl}/join/${room.code}`;
 
   return res.status(200).json({
