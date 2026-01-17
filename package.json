@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "dev:api": "tsx watch api/server.ts",
+    "dev:api": "tsx watch server-dev.ts",
     "start": "concurrently \"npm:dev\" \"npm:dev:api\"",
     "dev:test": "cross-env VITE_NODE_ENV=test vite",
     "build": "tsc && vite build",

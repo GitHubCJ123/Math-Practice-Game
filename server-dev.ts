@@ -10,6 +10,7 @@ import { fileURLToPath, pathToFileURL } from 'url';
     try {
         const __filename = fileURLToPath(import.meta.url);
         const __dirname = path.dirname(__filename);
+        const apiDir = path.join(__dirname, 'api');
 
         dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
 
@@ -17,17 +18,16 @@ import { fileURLToPath, pathToFileURL } from 'url';
         app.use(cors());
         app.use(express.json());
 
-        console.log('[API Server] Loading routes...');
-        const apiFiles = globSync('**/*.ts', { cwd: __dirname });
+        console.log('[API Server] Loading routes from:', apiDir);
+        const apiFiles = globSync('*.ts', { cwd: apiDir });
         console.log('[API Server] Found files:', apiFiles);
 
         for (const file of apiFiles) {
-            if (file.includes('server.ts')) continue;
-            if (file.includes('db-pool.ts') || file.includes('time-utils.ts')) continue;
-            if (file.includes('pusher.ts') || file.includes('room-store.ts')) continue;
+            // Skip utility files that aren't API endpoints
+            if (file.includes('server')) continue;
 
             const routeName = path.basename(file, '.ts');
-            const fullPath = path.join(__dirname, file);
+            const fullPath = path.join(apiDir, file);
             console.log(`[API Server] Loading route: ${routeName}`);
 
             try {
