@@ -1,4 +1,4 @@
-import { Room, Player, RoomSettings, Question, PlayerGameState } from "../types";
+import { Room, Player, RoomSettings, Question, PlayerGameState } from "../../types";
 import { generateRoomCode, generatePlayerId } from "./pusher";
 
 // In-memory room storage (for production, use Supabase)

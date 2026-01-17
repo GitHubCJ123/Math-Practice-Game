@@ -1,5 +1,5 @@
-import { getSupabase } from "./db-pool.js";
-import { getCurrentEasternMonthBounds, getPreviousEasternMonthBounds } from "./time-utils.js";
+import { getSupabase } from "./_lib/db-pool.js";
+import { getCurrentEasternMonthBounds, getPreviousEasternMonthBounds } from "./_lib/time-utils.js";
 import { clearHallOfFameDatesCache } from "./get-hall-of-fame-dates.js";
 import { clearLeaderboardCache } from "./get-leaderboard.js";
 
