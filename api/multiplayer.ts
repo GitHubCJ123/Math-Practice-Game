@@ -739,8 +739,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       default:
         return res.status(400).json({ error: `Unknown action: ${action}` });
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error("Multiplayer error:", error);
-    return res.status(500).json({ error: "Internal server error" });
+    return res.status(500).json({ 
+      error: "Internal server error", 
+      message: error?.message || String(error)
+    });
   }
 }
