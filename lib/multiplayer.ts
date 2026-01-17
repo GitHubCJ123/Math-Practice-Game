@@ -19,9 +19,17 @@ export function getPusherClient(): Pusher {
   return pusherClient;
 }
 
-// API helper for multiplayer endpoints
-// Use empty string - Vite proxy handles /api/* -> localhost:3001
+// API helper - all multiplayer calls go to single endpoint with action parameter
 const API_BASE = "";
+
+async function multiplayerApi(action: string, data: Record<string, any> = {}, method: string = "POST") {
+  const response = await fetch(`${API_BASE}/api/multiplayer`, {
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action, ...data }),
+  });
+  return response.json();
+}
 
 export async function createRoom(playerId: string, playerName: string): Promise<{
   success: boolean;
@@ -31,12 +39,7 @@ export async function createRoom(playerId: string, playerName: string): Promise<
   room?: any;
   error?: string;
 }> {
-  const response = await fetch(`${API_BASE}/api/create-room`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ odId: playerId, odName: playerName }),
-  });
-  return response.json();
+  return multiplayerApi("create-room", { odId: playerId, odName: playerName });
 }
 
 export async function joinRoom(roomCode: string, playerId: string, playerName: string): Promise<{
@@ -45,12 +48,7 @@ export async function joinRoom(roomCode: string, playerId: string, playerName: s
   room?: any;
   error?: string;
 }> {
-  const response = await fetch(`${API_BASE}/api/join-room`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ roomCode, odId: playerId, odName: playerName }),
-  });
-  return response.json();
+  return multiplayerApi("join-room", { roomCode, odId: playerId, odName: playerName });
 }
 
 export async function updateRoomSettings(roomId: string, playerId: string, settings: any): Promise<{
@@ -58,44 +56,25 @@ export async function updateRoomSettings(roomId: string, playerId: string, setti
   settings?: any;
   error?: string;
 }> {
-  const response = await fetch(`${API_BASE}/api/update-room-settings`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ roomId, odId: playerId, settings }),
-  });
-  return response.json();
+  return multiplayerApi("update-room-settings", { roomId, odId: playerId, settings });
 }
 
 export async function startGame(roomId: string, playerId: string): Promise<{
   success: boolean;
   error?: string;
 }> {
-  const response = await fetch(`${API_BASE}/api/start-game`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ roomId, odId: playerId }),
-  });
-  return response.json();
+  return multiplayerApi("start-game", { roomId, odId: playerId });
 }
 
 export async function startReadyPhase(roomId: string, playerId: string, settings: any): Promise<{
   success: boolean;
   error?: string;
 }> {
-  const response = await fetch(`${API_BASE}/api/start-ready-phase`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ roomId, odId: playerId, settings }),
-  });
-  return response.json();
+  return multiplayerApi("start-ready-phase", { roomId, odId: playerId, settings });
 }
 
 export async function updateProgress(roomId: string, playerId: string, currentQuestion: number): Promise<void> {
-  await fetch(`${API_BASE}/api/update-progress`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ roomId, odId: playerId, currentQuestion }),
-  });
+  await multiplayerApi("update-progress", { roomId, odId: playerId, currentQuestion });
 }
 
 export async function submitMultiplayerAnswers(
@@ -109,12 +88,7 @@ export async function submitMultiplayerAnswers(
   finishTime?: number;
   error?: string;
 }> {
-  const response = await fetch(`${API_BASE}/api/submit-multiplayer`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ roomId, odId: playerId, answers, score }),
-  });
-  return response.json();
+  return multiplayerApi("submit-multiplayer", { roomId, odId: playerId, answers, score });
 }
 
 export async function quickMatch(playerId: string, playerName: string, operation: string): Promise<{
@@ -126,49 +100,22 @@ export async function quickMatch(playerId: string, playerName: string, operation
   error?: string;
 }> {
   console.log('[Frontend QuickMatch] Starting quick match request:', { playerId, playerName, operation });
-  console.log('[Frontend QuickMatch] Fetching:', `${API_BASE}/api/quick-match`);
-  try {
-    const response = await fetch(`${API_BASE}/api/quick-match`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ odId: playerId, odName: playerName, operation }),
-    });
-    console.log('[Frontend QuickMatch] Response status:', response.status);
-    const data = await response.json();
-    console.log('[Frontend QuickMatch] Response data:', data);
-    return data;
-  } catch (error) {
-    console.error('[Frontend QuickMatch] Error:', error);
-    throw error;
-  }
+  return multiplayerApi("quick-match", { odId: playerId, odName: playerName, operation });
 }
 
 export async function cancelQuickMatch(playerId: string): Promise<void> {
-  await fetch(`${API_BASE}/api/quick-match`, {
-    method: "DELETE",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ odId: playerId }),
-  });
+  await multiplayerApi("quick-match", { odId: playerId }, "DELETE");
 }
 
 export async function leaveRoom(roomId: string, playerId: string, playerName: string): Promise<void> {
-  await fetch(`${API_BASE}/api/leave-room`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ roomId, odId: playerId, odName: playerName }),
-  });
+  await multiplayerApi("leave-room", { roomId, odId: playerId, odName: playerName });
 }
 
 export async function requestRematch(roomId: string, playerId: string, playerName: string): Promise<{
   success: boolean;
   error?: string;
 }> {
-  const response = await fetch(`${API_BASE}/api/rematch`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ roomId, odId: playerId, odName: playerName, action: "request" }),
-  });
-  return response.json();
+  return multiplayerApi("rematch", { roomId, odId: playerId, odName: playerName, action: "request" });
 }
 
 export async function acceptRematch(roomId: string, playerId: string, playerName: string): Promise<{
@@ -177,28 +124,15 @@ export async function acceptRematch(roomId: string, playerId: string, playerName
   newRoomCode?: string;
   error?: string;
 }> {
-  const response = await fetch(`${API_BASE}/api/rematch`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ roomId, odId: playerId, odName: playerName, action: "accept" }),
-  });
-  return response.json();
+  return multiplayerApi("rematch", { roomId, odId: playerId, odName: playerName, action: "accept" });
 }
 
 export async function declineRematch(roomId: string, playerId: string, playerName: string): Promise<void> {
-  await fetch(`${API_BASE}/api/rematch`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ roomId, odId: playerId, odName: playerName, action: "decline" }),
-  });
+  await multiplayerApi("rematch", { roomId, odId: playerId, odName: playerName, action: "decline" });
 }
 
 export async function notifyDisconnect(roomId: string, playerId: string): Promise<void> {
-  await fetch(`${API_BASE}/api/player-disconnect`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ roomId, odId: playerId }),
-  });
+  await multiplayerApi("player-disconnect", { roomId, odId: playerId });
 }
 
 export async function setReady(roomId: string, playerId: string, isReady: boolean): Promise<{
@@ -206,12 +140,7 @@ export async function setReady(roomId: string, playerId: string, isReady: boolea
   allReady: boolean;
   error?: string;
 }> {
-  const response = await fetch(`${API_BASE}/api/set-ready`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ roomId, odId: playerId, isReady }),
-  });
-  return response.json();
+  return multiplayerApi("set-ready", { roomId, odId: playerId, isReady });
 }
 
 // Generate a unique player ID (stored in sessionStorage for per-tab uniqueness)
