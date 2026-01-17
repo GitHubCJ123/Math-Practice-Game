@@ -582,10 +582,10 @@ async function handleSubmitMultiplayer(body: any, res: VercelResponse) {
 }
 
 async function handleRematch(body: any, res: VercelResponse) {
-  const { roomId, odId, odName, action } = body;
+  const { roomId, odId, odName, rematchAction } = body;
 
-  if (!roomId || !odId || !odName || !action) {
-    return res.status(400).json({ error: "Room ID, player ID, name, and action are required" });
+  if (!roomId || !odId || !odName || !rematchAction) {
+    return res.status(400).json({ error: "Room ID, player ID, name, and rematchAction are required" });
   }
 
   const room = getRoom(roomId);
@@ -600,7 +600,7 @@ async function handleRematch(body: any, res: VercelResponse) {
     return res.status(403).json({ error: "Player not in room" });
   }
 
-  if (action === "request") {
+  if (rematchAction === "request") {
     await pusher.trigger(`room-${roomId}`, "rematch-requested", {
       type: "rematch-requested",
       fromPlayerId: odId,
@@ -610,7 +610,7 @@ async function handleRematch(body: any, res: VercelResponse) {
     return res.status(200).json({ success: true, message: "Rematch request sent" });
   }
 
-  if (action === "accept") {
+  if (rematchAction === "accept") {
     const opponent = room.players.find(p => p.id !== odId);
     if (!opponent) {
       return res.status(400).json({ error: "No opponent to rematch with" });
@@ -640,7 +640,7 @@ async function handleRematch(body: any, res: VercelResponse) {
     });
   }
 
-  if (action === "decline") {
+  if (rematchAction === "decline") {
     await pusher.trigger(`room-${roomId}`, "rematch-declined", {
       type: "rematch-declined",
     });
@@ -648,7 +648,7 @@ async function handleRematch(body: any, res: VercelResponse) {
     return res.status(200).json({ success: true, message: "Rematch declined" });
   }
 
-  return res.status(400).json({ error: "Invalid action" });
+  return res.status(400).json({ error: "Invalid rematchAction" });
 }
 
 async function handlePlayerDisconnect(body: any, res: VercelResponse) {

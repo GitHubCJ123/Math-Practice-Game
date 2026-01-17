@@ -115,7 +115,7 @@ export async function requestRematch(roomId: string, playerId: string, playerNam
   success: boolean;
   error?: string;
 }> {
-  return multiplayerApi("rematch", { roomId, odId: playerId, odName: playerName, action: "request" });
+  return multiplayerApi("rematch", { roomId, odId: playerId, odName: playerName, rematchAction: "request" });
 }
 
 export async function acceptRematch(roomId: string, playerId: string, playerName: string): Promise<{
@@ -124,11 +124,11 @@ export async function acceptRematch(roomId: string, playerId: string, playerName
   newRoomCode?: string;
   error?: string;
 }> {
-  return multiplayerApi("rematch", { roomId, odId: playerId, odName: playerName, action: "accept" });
+  return multiplayerApi("rematch", { roomId, odId: playerId, odName: playerName, rematchAction: "accept" });
 }
 
 export async function declineRematch(roomId: string, playerId: string, playerName: string): Promise<void> {
-  await multiplayerApi("rematch", { roomId, odId: playerId, odName: playerName, action: "decline" });
+  await multiplayerApi("rematch", { roomId, odId: playerId, odName: playerName, rematchAction: "decline" });
 }
 
 export async function notifyDisconnect(roomId: string, playerId: string): Promise<void> {
