@@ -51,3 +51,68 @@ export interface QuizStats {
 }
 
 export type AllQuizStats = Partial<Record<Operation, QuizStats>>;
+
+// Multiplayer Types
+export interface Player {
+  id: string;
+  name: string;
+  isHost: boolean;
+  isReady: boolean;
+  connected: boolean;
+}
+
+export interface PlayerGameState {
+  odId: string;
+  odName: string;
+  answers: string[];
+  currentQuestion: number;
+  finished: boolean;
+  finishTime: number | null; // ms from game start
+  score: number;
+}
+
+export interface RoomSettings {
+  operation: Operation;
+  selectedNumbers: number[];
+  questionCount: number;
+  timeLimit: number; // 0 for no limit
+}
+
+export interface Room {
+  id: string;
+  code: string; // 8-character join code
+  hostId: string;
+  players: Player[];
+  settings: RoomSettings;
+  questions: Question[];
+  gameState: 'waiting' | 'countdown' | 'playing' | 'finished';
+  gameStartTime: number | null; // timestamp when game started
+  playerStates: PlayerGameState[];
+  createdAt: number;
+  isQuickMatch: boolean;
+}
+
+export interface MultiplayerResult {
+  odId: string;
+  odName: string;
+  score: number;
+  totalQuestions: number;
+  timeTaken: number;
+  answers: string[];
+  questions: Question[];
+}
+
+export type RoomEvent =
+  | { type: 'player-joined'; player: Player }
+  | { type: 'player-left'; odId: string }
+  | { type: 'player-ready'; odId: string }
+  | { type: 'settings-updated'; settings: RoomSettings }
+  | { type: 'game-starting'; countdown: number; questions: Question[] }
+  | { type: 'game-started'; startTime: number }
+  | { type: 'opponent-progress'; odId: string; currentQuestion: number }
+  | { type: 'opponent-finished'; odId: string; finishTime: number }
+  | { type: 'game-ended'; results: MultiplayerResult[] }
+  | { type: 'rematch-requested'; fromPlayerId: string; fromPlayerName: string }
+  | { type: 'rematch-accepted'; newRoomCode: string }
+  | { type: 'rematch-declined' }
+  | { type: 'player-disconnected'; odId: string };

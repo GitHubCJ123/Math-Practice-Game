@@ -1,10 +1,13 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
-import type { Operation, Question } from './types';
+import { BrowserRouter, Routes, Route, useNavigate, useLocation, useParams } from 'react-router-dom';
+import type { Operation, Question, MultiplayerResult } from './types';
 import { DEFAULT_QUESTION_COUNT } from './types';
 import { SelectionScreen } from './components/SelectionScreen';
 import { QuizScreen } from './components/QuizScreen';
 import { ResultsScreen } from './components/ResultsScreen';
+import { MultiplayerLobbyScreen } from './components/MultiplayerLobbyScreen';
+import { MultiplayerQuizScreen } from './components/MultiplayerQuizScreen';
+import { MultiplayerResultsScreen } from './components/MultiplayerResultsScreen';
 import { MathDashAd } from './components/MathDashAd';
 import { conversions, formatPercentString } from './lib/conversions';
 import { Analytics } from "@vercel/analytics/react";
@@ -22,6 +25,23 @@ const App: React.FC = () => {
     questionCount: number;
   } | null>(null);
   const [isDarkMode, setIsDarkMode] = useState(false);
+
+  // Multiplayer state
+  const [multiplayerRoomId, setMultiplayerRoomId] = useState<string | null>(null);
+  const [multiplayerPlayerId, setMultiplayerPlayerId] = useState<string>('');
+  const [multiplayerPlayerName, setMultiplayerPlayerName] = useState<string>('');
+  const [multiplayerQuestions, setMultiplayerQuestions] = useState<Question[]>([]);
+  const [multiplayerOpponent, setMultiplayerOpponent] = useState<{ id: string; name: string } | null>(null);
+  const [multiplayerIsHost, setMultiplayerIsHost] = useState(false);
+  const [multiplayerResults, setMultiplayerResults] = useState<MultiplayerResult[]>([]);
+  const [multiplayerTimeLimit, setMultiplayerTimeLimit] = useState(0);
+  const [rematchData, setRematchData] = useState<{
+    roomId: string;
+    roomCode: string;
+    isQuickMatch: boolean;
+    players: any[];
+    settings: any;
+  } | null>(null);
 
   useEffect(() => {
     const userPrefersDark = localStorage.getItem('theme') === 'dark';
@@ -279,12 +299,49 @@ const App: React.FC = () => {
     // This function can be used to reset state if needed in the future
   };
 
+  // Multiplayer handlers
+  const handleMultiplayerGameStart = useCallback(
+    (roomId: string, odId: string, odName: string, mpQuestions: Question[], isHost: boolean, opponent: { id: string; name: string }, timeLimit: number = 0) => {
+      setMultiplayerRoomId(roomId);
+      setMultiplayerPlayerId(odId);
+      setMultiplayerPlayerName(odName);
+      setMultiplayerQuestions(mpQuestions);
+      setMultiplayerIsHost(isHost);
+      setMultiplayerOpponent(opponent);
+      setMultiplayerTimeLimit(timeLimit);
+      setMultiplayerResults([]);
+    },
+    []
+  );
+
+  const handleMultiplayerFinish = useCallback((results: MultiplayerResult[]) => {
+    setMultiplayerResults(results);
+  }, []);
+
+  const handleMultiplayerRematch = useCallback((data: { newRoomId: string; newRoomCode: string; isQuickMatch: boolean; players: any[]; settings: any }) => {
+    // Set rematch state so the lobby knows to show the ready screen
+    setRematchData({
+      roomId: data.newRoomId,
+      roomCode: data.newRoomCode,
+      isQuickMatch: data.isQuickMatch,
+      players: data.players,
+      settings: data.settings,
+    });
+    setMultiplayerRoomId(data.newRoomId);
+    setMultiplayerQuestions([]);
+    setMultiplayerResults([]);
+  }, []);
+
+  const handleMultiplayerExit = useCallback(() => {
+    setMultiplayerRoomId(null);
+    setMultiplayerQuestions([]);
+    setMultiplayerResults([]);
+    setMultiplayerOpponent(null);
+  }, []);
+
   return (
     <BrowserRouter>
       <RouteChangeTracker />
-      <div className="w-full bg-blue-600 text-white text-center py-2 font-bold">
-        Multiplayer Mode Coming Soon!
-      </div>
       <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col items-center justify-center p-4 transition-colors duration-300 relative">
         <main className="w-full flex justify-center">
           <Routes>
@@ -325,6 +382,58 @@ const App: React.FC = () => {
                   timeTaken={timeTaken}
                   quizSettings={quizSettings}
                   handleRestart={handleRestart}
+                />
+              }
+            />
+            {/* Multiplayer Routes */}
+            <Route
+              path="/multiplayer"
+              element={
+                <MultiplayerLobbyWrapper
+                  isDarkMode={isDarkMode}
+                  toggleDarkMode={toggleDarkMode}
+                  onGameStart={handleMultiplayerGameStart}
+                  rematchData={rematchData}
+                  onRematchConsumed={() => setRematchData(null)}
+                />
+              }
+            />
+            <Route
+              path="/join/:roomCode"
+              element={
+                <MultiplayerLobbyWrapper
+                  isDarkMode={isDarkMode}
+                  toggleDarkMode={toggleDarkMode}
+                  onGameStart={handleMultiplayerGameStart}
+                  rematchData={null}
+                  onRematchConsumed={() => {}}
+                />
+              }
+            />
+            <Route
+              path="/multiplayer/quiz"
+              element={
+                <MultiplayerQuizWrapper
+                  roomId={multiplayerRoomId}
+                  odId={multiplayerPlayerId}
+                  odName={multiplayerPlayerName}
+                  questions={multiplayerQuestions}
+                  timeLimit={multiplayerTimeLimit}
+                  opponent={multiplayerOpponent}
+                  onFinish={handleMultiplayerFinish}
+                />
+              }
+            />
+            <Route
+              path="/multiplayer/results"
+              element={
+                <MultiplayerResultsWrapper
+                  roomId={multiplayerRoomId}
+                  odId={multiplayerPlayerId}
+                  odName={multiplayerPlayerName}
+                  results={multiplayerResults}
+                  onRematch={handleMultiplayerRematch}
+                  onExit={handleMultiplayerExit}
                 />
               }
             />
@@ -487,6 +596,161 @@ const ResultsScreenWrapper: React.FC<{
             quizSettings={quizSettings}
         />
     );
+};
+
+// Multiplayer Wrappers
+interface MultiplayerLobbyWrapperProps {
+  isDarkMode: boolean;
+  toggleDarkMode: () => void;
+  onGameStart: (roomId: string, odId: string, odName: string, questions: Question[], isHost: boolean, opponent: { id: string; name: string }, timeLimit?: number) => void;
+  rematchData: {
+    roomId: string;
+    roomCode: string;
+    isQuickMatch: boolean;
+    players: any[];
+    settings: any;
+  } | null;
+  onRematchConsumed: () => void;
+}
+
+const MultiplayerLobbyWrapper: React.FC<MultiplayerLobbyWrapperProps> = ({
+  isDarkMode,
+  toggleDarkMode,
+  onGameStart,
+  rematchData,
+  onRematchConsumed,
+}) => {
+  const navigate = useNavigate();
+
+  const handleGameStart = (
+    roomId: string,
+    odId: string,
+    odName: string,
+    questions: Question[],
+    isHost: boolean,
+    opponent: { id: string; name: string }
+  ) => {
+    onGameStart(roomId, odId, odName, questions, isHost, opponent);
+    navigate('/multiplayer/quiz', { replace: true });
+  };
+
+  // If coming from rematch, navigate is already happening via the results screen
+  useEffect(() => {
+    if (rematchData) {
+      // Navigate to /multiplayer so the lobby picks up the rematch data
+      navigate('/multiplayer', { replace: true });
+    }
+  }, [rematchData, navigate]);
+
+  return (
+    <MultiplayerLobbyScreen
+      isDarkMode={isDarkMode}
+      toggleDarkMode={toggleDarkMode}
+      onGameStart={handleGameStart}
+      rematchData={rematchData}
+      onRematchConsumed={onRematchConsumed}
+    />
+  );
+};
+
+interface MultiplayerQuizWrapperProps {
+  roomId: string | null;
+  odId: string;
+  odName: string;
+  questions: Question[];
+  timeLimit: number;
+  opponent: { id: string; name: string } | null;
+  onFinish: (results: MultiplayerResult[]) => void;
+}
+
+const MultiplayerQuizWrapper: React.FC<MultiplayerQuizWrapperProps> = ({
+  roomId,
+  odId,
+  odName,
+  questions,
+  timeLimit,
+  opponent,
+  onFinish,
+}) => {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!roomId || questions.length === 0 || !opponent) {
+      navigate('/multiplayer', { replace: true });
+    }
+  }, [roomId, questions, opponent, navigate]);
+
+  const handleFinish = (results: MultiplayerResult[]) => {
+    onFinish(results);
+    navigate('/multiplayer/results', { replace: true });
+  };
+
+  if (!roomId || questions.length === 0 || !opponent) {
+    return null;
+  }
+
+  return (
+    <MultiplayerQuizScreen
+      roomId={roomId}
+      odId={odId}
+      odName={odName}
+      questions={questions}
+      timeLimit={timeLimit}
+      opponent={opponent}
+      onFinish={handleFinish}
+    />
+  );
+};
+
+interface MultiplayerResultsWrapperProps {
+  roomId: string | null;
+  odId: string;
+  odName: string;
+  results: MultiplayerResult[];
+  onRematch: (data: { newRoomId: string; newRoomCode: string; isQuickMatch: boolean; players: any[]; settings: any }) => void;
+  onExit: () => void;
+}
+
+const MultiplayerResultsWrapper: React.FC<MultiplayerResultsWrapperProps> = ({
+  roomId,
+  odId,
+  odName,
+  results,
+  onRematch,
+  onExit,
+}) => {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!roomId || results.length === 0) {
+      navigate('/multiplayer', { replace: true });
+    }
+  }, [roomId, results, navigate]);
+
+  const handleRematch = (data: { newRoomId: string; newRoomCode: string; isQuickMatch: boolean; players: any[]; settings: any }) => {
+    onRematch(data);
+    navigate('/multiplayer', { replace: true });
+  };
+
+  const handleExit = () => {
+    onExit();
+    navigate('/', { replace: true });
+  };
+
+  if (!roomId || results.length === 0) {
+    return null;
+  }
+
+  return (
+    <MultiplayerResultsScreen
+      roomId={roomId}
+      odId={odId}
+      odName={odName}
+      results={results}
+      onRematch={handleRematch}
+      onExit={handleExit}
+    />
+  );
 };
 
 
