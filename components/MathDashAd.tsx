@@ -2,21 +2,21 @@ import React from 'react';
 
 export const MathDashAd: React.FC = () => {
   return (
-    <div className="w-full max-w-[280px]">
+    <div className="w-full max-w-[360px]">
       <div className="sticky top-4 group relative">
         {/* Neon Glow Effect Background */}
-        <div className="absolute -inset-1 bg-gradient-to-r from-pink-600 to-purple-600 rounded-2xl blur opacity-75 group-hover:opacity-100 transition duration-1000 group-hover:duration-200 animate-pulse"></div>
+        <div className="absolute -inset-1.5 bg-gradient-to-r from-pink-600 to-purple-600 rounded-2xl blur opacity-75 group-hover:opacity-100 transition duration-1000 group-hover:duration-200 animate-pulse"></div>
 
-        <div className="relative p-3 bg-slate-900 rounded-xl leading-none flex flex-col items-center text-center border border-slate-800">
-          <div className="mb-3">
-            <span className="text-3xl">🚀</span>
+        <div className="relative p-5 bg-slate-900 rounded-xl leading-none flex flex-col items-center text-center border border-slate-800">
+          <div className="mb-4">
+            <span className="text-5xl">🚀</span>
           </div>
 
-          <h3 className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-pink-400 to-purple-400 mb-2 font-mono tracking-tighter">
+          <h3 className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-pink-400 to-purple-400 mb-3 font-mono tracking-tighter">
             MATH DASH
           </h3>
 
-          <p className="text-slate-300 mb-4 text-xs font-medium">
+          <p className="text-slate-300 mb-5 text-sm font-medium">
             Race through neon obstacles while solving rapid-fire math problems!
           </p>
 
@@ -24,12 +24,12 @@ export const MathDashAd: React.FC = () => {
             href="https://math-dash.vercel.app"
             target="_blank"
             rel="noopener noreferrer"
-            className="w-full py-2 px-3 bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 text-white text-sm font-bold rounded-lg shadow-[0_0_15px_rgba(236,72,153,0.5)] hover:shadow-[0_0_25px_rgba(236,72,153,0.8)] transform hover:-translate-y-0.5 transition-all duration-200"
+            className="w-full py-3 px-4 bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 text-white text-base font-bold rounded-lg shadow-[0_0_15px_rgba(236,72,153,0.5)] hover:shadow-[0_0_25px_rgba(236,72,153,0.8)] transform hover:-translate-y-0.5 transition-all duration-200"
           >
             PLAY NOW
           </a>
 
-          <div className="mt-3 flex gap-2 justify-center text-xs text-slate-500">
+          <div className="mt-4 flex gap-3 justify-center text-sm text-slate-500">
             <span>⚡ Speed</span>
             <span>•</span>
             <span>🧮 Math</span>
