@@ -1,5 +1,5 @@
-import { Room, Player, RoomSettings, Question, PlayerGameState } from "../../types";
-import { generateRoomCode, generatePlayerId } from "./pusher";
+import { Room, Player, RoomSettings, Question, PlayerGameState } from "../../types.js";
+import { generateRoomCode, generatePlayerId } from "./pusher.js";
 
 // In-memory room storage (for production, use Supabase)
 // Rooms auto-expire after 1 hour of inactivity

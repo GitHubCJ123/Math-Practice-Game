@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { getPusher } from "../lib/api/pusher";
+import { getPusher } from "../lib/api/pusher.js";
 import {
   createRoom as createRoomInStore,
   joinRoom as joinRoomInStore,
@@ -17,8 +17,8 @@ import {
   removeFromQuickMatchQueue,
   findQuickMatchOpponent,
   setPlayerReady,
-} from "../lib/api/room-store";
-import { Question, Operation, MultiplayerResult } from "../types";
+} from "../lib/api/room-store.js";
+import { Question, Operation, MultiplayerResult } from "../types.js";
 
 // Question generation logic
 function generateQuestions(
