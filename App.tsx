@@ -395,7 +395,7 @@ const SelectionScreenWrapper: React.FC<SelectionScreenWrapperProps> = ({
       />
       
       {/* Ad for large screens - absolute positioned */}
-      <div className="absolute right-8 top-8 hidden 2xl:block">
+      <div className="absolute right-4 top-8 hidden 2xl:block">
         <MathDashAd />
       </div>
       
