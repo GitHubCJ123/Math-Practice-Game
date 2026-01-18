@@ -728,12 +728,23 @@ async function handleSubmitMultiplayer(body: any, res: VercelResponse) {
 
     // Calculate team results if in team mode
     let teamResults: TeamResult[] | undefined;
+    
+    // Safety check: ensure teams exist if in team mode
+    if (updatedRoom.settings.gameMode === "teams" && updatedRoom.teams.length === 0) {
+      console.log(`[Submit] Warning: Teams empty in team mode. Re-assigning random teams.`);
+      assignRandomTeams(updatedRoom);
+    }
+
     if (updatedRoom.settings.gameMode === "teams" && updatedRoom.teams.length > 0) {
+      console.log(`[Submit] Calculating team results. Teams: ${JSON.stringify(updatedRoom.teams.map(t => ({id: t.id, players: t.playerIds})))}`);
+      
       teamResults = updatedRoom.teams.map(team => {
         // Use team.playerIds directly instead of relying on player.teamId
         const teamPlayerStates = updatedRoom.playerStates.filter(ps => 
           team.playerIds.includes(ps.odId)
         );
+        
+        console.log(`[Submit] Team ${team.name} has ${teamPlayerStates.length} players. IDs in team: ${team.playerIds.join(',')}. States: ${updatedRoom.playerStates.map(p => p.odId).join(',')}`);
 
         const totalScore = teamPlayerStates.reduce((sum, ps) => sum + ps.score, 0);
         const totalTime = teamPlayerStates.reduce((sum, ps) => sum + (ps.finishTime || 0), 0);
@@ -750,6 +761,8 @@ async function handleSubmitMultiplayer(body: any, res: VercelResponse) {
           isWinner: false, // Will be set below
         };
       });
+
+      console.log(`[Submit] Team Results before winner check: ${JSON.stringify(teamResults.map(t => ({name: t.teamName, avg: t.averageScore})))}`);
 
       // Determine winner (higher average score wins, tiebreaker: lower average time)
       if (teamResults.length === 2) {
