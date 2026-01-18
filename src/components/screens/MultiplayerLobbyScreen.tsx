@@ -1168,7 +1168,7 @@ export const MultiplayerLobbyScreen: React.FC<MultiplayerLobbyScreenProps> = ({
                     }`}
                     title={maxPlayers < 4 ? "Teams require 4 players" : ""}
                   >
-                    Teams (2v2)
+                    Teams (2v2 / 1v3)
                   </button>
                 </div>
                 {maxPlayers < 4 && (
