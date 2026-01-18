@@ -1,16 +1,16 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Pusher, { Channel } from "pusher-js";
-import type { Question, MultiplayerResult, Operation } from "../types";
-import { CheckCircleIcon, XCircleIcon, TrophyIcon } from "./icons";
+import type { Question, MultiplayerResult, Operation } from "../../../types";
+import { CheckCircleIcon, XCircleIcon, TrophyIcon } from "../ui/icons";
 import {
   getPusherClient,
   requestRematch,
   acceptRematch,
   declineRematch,
   getOrCreatePlayerId,
-} from "../lib/multiplayer";
-import { formatPercentString } from "../lib/conversions";
+} from "../../lib/multiplayer";
+import { formatPercentString } from "../../lib/conversions";
 
 interface MultiplayerResultsScreenProps {
   roomId: string;

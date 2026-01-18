@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import type { Question, Operation } from '../types';
-import { ClockIcon } from './icons';
+import type { Question, Operation } from '../../../types';
+import { ClockIcon } from '../ui/icons';
 
 interface QuizScreenProps {
   questions: Question[];

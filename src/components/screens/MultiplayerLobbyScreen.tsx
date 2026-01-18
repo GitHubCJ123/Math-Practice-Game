@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import Pusher, { Channel } from "pusher-js";
-import type { Operation, RoomSettings, Player, Question } from "../types";
+import type { Operation, RoomSettings, Player, Question } from "../../../types";
 import {
   getPusherClient,
   createRoom,
@@ -14,8 +14,8 @@ import {
   leaveRoom,
   setReady,
   getOrCreatePlayerId,
-} from "../lib/multiplayer";
-import { SunIcon, MoonIcon } from "./icons";
+} from "../../lib/multiplayer";
+import { SunIcon, MoonIcon } from "../ui/icons";
 
 interface MultiplayerLobbyScreenProps {
   isDarkMode: boolean;

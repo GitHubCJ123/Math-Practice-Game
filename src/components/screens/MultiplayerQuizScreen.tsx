@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useRef } from "react";
 import Pusher, { Channel } from "pusher-js";
-import type { Question, Operation, MultiplayerResult } from "../types";
-import { ClockIcon } from "./icons";
+import type { Question, Operation, MultiplayerResult } from "../../../types";
+import { ClockIcon } from "../ui/icons";
 import {
   getPusherClient,
   updateProgress,
   submitMultiplayerAnswers,
   notifyDisconnect,
-} from "../lib/multiplayer";
+} from "../../lib/multiplayer";
 
 interface MultiplayerQuizScreenProps {
   roomId: string;

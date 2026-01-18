@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import type { Operation, Question, HighScores, AllQuizStats } from '../types';
-import { DEFAULT_QUESTION_COUNT } from '../types';
-import { CheckCircleIcon, XCircleIcon, StarIcon, TrophyIcon } from './icons';
-import { feedbackMessages } from '../lib/feedbackMessages';
-import { formatPercentString } from '../lib/conversions';
+import type { Operation, Question, HighScores, AllQuizStats } from '../../../types';
+import { DEFAULT_QUESTION_COUNT } from '../../../types';
+import { CheckCircleIcon, XCircleIcon, StarIcon, TrophyIcon } from '../ui/icons';
+import { feedbackMessages } from '../../lib/feedbackMessages';
+import { formatPercentString } from '../../lib/conversions';
 
 const LEADERBOARD_SUPPORTED_OPERATIONS = new Set<Operation>([
   'multiplication',

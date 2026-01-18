@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import type { Operation, HighScores, HighScore, AllQuizStats, QuizStats } from '../types';
-import { DEFAULT_QUESTION_COUNT, MIN_QUESTION_COUNT, MAX_QUESTION_COUNT, MAX_CONVERSION_QUESTION_COUNT } from '../types';
-import { StarIcon, SunIcon, MoonIcon, ChartBarIcon, BullseyeIcon, ListBulletIcon, ClockIcon, TrashIcon } from './icons';
-import { Leaderboard } from './Leaderboard';
+import type { Operation, HighScores, HighScore, AllQuizStats, QuizStats } from '../../../types';
+import { DEFAULT_QUESTION_COUNT, MIN_QUESTION_COUNT, MAX_QUESTION_COUNT, MAX_CONVERSION_QUESTION_COUNT } from '../../../types';
+import { StarIcon, SunIcon, MoonIcon, ChartBarIcon, BullseyeIcon, ListBulletIcon, ClockIcon, TrashIcon } from '../ui/icons';
+import { Leaderboard } from '../ui/Leaderboard';
 
 // Multiplayer launch date: January 22, 2026, 6:00 PM EST
 const MULTIPLAYER_LAUNCH_DATE = new Date('2026-01-22T18:00:00-05:00');
