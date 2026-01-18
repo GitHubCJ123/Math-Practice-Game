@@ -700,10 +700,18 @@ async function handleSubmitMultiplayer(body: any, res: VercelResponse) {
       return (a.finishTime || Infinity) - (b.finishTime || Infinity);
     });
 
-    // Get player's teamId from the room's players array
+    // Get player's teamId - check teams.playerIds array as fallback for player.teamId
     const getPlayerTeamId = (playerId: string): string | undefined => {
+      // First check player.teamId
       const player = updatedRoom.players.find(p => p.id === playerId);
-      return player?.teamId;
+      if (player?.teamId) return player.teamId;
+      // Fallback: check teams.playerIds arrays
+      for (const team of updatedRoom.teams) {
+        if (team.playerIds.includes(playerId)) {
+          return team.id;
+        }
+      }
+      return undefined;
     };
 
     const results: MultiplayerResult[] = rankedStates.map((ps, index) => ({
@@ -722,10 +730,10 @@ async function handleSubmitMultiplayer(body: any, res: VercelResponse) {
     let teamResults: TeamResult[] | undefined;
     if (updatedRoom.settings.gameMode === "teams" && updatedRoom.teams.length > 0) {
       teamResults = updatedRoom.teams.map(team => {
-        const teamPlayerStates = updatedRoom.playerStates.filter(ps => {
-          const player = updatedRoom.players.find(p => p.id === ps.odId);
-          return player?.teamId === team.id;
-        });
+        // Use team.playerIds directly instead of relying on player.teamId
+        const teamPlayerStates = updatedRoom.playerStates.filter(ps => 
+          team.playerIds.includes(ps.odId)
+        );
 
         const totalScore = teamPlayerStates.reduce((sum, ps) => sum + ps.score, 0);
         const totalTime = teamPlayerStates.reduce((sum, ps) => sum + (ps.finishTime || 0), 0);

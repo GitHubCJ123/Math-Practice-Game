@@ -55,10 +55,13 @@ export const MultiplayerResultsScreen: React.FC<MultiplayerResultsScreenProps> =
   const iWin = myRank === 1;
   const totalPlayers = results.length;
   
-  // Team mode calculations
+  // Team mode calculations - use team.playerIds for reliable matching
   const myTeam = teams.find((t) => t.playerIds.includes(odId));
   const myTeamResult = teamResults?.find((tr) => tr.teamId === myTeam?.id);
-  const isTeamWinner = myTeamResult?.isWinner || false;
+  // Also check playerIds array in teamResults as fallback
+  const myTeamResultFallback = teamResults?.find((tr) => tr.playerIds?.includes(odId));
+  const finalMyTeamResult = myTeamResult || myTeamResultFallback;
+  const isTeamWinner = finalMyTeamResult?.isWinner || false;
 
   // Subscribe to room channel for rematch events
   useEffect(() => {
