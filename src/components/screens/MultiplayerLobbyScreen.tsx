@@ -1107,8 +1107,8 @@ export const MultiplayerLobbyScreen: React.FC<MultiplayerLobbyScreenProps> = ({
                         setMaxPlayers(num as 2 | 3 | 4);
                         // If reducing max players below current count, don't allow
                         if (num < players.length) return;
-                        // If going below 4 players, disable team mode
-                        const newGameMode = num < 4 ? 'ffa' : gameMode;
+                        // If going below 3 players, disable team mode
+                        const newGameMode = num < 3 ? 'ffa' : gameMode;
                         if (newGameMode !== gameMode) {
                           setGameMode(newGameMode);
                         }
@@ -1154,25 +1154,25 @@ export const MultiplayerLobbyScreen: React.FC<MultiplayerLobbyScreenProps> = ({
                   </button>
                   <button
                     onClick={() => {
-                      if (!isHost || maxPlayers < 4) return;
+                      if (!isHost || maxPlayers < 3) return;
                       setGameMode('teams');
                       handleSettingsChange({ gameMode: 'teams' });
                     }}
-                    disabled={!isHost || maxPlayers < 4}
+                    disabled={!isHost || maxPlayers < 3}
                     className={`px-4 py-2 rounded-lg font-medium transition-colors ${
                       gameMode === 'teams'
                         ? "bg-purple-600 text-white"
-                        : !isHost || maxPlayers < 4
+                        : !isHost || maxPlayers < 3
                         ? "bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 cursor-not-allowed"
                         : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
                     }`}
-                    title={maxPlayers < 4 ? "Teams require 4 players" : ""}
+                    title={maxPlayers < 3 ? "Teams require 3 players" : ""}
                   >
-                    Teams (2v2 / 1v3)
+                    Teams (2v2 / 1v3 / 2v1)
                   </button>
                 </div>
-                {maxPlayers < 4 && (
-                  <p className="text-xs text-slate-400 mt-1">Teams mode requires 4 players</p>
+                {maxPlayers < 3 && (
+                  <p className="text-xs text-slate-400 mt-1">Teams mode requires 3 players</p>
                 )}
               </div>
 
