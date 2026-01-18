@@ -708,10 +708,8 @@ const MultiplayerQuizWrapper: React.FC<MultiplayerQuizWrapperProps> = ({
     }
   }, [roomId, questions, players, navigate]);
 
-  const handleFinish = (results: MultiplayerResult[]) => {
-    // Extract team results if present
-    const teamResultsFromResults = (results as any).teamResults;
-    onFinish(results, teamResultsFromResults);
+  const handleFinish = (results: MultiplayerResult[], teamResults?: TeamResult[]) => {
+    onFinish(results, teamResults);
     navigate('/multiplayer/results', { replace: true });
   };
 

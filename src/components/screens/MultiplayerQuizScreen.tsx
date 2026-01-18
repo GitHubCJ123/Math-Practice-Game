@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import Pusher, { Channel } from "pusher-js";
-import type { Question, Operation, MultiplayerResult, Team, GameMode, Player } from "../../../types";
+import type { Question, Operation, MultiplayerResult, Team, GameMode, Player, TeamResult } from "../../../types";
 import { ClockIcon } from "../ui/icons";
 import {
   getPusherClient,
@@ -18,7 +18,7 @@ interface MultiplayerQuizScreenProps {
   players: Player[];
   teams: Team[];
   gameMode: GameMode;
-  onFinish: (results: MultiplayerResult[]) => void;
+  onFinish: (results: MultiplayerResult[], teamResults?: TeamResult[]) => void;
 }
 
 const playTimeUpSound = () => {
@@ -103,8 +103,8 @@ export const MultiplayerQuizScreen: React.FC<MultiplayerQuizScreenProps> = ({
       }
     });
 
-    channel.bind("game-ended", (data: { results: MultiplayerResult[] }) => {
-      onFinish(data.results);
+    channel.bind("game-ended", (data: { results: MultiplayerResult[]; teamResults?: TeamResult[] }) => {
+      onFinish(data.results, data.teamResults);
     });
 
     channel.bind("player-disconnected", (data: { odId: string }) => {
