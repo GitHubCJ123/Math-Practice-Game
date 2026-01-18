@@ -53,12 +53,21 @@ export interface QuizStats {
 export type AllQuizStats = Partial<Record<Operation, QuizStats>>;
 
 // Multiplayer Types
+export type GameMode = 'ffa' | 'teams';
+
 export interface Player {
   id: string;
   name: string;
   isHost: boolean;
   isReady: boolean;
   connected: boolean;
+  teamId?: string; // Only set when gameMode is 'teams'
+}
+
+export interface Team {
+  id: string;
+  name: string; // 'Team A' or 'Team B'
+  playerIds: string[];
 }
 
 export interface PlayerGameState {
@@ -76,6 +85,15 @@ export interface RoomSettings {
   selectedNumbers: number[];
   questionCount: number;
   timeLimit: number; // 0 for no limit
+  maxPlayers: number; // 2, 3, or 4
+  gameMode: GameMode; // 'ffa' or 'teams'
+}
+
+export interface RematchState {
+  requesterId: string;
+  requesterName: string;
+  keepTeams: boolean;
+  acceptedPlayerIds: string[]; // Players who have accepted
 }
 
 export interface Room {
@@ -83,6 +101,7 @@ export interface Room {
   code: string; // 8-character join code
   hostId: string;
   players: Player[];
+  teams: Team[]; // Empty for FFA mode, 2 teams for team mode
   settings: RoomSettings;
   questions: Question[];
   gameState: 'waiting' | 'countdown' | 'playing' | 'finished';
@@ -90,6 +109,7 @@ export interface Room {
   playerStates: PlayerGameState[];
   createdAt: number;
   isQuickMatch: boolean;
+  rematchState?: RematchState; // Tracks pending rematch for 3+ players
 }
 
 export interface MultiplayerResult {
@@ -100,6 +120,19 @@ export interface MultiplayerResult {
   timeTaken: number;
   answers: string[];
   questions: Question[];
+  teamId?: string; // Only set when gameMode is 'teams'
+  rank?: number; // 1st, 2nd, 3rd, 4th place for FFA
+}
+
+export interface TeamResult {
+  teamId: string;
+  teamName: string;
+  playerIds: string[];
+  averageScore: number;
+  averageTime: number;
+  totalScore: number;
+  totalTime: number;
+  isWinner: boolean;
 }
 
 export type RoomEvent =
@@ -107,12 +140,14 @@ export type RoomEvent =
   | { type: 'player-left'; odId: string }
   | { type: 'player-ready'; odId: string }
   | { type: 'settings-updated'; settings: RoomSettings }
+  | { type: 'teams-updated'; teams: Team[]; players: Player[] }
   | { type: 'game-starting'; countdown: number; questions: Question[] }
   | { type: 'game-started'; startTime: number }
   | { type: 'opponent-progress'; odId: string; currentQuestion: number }
   | { type: 'opponent-finished'; odId: string; finishTime: number }
-  | { type: 'game-ended'; results: MultiplayerResult[] }
-  | { type: 'rematch-requested'; fromPlayerId: string; fromPlayerName: string }
+  | { type: 'game-ended'; results: MultiplayerResult[]; teamResults?: TeamResult[] }
+  | { type: 'rematch-requested'; fromPlayerId: string; fromPlayerName: string; keepTeams?: boolean; totalNeeded: number }
+  | { type: 'rematch-player-accepted'; odId: string; odName: string; acceptedCount: number; totalNeeded: number }
   | { type: 'rematch-accepted'; newRoomCode: string }
-  | { type: 'rematch-declined' }
+  | { type: 'rematch-declined'; declinedBy?: string }
   | { type: 'player-disconnected'; odId: string };

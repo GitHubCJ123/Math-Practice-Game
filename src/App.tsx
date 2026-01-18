@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, useNavigate, useLocation, useParams } from 'react-router-dom';
-import type { Operation, Question, MultiplayerResult } from '../types';
+import type { Operation, Question, MultiplayerResult, Team, GameMode, TeamResult, Player } from '../types';
 import { DEFAULT_QUESTION_COUNT } from '../types';
 import { SelectionScreen } from './components/screens/SelectionScreen';
 import { QuizScreen } from './components/screens/QuizScreen';
@@ -31,16 +31,20 @@ const App: React.FC = () => {
   const [multiplayerPlayerId, setMultiplayerPlayerId] = useState<string>('');
   const [multiplayerPlayerName, setMultiplayerPlayerName] = useState<string>('');
   const [multiplayerQuestions, setMultiplayerQuestions] = useState<Question[]>([]);
-  const [multiplayerOpponent, setMultiplayerOpponent] = useState<{ id: string; name: string } | null>(null);
+  const [multiplayerPlayers, setMultiplayerPlayers] = useState<Player[]>([]);
+  const [multiplayerTeams, setMultiplayerTeams] = useState<Team[]>([]);
+  const [multiplayerGameMode, setMultiplayerGameMode] = useState<GameMode>('ffa');
   const [multiplayerIsHost, setMultiplayerIsHost] = useState(false);
   const [multiplayerResults, setMultiplayerResults] = useState<MultiplayerResult[]>([]);
+  const [multiplayerTeamResults, setMultiplayerTeamResults] = useState<TeamResult[]>([]);
   const [multiplayerTimeLimit, setMultiplayerTimeLimit] = useState(0);
   const [rematchData, setRematchData] = useState<{
     roomId: string;
     roomCode: string;
     isQuickMatch: boolean;
-    players: any[];
+    players: Player[];
     settings: any;
+    teams: Team[];
   } | null>(null);
 
   useEffect(() => {
@@ -301,24 +305,30 @@ const App: React.FC = () => {
 
   // Multiplayer handlers
   const handleMultiplayerGameStart = useCallback(
-    (roomId: string, odId: string, odName: string, mpQuestions: Question[], isHost: boolean, opponent: { id: string; name: string }, timeLimit: number = 0) => {
+    (roomId: string, odId: string, odName: string, mpQuestions: Question[], isHost: boolean, players: Player[], teams: Team[], gameMode: GameMode, timeLimit: number = 0) => {
       setMultiplayerRoomId(roomId);
       setMultiplayerPlayerId(odId);
       setMultiplayerPlayerName(odName);
       setMultiplayerQuestions(mpQuestions);
       setMultiplayerIsHost(isHost);
-      setMultiplayerOpponent(opponent);
+      setMultiplayerPlayers(players);
+      setMultiplayerTeams(teams);
+      setMultiplayerGameMode(gameMode);
       setMultiplayerTimeLimit(timeLimit);
       setMultiplayerResults([]);
+      setMultiplayerTeamResults([]);
     },
     []
   );
 
-  const handleMultiplayerFinish = useCallback((results: MultiplayerResult[]) => {
+  const handleMultiplayerFinish = useCallback((results: MultiplayerResult[], teamResults?: TeamResult[]) => {
     setMultiplayerResults(results);
+    if (teamResults) {
+      setMultiplayerTeamResults(teamResults);
+    }
   }, []);
 
-  const handleMultiplayerRematch = useCallback((data: { newRoomId: string; newRoomCode: string; isQuickMatch: boolean; players: any[]; settings: any }) => {
+  const handleMultiplayerRematch = useCallback((data: { newRoomId: string; newRoomCode: string; isQuickMatch: boolean; players: any[]; settings: any; teams: Team[] }) => {
     // Set rematch state so the lobby knows to show the ready screen
     setRematchData({
       roomId: data.newRoomId,
@@ -326,17 +336,22 @@ const App: React.FC = () => {
       isQuickMatch: data.isQuickMatch,
       players: data.players,
       settings: data.settings,
+      teams: data.teams || [],
     });
     setMultiplayerRoomId(data.newRoomId);
     setMultiplayerQuestions([]);
     setMultiplayerResults([]);
+    setMultiplayerTeamResults([]);
   }, []);
 
   const handleMultiplayerExit = useCallback(() => {
     setMultiplayerRoomId(null);
     setMultiplayerQuestions([]);
     setMultiplayerResults([]);
-    setMultiplayerOpponent(null);
+    setMultiplayerTeamResults([]);
+    setMultiplayerPlayers([]);
+    setMultiplayerTeams([]);
+    setMultiplayerGameMode('ffa');
   }, []);
 
   return (
@@ -419,7 +434,9 @@ const App: React.FC = () => {
                   odName={multiplayerPlayerName}
                   questions={multiplayerQuestions}
                   timeLimit={multiplayerTimeLimit}
-                  opponent={multiplayerOpponent}
+                  players={multiplayerPlayers}
+                  teams={multiplayerTeams}
+                  gameMode={multiplayerGameMode}
                   onFinish={handleMultiplayerFinish}
                 />
               }
@@ -432,6 +449,9 @@ const App: React.FC = () => {
                   odId={multiplayerPlayerId}
                   odName={multiplayerPlayerName}
                   results={multiplayerResults}
+                  teams={multiplayerTeams}
+                  gameMode={multiplayerGameMode}
+                  teamResults={multiplayerTeamResults}
                   onRematch={handleMultiplayerRematch}
                   onExit={handleMultiplayerExit}
                 />
@@ -602,13 +622,14 @@ const ResultsScreenWrapper: React.FC<{
 interface MultiplayerLobbyWrapperProps {
   isDarkMode: boolean;
   toggleDarkMode: () => void;
-  onGameStart: (roomId: string, odId: string, odName: string, questions: Question[], isHost: boolean, opponent: { id: string; name: string }, timeLimit?: number) => void;
+  onGameStart: (roomId: string, odId: string, odName: string, questions: Question[], isHost: boolean, players: Player[], teams: Team[], gameMode: GameMode, timeLimit?: number) => void;
   rematchData: {
     roomId: string;
     roomCode: string;
     isQuickMatch: boolean;
     players: any[];
     settings: any;
+    teams: Team[];
   } | null;
   onRematchConsumed: () => void;
 }
@@ -628,9 +649,12 @@ const MultiplayerLobbyWrapper: React.FC<MultiplayerLobbyWrapperProps> = ({
     odName: string,
     questions: Question[],
     isHost: boolean,
-    opponent: { id: string; name: string }
+    players: Player[],
+    teams: Team[],
+    gameMode: GameMode,
+    timeLimit?: number
   ) => {
-    onGameStart(roomId, odId, odName, questions, isHost, opponent);
+    onGameStart(roomId, odId, odName, questions, isHost, players, teams, gameMode, timeLimit);
     navigate('/multiplayer/quiz', { replace: true });
   };
 
@@ -659,8 +683,10 @@ interface MultiplayerQuizWrapperProps {
   odName: string;
   questions: Question[];
   timeLimit: number;
-  opponent: { id: string; name: string } | null;
-  onFinish: (results: MultiplayerResult[]) => void;
+  players: Player[];
+  teams: Team[];
+  gameMode: GameMode;
+  onFinish: (results: MultiplayerResult[], teamResults?: TeamResult[]) => void;
 }
 
 const MultiplayerQuizWrapper: React.FC<MultiplayerQuizWrapperProps> = ({
@@ -669,23 +695,27 @@ const MultiplayerQuizWrapper: React.FC<MultiplayerQuizWrapperProps> = ({
   odName,
   questions,
   timeLimit,
-  opponent,
+  players,
+  teams,
+  gameMode,
   onFinish,
 }) => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (!roomId || questions.length === 0 || !opponent) {
+    if (!roomId || questions.length === 0 || players.length === 0) {
       navigate('/multiplayer', { replace: true });
     }
-  }, [roomId, questions, opponent, navigate]);
+  }, [roomId, questions, players, navigate]);
 
   const handleFinish = (results: MultiplayerResult[]) => {
-    onFinish(results);
+    // Extract team results if present
+    const teamResultsFromResults = (results as any).teamResults;
+    onFinish(results, teamResultsFromResults);
     navigate('/multiplayer/results', { replace: true });
   };
 
-  if (!roomId || questions.length === 0 || !opponent) {
+  if (!roomId || questions.length === 0 || players.length === 0) {
     return null;
   }
 
@@ -696,7 +726,9 @@ const MultiplayerQuizWrapper: React.FC<MultiplayerQuizWrapperProps> = ({
       odName={odName}
       questions={questions}
       timeLimit={timeLimit}
-      opponent={opponent}
+      players={players}
+      teams={teams}
+      gameMode={gameMode}
       onFinish={handleFinish}
     />
   );
@@ -707,7 +739,10 @@ interface MultiplayerResultsWrapperProps {
   odId: string;
   odName: string;
   results: MultiplayerResult[];
-  onRematch: (data: { newRoomId: string; newRoomCode: string; isQuickMatch: boolean; players: any[]; settings: any }) => void;
+  teams: Team[];
+  gameMode: GameMode;
+  teamResults?: TeamResult[];
+  onRematch: (data: { newRoomId: string; newRoomCode: string; isQuickMatch: boolean; players: any[]; settings: any; teams: Team[] }) => void;
   onExit: () => void;
 }
 
@@ -716,6 +751,9 @@ const MultiplayerResultsWrapper: React.FC<MultiplayerResultsWrapperProps> = ({
   odId,
   odName,
   results,
+  teams,
+  gameMode,
+  teamResults,
   onRematch,
   onExit,
 }) => {
@@ -727,7 +765,7 @@ const MultiplayerResultsWrapper: React.FC<MultiplayerResultsWrapperProps> = ({
     }
   }, [roomId, results, navigate]);
 
-  const handleRematch = (data: { newRoomId: string; newRoomCode: string; isQuickMatch: boolean; players: any[]; settings: any }) => {
+  const handleRematch = (data: { newRoomId: string; newRoomCode: string; isQuickMatch: boolean; players: any[]; settings: any; teams: Team[] }) => {
     onRematch(data);
     navigate('/multiplayer', { replace: true });
   };
@@ -747,6 +785,9 @@ const MultiplayerResultsWrapper: React.FC<MultiplayerResultsWrapperProps> = ({
       odId={odId}
       odName={odName}
       results={results}
+      teams={teams}
+      gameMode={gameMode}
+      teamResults={teamResults}
       onRematch={handleRematch}
       onExit={handleExit}
     />

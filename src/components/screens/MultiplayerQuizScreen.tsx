@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import Pusher, { Channel } from "pusher-js";
-import type { Question, Operation, MultiplayerResult } from "../../../types";
+import type { Question, Operation, MultiplayerResult, Team, GameMode, Player } from "../../../types";
 import { ClockIcon } from "../ui/icons";
 import {
   getPusherClient,
@@ -15,7 +15,9 @@ interface MultiplayerQuizScreenProps {
   odName: string;
   questions: Question[];
   timeLimit: number;
-  opponent: { id: string; name: string };
+  players: Player[];
+  teams: Team[];
+  gameMode: GameMode;
   onFinish: (results: MultiplayerResult[]) => void;
 }
 
@@ -44,7 +46,9 @@ export const MultiplayerQuizScreen: React.FC<MultiplayerQuizScreenProps> = ({
   odName,
   questions,
   timeLimit,
-  opponent,
+  players,
+  teams,
+  gameMode,
   onFinish,
 }) => {
   const [answers, setAnswers] = useState<string[]>(Array(questions.length).fill(""));
@@ -54,12 +58,21 @@ export const MultiplayerQuizScreen: React.FC<MultiplayerQuizScreenProps> = ({
   const [introStage, setIntroStage] = useState<"ready" | "set" | "go" | "finished">("ready");
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
-  // Opponent state
-  const [opponentProgress, setOpponentProgress] = useState(0);
-  const [opponentFinished, setOpponentFinished] = useState(false);
-  const [showOpponentFinishedPopup, setShowOpponentFinishedPopup] = useState(false);
-  const [waitingForOpponent, setWaitingForOpponent] = useState(false);
-  const [opponentDisconnected, setOpponentDisconnected] = useState(false);
+  // Opponent state - now tracks multiple opponents
+  const [opponentProgress, setOpponentProgress] = useState<Record<string, number>>({});
+  const [opponentFinished, setOpponentFinished] = useState<Record<string, boolean>>({});
+  const [showFinishedPopup, setShowFinishedPopup] = useState<string | null>(null);
+  const [waitingForOpponents, setWaitingForOpponents] = useState(false);
+  const [disconnectedPlayers, setDisconnectedPlayers] = useState<Set<string>>(new Set());
+  
+  // Derived values
+  const opponents = players.filter((p) => p.id !== odId);
+  const myTeam = teams.find((t) => t.playerIds.includes(odId));
+  const myTeammates = myTeam ? players.filter((p) => myTeam.playerIds.includes(p.id) && p.id !== odId) : [];
+  const myOpponents = gameMode === 'teams' 
+    ? players.filter((p) => !myTeam?.playerIds.includes(p.id))
+    : opponents;
+  const allOpponentsFinished = opponents.every((p) => opponentFinished[p.id] || disconnectedPlayers.has(p.id));
 
   const answersRef = useRef(answers);
   useEffect(() => {
@@ -75,16 +88,17 @@ export const MultiplayerQuizScreen: React.FC<MultiplayerQuizScreenProps> = ({
 
     channel.bind("opponent-progress", (data: { odId: string; currentQuestion: number }) => {
       if (data.odId !== odId) {
-        setOpponentProgress(data.currentQuestion);
+        setOpponentProgress((prev) => ({ ...prev, [data.odId]: data.currentQuestion }));
       }
     });
 
     channel.bind("opponent-finished", (data: { odId: string; finishTime: number }) => {
       if (data.odId !== odId) {
-        setOpponentFinished(true);
+        setOpponentFinished((prev) => ({ ...prev, [data.odId]: true }));
         if (!quizFinished) {
-          setShowOpponentFinishedPopup(true);
-          setTimeout(() => setShowOpponentFinishedPopup(false), 3000);
+          const finishedPlayer = players.find((p) => p.id === data.odId);
+          setShowFinishedPopup(finishedPlayer?.name || "Someone");
+          setTimeout(() => setShowFinishedPopup(null), 2000);
         }
       }
     });
@@ -95,8 +109,8 @@ export const MultiplayerQuizScreen: React.FC<MultiplayerQuizScreenProps> = ({
 
     channel.bind("player-disconnected", (data: { odId: string }) => {
       if (data.odId !== odId) {
-        setOpponentDisconnected(true);
-        setOpponentFinished(true);
+        setDisconnectedPlayers((prev) => new Set([...prev, data.odId]));
+        setOpponentFinished((prev) => ({ ...prev, [data.odId]: true }));
       }
     });
 
@@ -110,7 +124,7 @@ export const MultiplayerQuizScreen: React.FC<MultiplayerQuizScreenProps> = ({
       pusher.unsubscribe(`room-${roomId}`);
       window.removeEventListener("beforeunload", handleBeforeUnload);
     };
-  }, [roomId, odId, onFinish, quizFinished]);
+  }, [roomId, odId, onFinish, quizFinished, players]);
 
   // Intro animation
   useEffect(() => {
@@ -185,7 +199,7 @@ export const MultiplayerQuizScreen: React.FC<MultiplayerQuizScreenProps> = ({
     setTimerRunning(false);
 
     const score = calculateScore(finalAnswers);
-    setWaitingForOpponent(true);
+    setWaitingForOpponents(true);
 
     await submitMultiplayerAnswers(roomId, odId, finalAnswers, score);
   };
@@ -278,21 +292,58 @@ export const MultiplayerQuizScreen: React.FC<MultiplayerQuizScreenProps> = ({
 
   const usesDisplayProperty = isConversionMode || questions[0]?.operation === "negative-numbers";
 
-  // Waiting for opponent screen
-  if (waitingForOpponent && !opponentFinished) {
+  // Waiting for opponents screen
+  if (waitingForOpponents && !allOpponentsFinished) {
+    const stillPlaying = opponents.filter((p) => !opponentFinished[p.id] && !disconnectedPlayers.has(p.id));
+    
     return (
       <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-8 flex items-center justify-center transition-colors duration-300">
-        <div className="max-w-2xl w-full bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 p-12 md:p-16">
+        <div className="max-w-2xl w-full bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 p-8 md:p-12">
           <div className="text-center">
-            <div className="animate-spin w-24 h-24 border-6 border-blue-200 dark:border-blue-800 border-t-blue-600 rounded-full mx-auto mb-8" style={{ borderWidth: '6px' }}></div>
-            <h2 className="text-4xl md:text-5xl font-extrabold text-slate-800 dark:text-white mb-4">Great job!</h2>
-            <p className="text-xl md:text-2xl text-slate-500 dark:text-slate-400 mb-6">
-              Waiting for {opponent.name} to finish...
+            <div className="animate-spin w-20 h-20 border-4 border-blue-200 dark:border-blue-800 border-t-blue-600 rounded-full mx-auto mb-6"></div>
+            <h2 className="text-3xl md:text-4xl font-extrabold text-slate-800 dark:text-white mb-4">Great job!</h2>
+            <p className="text-lg md:text-xl text-slate-500 dark:text-slate-400 mb-6">
+              Waiting for {stillPlaying.length === 1 ? stillPlaying[0].name : 'others'} to finish...
             </p>
-            <div className="bg-slate-100 dark:bg-slate-800 rounded-xl p-4 inline-block">
-              <p className="text-lg text-slate-600 dark:text-slate-400">
-                {opponent.name} is on question <span className="font-bold text-blue-600 dark:text-blue-400">{opponentProgress}</span> of {questions.length}
-              </p>
+            
+            {/* Opponents Progress */}
+            <div className="space-y-3">
+              {opponents.map((opponent) => {
+                const progress = opponentProgress[opponent.id] || 0;
+                const isFinished = opponentFinished[opponent.id];
+                const isDisconnected = disconnectedPlayers.has(opponent.id);
+                const isTeammate = myTeam?.playerIds.includes(opponent.id);
+                
+                return (
+                  <div 
+                    key={opponent.id}
+                    className={`rounded-xl p-4 ${
+                      isTeammate 
+                        ? 'bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800'
+                        : 'bg-slate-100 dark:bg-slate-800'
+                    }`}
+                  >
+                    <div className="flex justify-between items-center mb-2">
+                      <span className={`text-sm font-medium ${
+                        isTeammate ? 'text-blue-600 dark:text-blue-400' : 'text-slate-600 dark:text-slate-400'
+                      }`}>
+                        {opponent.name} {isTeammate && '(Teammate)'}
+                      </span>
+                      <span className="text-sm font-bold text-slate-700 dark:text-slate-300">
+                        {isDisconnected ? '❌ Disconnected' : isFinished ? '✅ Finished!' : `${progress} / ${questions.length}`}
+                      </span>
+                    </div>
+                    <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2">
+                      <div
+                        className={`h-2 rounded-full transition-all duration-300 ${
+                          isDisconnected ? 'bg-red-500' : isFinished ? 'bg-green-500' : isTeammate ? 'bg-blue-500' : 'bg-orange-500'
+                        }`}
+                        style={{ width: `${isFinished ? 100 : (progress / questions.length) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -302,19 +353,19 @@ export const MultiplayerQuizScreen: React.FC<MultiplayerQuizScreenProps> = ({
 
   return (
     <div className="max-w-4xl mx-auto p-6 bg-white dark:bg-slate-900 rounded-3xl shadow-xl border border-slate-200 dark:border-slate-800 relative min-h-[600px]">
-      {/* Opponent Finished Popup - at top to not distract */}
-      {showOpponentFinishedPopup && (
+      {/* Player Finished Popup - at top to not distract */}
+      {showFinishedPopup && (
         <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 pointer-events-none">
           <div className="bg-yellow-500 text-white px-6 py-3 rounded-xl shadow-2xl animate-pop-in">
-            <p className="text-lg font-bold">🏁 {opponent.name} finished!</p>
+            <p className="text-lg font-bold">🏁 {showFinishedPopup} finished!</p>
           </div>
         </div>
       )}
 
-      {/* Opponent Disconnected Banner */}
-      {opponentDisconnected && (
+      {/* Disconnected Players Banner */}
+      {disconnectedPlayers.size > 0 && (
         <div className="absolute top-4 left-4 right-4 bg-red-500 text-white px-4 py-2 rounded-lg text-center font-semibold z-40">
-          {opponent.name} disconnected - You win!
+          {Array.from(disconnectedPlayers).map(id => players.find(p => p.id === id)?.name).filter(Boolean).join(', ')} disconnected
         </div>
       )}
 
@@ -348,23 +399,76 @@ export const MultiplayerQuizScreen: React.FC<MultiplayerQuizScreenProps> = ({
           </div>
         </div>
 
-        {/* Opponent Progress Bar */}
-        <div className="mb-6 bg-slate-100 dark:bg-slate-800 rounded-xl p-3">
-          <div className="flex justify-between items-center mb-2">
-            <span className="text-sm font-medium text-slate-600 dark:text-slate-400">
-              {opponent.name}'s Progress
-            </span>
-            <span className="text-sm font-bold text-slate-700 dark:text-slate-300">
-              {opponentFinished ? "Finished!" : `${opponentProgress} / ${questions.length}`}
-            </span>
-          </div>
-          <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2">
-            <div
-              className={`h-2 rounded-full transition-all duration-300 ${
-                opponentFinished ? "bg-green-500" : "bg-orange-500"
-              }`}
-              style={{ width: `${(opponentProgress / questions.length) * 100}%` }}
-            />
+        {/* Opponents Progress Bars */}
+        <div className="mb-6 space-y-2">
+          {/* Team mode: show teammates first with different color */}
+          {gameMode === 'teams' && myTeammates.length > 0 && (
+            <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-3 border border-blue-200 dark:border-blue-800">
+              <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 mb-2">🔵 Your Team</p>
+              {myTeammates.map((teammate) => {
+                const progress = opponentProgress[teammate.id] || 0;
+                const isFinished = opponentFinished[teammate.id];
+                const isDisconnected = disconnectedPlayers.has(teammate.id);
+                return (
+                  <div key={teammate.id} className="mb-2 last:mb-0">
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="text-sm font-medium text-blue-600 dark:text-blue-400">
+                        {teammate.name}
+                      </span>
+                      <span className="text-sm font-bold text-slate-700 dark:text-slate-300">
+                        {isDisconnected ? '❌' : isFinished ? "✅" : `${progress}/${questions.length}`}
+                      </span>
+                    </div>
+                    <div className="w-full bg-blue-100 dark:bg-blue-800/30 rounded-full h-2">
+                      <div
+                        className={`h-2 rounded-full transition-all duration-300 ${
+                          isDisconnected ? 'bg-red-500' : isFinished ? "bg-green-500" : "bg-blue-500"
+                        }`}
+                        style={{ width: `${isFinished ? 100 : (progress / questions.length) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          
+          {/* Opponents */}
+          <div className={`rounded-xl p-3 ${
+            gameMode === 'teams' 
+              ? 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800' 
+              : 'bg-slate-100 dark:bg-slate-800'
+          }`}>
+            {gameMode === 'teams' && (
+              <p className="text-xs font-semibold text-red-600 dark:text-red-400 mb-2">🔴 Opponents</p>
+            )}
+            {myOpponents.map((opponent) => {
+              const progress = opponentProgress[opponent.id] || 0;
+              const isFinished = opponentFinished[opponent.id];
+              const isDisconnected = disconnectedPlayers.has(opponent.id);
+              return (
+                <div key={opponent.id} className="mb-2 last:mb-0">
+                  <div className="flex justify-between items-center mb-1">
+                    <span className={`text-sm font-medium ${
+                      gameMode === 'teams' ? 'text-red-600 dark:text-red-400' : 'text-slate-600 dark:text-slate-400'
+                    }`}>
+                      {opponent.name}
+                    </span>
+                    <span className="text-sm font-bold text-slate-700 dark:text-slate-300">
+                      {isDisconnected ? '❌' : isFinished ? "✅" : `${progress}/${questions.length}`}
+                    </span>
+                  </div>
+                  <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2">
+                    <div
+                      className={`h-2 rounded-full transition-all duration-300 ${
+                        isDisconnected ? 'bg-red-500' : isFinished ? "bg-green-500" : "bg-orange-500"
+                      }`}
+                      style={{ width: `${isFinished ? 100 : (progress / questions.length) * 100}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
 

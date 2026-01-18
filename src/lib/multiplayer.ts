@@ -1,4 +1,5 @@
 import Pusher from "pusher-js";
+import type { RoomSettings, GameMode, Team, Player } from "../../types";
 
 let pusherClient: Pusher | null = null;
 
@@ -31,7 +32,12 @@ async function multiplayerApi(action: string, data: Record<string, any> = {}, me
   return response.json();
 }
 
-export async function createRoom(playerId: string, playerName: string): Promise<{
+export async function createRoom(
+  playerId: string,
+  playerName: string,
+  maxPlayers: number = 2,
+  gameMode: GameMode = 'ffa'
+): Promise<{
   success: boolean;
   roomId?: string;
   roomCode?: string;
@@ -39,7 +45,12 @@ export async function createRoom(playerId: string, playerName: string): Promise<
   room?: any;
   error?: string;
 }> {
-  return multiplayerApi("create-room", { odId: playerId, odName: playerName });
+  return multiplayerApi("create-room", { 
+    odId: playerId, 
+    odName: playerName,
+    maxPlayers,
+    gameMode,
+  });
 }
 
 export async function joinRoom(roomCode: string, playerId: string, playerName: string): Promise<{
@@ -51,9 +62,15 @@ export async function joinRoom(roomCode: string, playerId: string, playerName: s
   return multiplayerApi("join-room", { roomCode, odId: playerId, odName: playerName });
 }
 
-export async function updateRoomSettings(roomId: string, playerId: string, settings: any): Promise<{
+export async function updateRoomSettings(
+  roomId: string,
+  playerId: string,
+  settings: Partial<RoomSettings>
+): Promise<{
   success: boolean;
-  settings?: any;
+  settings?: RoomSettings;
+  teams?: Team[];
+  players?: Player[];
   error?: string;
 }> {
   return multiplayerApi("update-room-settings", { roomId, odId: playerId, settings });
@@ -66,7 +83,11 @@ export async function startGame(roomId: string, playerId: string): Promise<{
   return multiplayerApi("start-game", { roomId, odId: playerId });
 }
 
-export async function startReadyPhase(roomId: string, playerId: string, settings: any): Promise<{
+export async function startReadyPhase(
+  roomId: string,
+  playerId: string,
+  settings: Partial<RoomSettings>
+): Promise<{
   success: boolean;
   error?: string;
 }> {
@@ -84,7 +105,7 @@ export async function submitMultiplayerAnswers(
   score: number
 ): Promise<{
   success: boolean;
-  bothFinished: boolean;
+  allFinished: boolean;
   finishTime?: number;
   error?: string;
 }> {
@@ -111,20 +132,44 @@ export async function leaveRoom(roomId: string, playerId: string, playerName: st
   await multiplayerApi("leave-room", { roomId, odId: playerId, odName: playerName });
 }
 
-export async function requestRematch(roomId: string, playerId: string, playerName: string): Promise<{
+export async function requestRematch(
+  roomId: string,
+  playerId: string,
+  playerName: string,
+  keepTeams: boolean = false
+): Promise<{
   success: boolean;
   error?: string;
 }> {
-  return multiplayerApi("rematch", { roomId, odId: playerId, odName: playerName, rematchAction: "request" });
+  return multiplayerApi("rematch", { 
+    roomId, 
+    odId: playerId, 
+    odName: playerName, 
+    rematchAction: "request",
+    keepTeams,
+  });
 }
 
-export async function acceptRematch(roomId: string, playerId: string, playerName: string): Promise<{
+export async function acceptRematch(
+  roomId: string,
+  playerId: string,
+  playerName: string,
+  keepTeams: boolean = false
+): Promise<{
   success: boolean;
   newRoomId?: string;
   newRoomCode?: string;
+  teams?: Team[];
+  players?: Player[];
   error?: string;
 }> {
-  return multiplayerApi("rematch", { roomId, odId: playerId, odName: playerName, rematchAction: "accept" });
+  return multiplayerApi("rematch", { 
+    roomId, 
+    odId: playerId, 
+    odName: playerName, 
+    rematchAction: "accept",
+    keepTeams,
+  });
 }
 
 export async function declineRematch(roomId: string, playerId: string, playerName: string): Promise<void> {
@@ -141,6 +186,25 @@ export async function setReady(roomId: string, playerId: string, isReady: boolea
   error?: string;
 }> {
   return multiplayerApi("set-ready", { roomId, odId: playerId, isReady });
+}
+
+export async function assignPlayerToTeam(
+  roomId: string,
+  hostPlayerId: string,
+  targetPlayerId: string,
+  teamId: string
+): Promise<{
+  success: boolean;
+  teams?: Team[];
+  players?: Player[];
+  error?: string;
+}> {
+  return multiplayerApi("assign-team", { 
+    roomId, 
+    odId: hostPlayerId, 
+    targetPlayerId, 
+    teamId,
+  });
 }
 
 // Generate a unique player ID (stored in sessionStorage for per-tab uniqueness)

@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import Pusher, { Channel } from "pusher-js";
-import type { Operation, RoomSettings, Player, Question } from "../../../types";
+import type { Operation, RoomSettings, Player, Question, Team, GameMode } from "../../../types";
 import {
   getPusherClient,
   createRoom,
@@ -14,6 +14,7 @@ import {
   leaveRoom,
   setReady,
   getOrCreatePlayerId,
+  assignPlayerToTeam,
 } from "../../lib/multiplayer";
 import { SunIcon, MoonIcon } from "../ui/icons";
 
@@ -26,7 +27,10 @@ interface MultiplayerLobbyScreenProps {
     odName: string,
     questions: Question[],
     isHost: boolean,
-    opponent: { id: string; name: string }
+    players: Player[],
+    teams: Team[],
+    gameMode: GameMode,
+    timeLimit?: number
   ) => void;
   rematchData?: {
     roomId: string;
@@ -34,6 +38,7 @@ interface MultiplayerLobbyScreenProps {
     isQuickMatch: boolean;
     players: any[];
     settings: any;
+    teams: Team[];
   } | null;
   onRematchConsumed?: () => void;
 }
@@ -90,6 +95,21 @@ export const MultiplayerLobbyScreen: React.FC<MultiplayerLobbyScreenProps> = ({
   const [selectedNumbers, setSelectedNumbers] = useState<number[]>([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
   const [questionCount, setQuestionCount] = useState(10);
   const [timeLimit, setTimeLimit] = useState(0);
+  const [maxPlayers, setMaxPlayers] = useState(2);
+  const [gameMode, setGameMode] = useState<GameMode>("ffa");
+  const [teams, setTeams] = useState<Team[]>([]);
+
+  // Refs for callback values (to avoid Pusher re-subscriptions)
+  const playersRef = useRef(players);
+  const teamsRef = useRef(teams);
+  const gameModeRef = useRef(gameMode);
+  const timeLimitRef = useRef(timeLimit);
+  
+  // Keep refs in sync with state
+  useEffect(() => { playersRef.current = players; }, [players]);
+  useEffect(() => { teamsRef.current = teams; }, [teams]);
+  useEffect(() => { gameModeRef.current = gameMode; }, [gameMode]);
+  useEffect(() => { timeLimitRef.current = timeLimit; }, [timeLimit]);
 
   // Join state
   const [joinCodeInput, setJoinCodeInput] = useState(joinCodeFromUrl || "");
@@ -99,7 +119,7 @@ export const MultiplayerLobbyScreen: React.FC<MultiplayerLobbyScreenProps> = ({
   const [quickMatchOperation, setQuickMatchOperation] = useState<Operation>("multiplication");
   const [isSearching, setIsSearching] = useState(false);
   const [myReady, setMyReady] = useState(false);
-  const [opponentReady, setOpponentReady] = useState(false);
+  const [readyStates, setReadyStates] = useState<Record<string, boolean>>({});
   const [opponentLeft, setOpponentLeft] = useState(false);
   const [showReadyScreen, setShowReadyScreen] = useState(false);
 
@@ -123,6 +143,9 @@ export const MultiplayerLobbyScreen: React.FC<MultiplayerLobbyScreenProps> = ({
       setSelectedNumbers(rematchData.settings.selectedNumbers || [1,2,3,4,5,6,7,8,9,10,11,12]);
       setQuestionCount(rematchData.settings.questionCount || 10);
       setTimeLimit(rematchData.settings.timeLimit || 0);
+      setMaxPlayers(rematchData.settings.maxPlayers || 2);
+      setGameMode(rematchData.settings.gameMode || "ffa");
+      setTeams(rematchData.teams || []);
       setPlayers(rematchData.players.map((p: any) => ({
         ...p,
         isReady: false, // Reset ready status for new game
@@ -131,7 +154,9 @@ export const MultiplayerLobbyScreen: React.FC<MultiplayerLobbyScreenProps> = ({
       const meInPlayers = rematchData.players.find((p: any) => p.id === playerId);
       setIsHost(meInPlayers?.isHost || false);
       setMyReady(false);
-      setOpponentReady(false);
+      setReadyStates({});
+      // Show ready screen for rematch
+      setShowReadyScreen(true);
       // Clear the rematch data so it doesn't re-trigger
       if (onRematchConsumed) {
         onRematchConsumed();
@@ -173,9 +198,7 @@ export const MultiplayerLobbyScreen: React.FC<MultiplayerLobbyScreenProps> = ({
 
     roomChannel.bind("player-ready", (data: { odId: string; isReady: boolean }) => {
       console.log('[Lobby] player-ready event:', data);
-      if (data.odId !== playerId) {
-        setOpponentReady(data.isReady);
-      }
+      setReadyStates((prev) => ({ ...prev, [data.odId]: data.isReady }));
       setPlayers((prev) =>
         prev.map((p) => (p.id === data.odId ? { ...p, isReady: data.isReady } : p))
       );
@@ -187,24 +210,50 @@ export const MultiplayerLobbyScreen: React.FC<MultiplayerLobbyScreenProps> = ({
       setSelectedNumbers(data.settings.selectedNumbers);
       setQuestionCount(data.settings.questionCount);
       setTimeLimit(data.settings.timeLimit);
+      setMaxPlayers(data.settings.maxPlayers || 2);
+      setGameMode(data.settings.gameMode || "ffa");
     });
 
-    roomChannel.bind("ready-phase", () => {
+    roomChannel.bind("teams-updated", (data: { teams: Team[]; players: Player[] }) => {
+      console.log('[Lobby] teams-updated event:', data);
+      setTeams(data.teams);
+      setPlayers(data.players);
+    });
+
+    roomChannel.bind("ready-phase", (data: { settings?: RoomSettings }) => {
       console.log('[Lobby] ready-phase event received');
       setShowReadyScreen(true);
       setMyReady(false);
-      setOpponentReady(false);
+      setReadyStates({});
+      if (data.settings) {
+        setMaxPlayers(data.settings.maxPlayers || 2);
+        setGameMode(data.settings.gameMode || "ffa");
+      }
     });
 
-    roomChannel.bind("game-starting", (data: { questions: Question[] }) => {
+    roomChannel.bind("game-starting", (data: { questions: Question[]; teams?: Team[]; players?: Player[] }) => {
       console.log('[Lobby] game-starting event:', data);
-      const opponent = players.find((p) => p.id !== playerId);
-      if (opponent) {
-        onGameStart(roomId, playerId, playerName, data.questions, isHost, {
-          id: opponent.id,
-          name: opponent.name,
-        });
+      if (data.teams) {
+        setTeams(data.teams);
       }
+      if (data.players) {
+        setPlayers(data.players);
+      }
+      // Get all players and teams from the event data, using refs for current values
+      const currentPlayers: Player[] = data.players || playersRef.current;
+      const eventTeams: Team[] = data.teams || teamsRef.current;
+      
+      onGameStart(
+        roomId, 
+        playerId, 
+        playerName, 
+        data.questions, 
+        isHost, 
+        currentPlayers,
+        eventTeams,
+        gameModeRef.current,
+        timeLimitRef.current
+      );
     });
 
     roomChannel.bind("player-disconnected", (data: { odId: string }) => {
@@ -218,7 +267,7 @@ export const MultiplayerLobbyScreen: React.FC<MultiplayerLobbyScreenProps> = ({
       pusher.unsubscribe(`room-${roomId}`);
       setChannel(null);
     };
-  }, [roomId, playerId, playerName, isHost, onGameStart, players]);
+  }, [roomId, playerId, playerName, isHost, onGameStart]);
 
   // Quick match channel subscription
   useEffect(() => {
@@ -300,6 +349,11 @@ export const MultiplayerLobbyScreen: React.FC<MultiplayerLobbyScreenProps> = ({
         setSelectedNumbers(result.room.settings.selectedNumbers);
         setQuestionCount(result.room.settings.questionCount);
         setTimeLimit(result.room.settings.timeLimit);
+        setMaxPlayers(result.room.settings.maxPlayers || 2);
+        setGameMode(result.room.settings.gameMode || "ffa");
+        if (result.room.teams) {
+          setTeams(result.room.teams);
+        }
       } else {
         setJoinError(result.error || "Failed to join room");
       }
@@ -314,7 +368,7 @@ export const MultiplayerLobbyScreen: React.FC<MultiplayerLobbyScreenProps> = ({
   const handleStartGame = async () => {
     if (!roomId) return;
     if (players.length < 2) {
-      alert("Need 2 players to start");
+      alert("Need at least 2 players to start");
       return;
     }
 
@@ -326,6 +380,8 @@ export const MultiplayerLobbyScreen: React.FC<MultiplayerLobbyScreenProps> = ({
         selectedNumbers,
         questionCount,
         timeLimit,
+        maxPlayers,
+        gameMode,
       });
       if (!result.success) {
         alert(result.error || "Failed to start ready phase");
@@ -405,10 +461,19 @@ export const MultiplayerLobbyScreen: React.FC<MultiplayerLobbyScreenProps> = ({
         selectedNumbers: newSettings.selectedNumbers ?? selectedNumbers,
         questionCount: newSettings.questionCount ?? questionCount,
         timeLimit: newSettings.timeLimit ?? timeLimit,
+        maxPlayers: newSettings.maxPlayers ?? maxPlayers,
+        gameMode: newSettings.gameMode ?? gameMode,
       };
-      await updateRoomSettings(roomId, playerId, merged);
+      const result = await updateRoomSettings(roomId, playerId, merged);
+      // Update teams from response if switching to/from team mode
+      if (result.teams) {
+        setTeams(result.teams);
+      }
+      if (result.players) {
+        setPlayers(result.players);
+      }
     },
-    [roomId, isHost, playerId, operation, selectedNumbers, questionCount, timeLimit]
+    [roomId, isHost, playerId, operation, selectedNumbers, questionCount, timeLimit, maxPlayers, gameMode]
   );
 
   const toggleNumber = (num: number) => {
@@ -444,7 +509,8 @@ export const MultiplayerLobbyScreen: React.FC<MultiplayerLobbyScreenProps> = ({
 
   // QUICK MATCH READY SCREEN
   if (inRoom && isQuickMatchRoom) {
-    const opponent = players.find((p) => p.id !== playerId);
+    const opponents = players.filter((p) => p.id !== playerId);
+    const allOthersReady = opponents.every((p) => readyStates[p.id]);
     
     return (
       <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-8 transition-colors duration-300">
@@ -461,7 +527,7 @@ export const MultiplayerLobbyScreen: React.FC<MultiplayerLobbyScreenProps> = ({
                 setRoomId(null);
                 setPlayers([]);
                 setMyReady(false);
-                setOpponentReady(false);
+                setReadyStates({});
                 setOpponentLeft(false);
               }}
               className="text-blue-600 dark:text-blue-400 hover:underline font-semibold"
@@ -499,7 +565,7 @@ export const MultiplayerLobbyScreen: React.FC<MultiplayerLobbyScreenProps> = ({
                       setRoomId(null);
                       setPlayers([]);
                       setMyReady(false);
-                      setOpponentReady(false);
+                      setReadyStates({});
                       setOpponentLeft(false);
                       // Immediately start searching again
                       handleQuickMatch();
@@ -514,7 +580,7 @@ export const MultiplayerLobbyScreen: React.FC<MultiplayerLobbyScreenProps> = ({
                       setRoomId(null);
                       setPlayers([]);
                       setMyReady(false);
-                      setOpponentReady(false);
+                      setReadyStates({});
                       setOpponentLeft(false);
                     }}
                     className="w-full py-3 rounded-xl text-lg font-semibold bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors"
@@ -533,38 +599,43 @@ export const MultiplayerLobbyScreen: React.FC<MultiplayerLobbyScreenProps> = ({
                 </p>
 
                 {/* Players Ready Status */}
-                <div className="grid grid-cols-2 gap-6 mb-8">
+                <div className={`grid gap-4 mb-8 ${players.length <= 2 ? 'grid-cols-2' : 'grid-cols-2'}`}>
                   {/* You */}
-                  <div className={`p-6 rounded-2xl border-2 text-center transition-all ${
+                  <div className={`p-4 rounded-2xl border-2 text-center transition-all ${
                     myReady 
                       ? "bg-green-50 dark:bg-green-900/20 border-green-400 dark:border-green-600" 
                       : "bg-slate-50 dark:bg-slate-800 border-slate-300 dark:border-slate-600"
                   }`}>
-                    <div className="text-4xl mb-3">{myReady ? "✅" : "⏳"}</div>
-                    <h3 className="font-bold text-lg text-slate-800 dark:text-white mb-1">
+                    <div className="text-3xl mb-2">{myReady ? "✅" : "⏳"}</div>
+                    <h3 className="font-bold text-slate-800 dark:text-white mb-1 truncate">
                       {playerName}
                     </h3>
-                    <p className="text-sm text-slate-500 dark:text-slate-400">You</p>
-                    <p className={`text-sm font-semibold mt-2 ${myReady ? "text-green-600 dark:text-green-400" : "text-slate-400"}`}>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">You</p>
+                    <p className={`text-xs font-semibold mt-1 ${myReady ? "text-green-600 dark:text-green-400" : "text-slate-400"}`}>
                       {myReady ? "READY" : "Not Ready"}
                     </p>
                   </div>
 
-                  {/* Opponent */}
-                  <div className={`p-6 rounded-2xl border-2 text-center transition-all ${
-                    opponentReady 
-                      ? "bg-green-50 dark:bg-green-900/20 border-green-400 dark:border-green-600" 
-                      : "bg-slate-50 dark:bg-slate-800 border-slate-300 dark:border-slate-600"
-                  }`}>
-                    <div className="text-4xl mb-3">{opponentReady ? "✅" : "⏳"}</div>
-                    <h3 className="font-bold text-lg text-slate-800 dark:text-white mb-1">
-                      {opponent?.name || "Opponent"}
-                    </h3>
-                    <p className="text-sm text-slate-500 dark:text-slate-400">Opponent</p>
-                    <p className={`text-sm font-semibold mt-2 ${opponentReady ? "text-green-600 dark:text-green-400" : "text-slate-400"}`}>
-                      {opponentReady ? "READY" : "Not Ready"}
-                    </p>
-                  </div>
+                  {/* Other Players */}
+                  {opponents.map((opponent) => (
+                    <div
+                      key={opponent.id}
+                      className={`p-4 rounded-2xl border-2 text-center transition-all ${
+                        readyStates[opponent.id]
+                          ? "bg-green-50 dark:bg-green-900/20 border-green-400 dark:border-green-600" 
+                          : "bg-slate-50 dark:bg-slate-800 border-slate-300 dark:border-slate-600"
+                      }`}
+                    >
+                      <div className="text-3xl mb-2">{readyStates[opponent.id] ? "✅" : "⏳"}</div>
+                      <h3 className="font-bold text-slate-800 dark:text-white mb-1 truncate">
+                        {opponent.name}
+                      </h3>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">Opponent</p>
+                      <p className={`text-xs font-semibold mt-1 ${readyStates[opponent.id] ? "text-green-600 dark:text-green-400" : "text-slate-400"}`}>
+                        {readyStates[opponent.id] ? "READY" : "Not Ready"}
+                      </p>
+                    </div>
+                  ))}
                 </div>
 
                 {/* Ready Button */}
@@ -579,12 +650,12 @@ export const MultiplayerLobbyScreen: React.FC<MultiplayerLobbyScreenProps> = ({
                   {myReady ? "Cancel Ready" : "I'm Ready!"}
                 </button>
 
-                {myReady && !opponentReady && (
+                {myReady && !allOthersReady && (
                   <p className="text-center text-slate-500 dark:text-slate-400 mt-4 animate-pulse">
-                    Waiting for opponent to be ready...
+                    Waiting for others to be ready...
                   </p>
                 )}
-                {myReady && opponentReady && (
+                {myReady && allOthersReady && (
                   <p className="text-center text-green-600 dark:text-green-400 mt-4 font-semibold animate-pulse">
                     Starting game...
                   </p>
@@ -599,7 +670,18 @@ export const MultiplayerLobbyScreen: React.FC<MultiplayerLobbyScreenProps> = ({
 
   // PRIVATE ROOM READY SCREEN (after host clicks Start Game)
   if (inRoom && !isQuickMatchRoom && showReadyScreen) {
-    const opponent = players.find((p) => p.id !== playerId);
+    const opponents = players.filter((p) => p.id !== playerId);
+    const allOthersReady = opponents.every((p) => readyStates[p.id]);
+    const myPlayer = players.find((p) => p.id === playerId);
+    const myTeam = teams.find((t) => t.playerIds.includes(playerId));
+    
+    // Group players by team for team mode display
+    const teamAPlayers = gameMode === 'teams' 
+      ? players.filter((p) => teams[0]?.playerIds.includes(p.id))
+      : [];
+    const teamBPlayers = gameMode === 'teams'
+      ? players.filter((p) => teams[1]?.playerIds.includes(p.id))
+      : [];
     
     return (
       <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-8 transition-colors duration-300">
@@ -616,7 +698,7 @@ export const MultiplayerLobbyScreen: React.FC<MultiplayerLobbyScreenProps> = ({
                 setPlayers([]);
                 setShowReadyScreen(false);
                 setMyReady(false);
-                setOpponentReady(false);
+                setReadyStates({});
               }}
               className="text-blue-600 dark:text-blue-400 hover:underline font-semibold"
             >
@@ -636,44 +718,118 @@ export const MultiplayerLobbyScreen: React.FC<MultiplayerLobbyScreenProps> = ({
             <h1 className="text-2xl md:text-3xl font-bold text-center text-slate-800 dark:text-white mb-2">
               Get Ready!
             </h1>
-            <p className="text-center text-slate-500 dark:text-slate-400 mb-6">
+            <p className="text-center text-slate-500 dark:text-slate-400 mb-2">
               {operationLabels[operation]} • {questionCount} Questions • {timeLimit > 0 ? `${timeLimit}s` : 'No Time Limit'}
             </p>
+            {gameMode === 'teams' && (
+              <p className="text-center text-purple-600 dark:text-purple-400 text-sm font-semibold mb-4">
+                🏆 Team Mode
+              </p>
+            )}
 
-            {/* Players Ready Status */}
-            <div className="grid grid-cols-2 gap-6 mb-8">
-              {/* You */}
-              <div className={`p-6 rounded-2xl border-2 text-center transition-all ${
-                myReady 
-                  ? "bg-green-50 dark:bg-green-900/20 border-green-400 dark:border-green-600" 
-                  : "bg-slate-50 dark:bg-slate-800 border-slate-300 dark:border-slate-600"
-              }`}>
-                <div className="text-4xl mb-3">{myReady ? "✅" : "⏳"}</div>
-                <h3 className="font-bold text-lg text-slate-800 dark:text-white mb-1">
-                  {playerName}
-                </h3>
-                <p className="text-sm text-slate-500 dark:text-slate-400">You</p>
-                <p className={`text-sm font-semibold mt-2 ${myReady ? "text-green-600 dark:text-green-400" : "text-slate-400"}`}>
-                  {myReady ? "READY" : "Not Ready"}
-                </p>
-              </div>
+            {/* Team Mode Display */}
+            {gameMode === 'teams' ? (
+              <div className="space-y-6 mb-8">
+                {/* Team A */}
+                <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4 border-2 border-blue-300 dark:border-blue-700">
+                  <h3 className="text-lg font-bold text-blue-600 dark:text-blue-400 mb-3 flex items-center gap-2">
+                    🔵 Team A
+                  </h3>
+                  <div className="grid grid-cols-2 gap-3">
+                    {teamAPlayers.map((player) => {
+                      const isMe = player.id === playerId;
+                      const isReady = isMe ? myReady : readyStates[player.id];
+                      return (
+                        <div
+                          key={player.id}
+                          className={`p-3 rounded-xl border-2 text-center transition-all ${
+                            isReady
+                              ? "bg-green-50 dark:bg-green-900/30 border-green-400 dark:border-green-600"
+                              : "bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600"
+                          }`}
+                        >
+                          <div className="text-2xl mb-1">{isReady ? "✅" : "⏳"}</div>
+                          <h4 className="font-bold text-slate-800 dark:text-white text-sm truncate">
+                            {player.name}
+                          </h4>
+                          {isMe && <p className="text-xs text-slate-500 dark:text-slate-400">You</p>}
+                          <p className={`text-xs font-semibold mt-1 ${isReady ? "text-green-600 dark:text-green-400" : "text-slate-400"}`}>
+                            {isReady ? "READY" : "Not Ready"}
+                          </p>
+                        </div>
+                      );
+                    })}
+                    {teamAPlayers.length === 0 && (
+                      <p className="text-slate-400 text-sm col-span-2 text-center py-2">No players</p>
+                    )}
+                  </div>
+                </div>
 
-              {/* Opponent */}
-              <div className={`p-6 rounded-2xl border-2 text-center transition-all ${
-                opponentReady 
-                  ? "bg-green-50 dark:bg-green-900/20 border-green-400 dark:border-green-600" 
-                  : "bg-slate-50 dark:bg-slate-800 border-slate-300 dark:border-slate-600"
-              }`}>
-                <div className="text-4xl mb-3">{opponentReady ? "✅" : "⏳"}</div>
-                <h3 className="font-bold text-lg text-slate-800 dark:text-white mb-1">
-                  {opponent?.name || "Opponent"}
-                </h3>
-                <p className="text-sm text-slate-500 dark:text-slate-400">Opponent</p>
-                <p className={`text-sm font-semibold mt-2 ${opponentReady ? "text-green-600 dark:text-green-400" : "text-slate-400"}`}>
-                  {opponentReady ? "READY" : "Not Ready"}
-                </p>
+                {/* Team B */}
+                <div className="bg-red-50 dark:bg-red-900/20 rounded-xl p-4 border-2 border-red-300 dark:border-red-700">
+                  <h3 className="text-lg font-bold text-red-600 dark:text-red-400 mb-3 flex items-center gap-2">
+                    🔴 Team B
+                  </h3>
+                  <div className="grid grid-cols-2 gap-3">
+                    {teamBPlayers.map((player) => {
+                      const isMe = player.id === playerId;
+                      const isReady = isMe ? myReady : readyStates[player.id];
+                      return (
+                        <div
+                          key={player.id}
+                          className={`p-3 rounded-xl border-2 text-center transition-all ${
+                            isReady
+                              ? "bg-green-50 dark:bg-green-900/30 border-green-400 dark:border-green-600"
+                              : "bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600"
+                          }`}
+                        >
+                          <div className="text-2xl mb-1">{isReady ? "✅" : "⏳"}</div>
+                          <h4 className="font-bold text-slate-800 dark:text-white text-sm truncate">
+                            {player.name}
+                          </h4>
+                          {isMe && <p className="text-xs text-slate-500 dark:text-slate-400">You</p>}
+                          <p className={`text-xs font-semibold mt-1 ${isReady ? "text-green-600 dark:text-green-400" : "text-slate-400"}`}>
+                            {isReady ? "READY" : "Not Ready"}
+                          </p>
+                        </div>
+                      );
+                    })}
+                    {teamBPlayers.length === 0 && (
+                      <p className="text-slate-400 text-sm col-span-2 text-center py-2">No players</p>
+                    )}
+                  </div>
+                </div>
               </div>
-            </div>
+            ) : (
+              /* FFA Mode Display */
+              <div className={`grid gap-4 mb-8 ${players.length <= 2 ? 'grid-cols-2' : 'grid-cols-2'}`}>
+                {players.map((player) => {
+                  const isMe = player.id === playerId;
+                  const isReady = isMe ? myReady : readyStates[player.id];
+                  return (
+                    <div
+                      key={player.id}
+                      className={`p-4 rounded-2xl border-2 text-center transition-all ${
+                        isReady
+                          ? "bg-green-50 dark:bg-green-900/20 border-green-400 dark:border-green-600"
+                          : "bg-slate-50 dark:bg-slate-800 border-slate-300 dark:border-slate-600"
+                      }`}
+                    >
+                      <div className="text-3xl mb-2">{isReady ? "✅" : "⏳"}</div>
+                      <h3 className="font-bold text-slate-800 dark:text-white mb-1 truncate">
+                        {player.name}
+                      </h3>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        {isMe ? "You" : "Opponent"}
+                      </p>
+                      <p className={`text-xs font-semibold mt-1 ${isReady ? "text-green-600 dark:text-green-400" : "text-slate-400"}`}>
+                        {isReady ? "READY" : "Not Ready"}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
 
             {/* Ready Button */}
             <button
@@ -687,12 +843,12 @@ export const MultiplayerLobbyScreen: React.FC<MultiplayerLobbyScreenProps> = ({
               {myReady ? "Cancel Ready" : "I'm Ready!"}
             </button>
 
-            {myReady && !opponentReady && (
+            {myReady && !allOthersReady && (
               <p className="text-center text-slate-500 dark:text-slate-400 mt-4 animate-pulse">
-                Waiting for opponent to be ready...
+                Waiting for others to be ready...
               </p>
             )}
-            {myReady && opponentReady && (
+            {myReady && allOthersReady && (
               <p className="text-center text-green-600 dark:text-green-400 mt-4 font-semibold animate-pulse">
                 Starting game...
               </p>
@@ -705,8 +861,17 @@ export const MultiplayerLobbyScreen: React.FC<MultiplayerLobbyScreenProps> = ({
 
   // PRIVATE ROOM SCREEN (with host controls)
   if (inRoom && !isQuickMatchRoom) {
-    const opponent = players.find((p) => p.id !== playerId);
     const availableNumbers = getNumbersForOperation(operation);
+    const minPlayers = 2;
+    const hasEnoughPlayers = players.length >= minPlayers;
+    
+    // For team mode display
+    const teamAPlayers = gameMode === 'teams'
+      ? players.filter((p) => teams[0]?.playerIds.includes(p.id))
+      : [];
+    const teamBPlayers = gameMode === 'teams'
+      ? players.filter((p) => teams[1]?.playerIds.includes(p.id))
+      : [];
 
     return (
       <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-8 transition-colors duration-300">
@@ -772,44 +937,244 @@ export const MultiplayerLobbyScreen: React.FC<MultiplayerLobbyScreenProps> = ({
 
             {/* Players */}
             <div className="mb-6">
-              <h2 className="text-lg font-semibold text-slate-700 dark:text-slate-200 mb-3">Players</h2>
-              <div className="grid grid-cols-2 gap-4">
-                {players.map((player) => (
-                  <div
-                    key={player.id}
-                    className={`p-4 rounded-xl border-2 ${
-                      player.id === playerId
-                        ? "bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700"
-                        : "bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700"
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <div
-                        className={`w-3 h-3 rounded-full ${
-                          player.connected ? "bg-green-500" : "bg-red-500"
-                        }`}
-                      />
-                      <span className="font-semibold text-slate-800 dark:text-white">
-                        {player.name}
-                        {player.id === playerId && " (You)"}
+              <h2 className="text-lg font-semibold text-slate-700 dark:text-slate-200 mb-3">
+                Players ({players.length}/{maxPlayers})
+              </h2>
+              
+              {/* Team Mode Display */}
+              {gameMode === 'teams' && players.length > 1 ? (
+                <div className="space-y-4">
+                  {/* Team A */}
+                  <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4 border-2 border-blue-300 dark:border-blue-700">
+                    <h3 className="text-md font-bold text-blue-600 dark:text-blue-400 mb-3 flex items-center gap-2">
+                      🔵 Team A
+                    </h3>
+                    <div className="grid grid-cols-2 gap-3">
+                      {teamAPlayers.map((player) => (
+                        <div
+                          key={player.id}
+                          className={`p-3 rounded-xl border-2 ${
+                            player.id === playerId
+                              ? "bg-blue-100 dark:bg-blue-800/30 border-blue-400 dark:border-blue-600"
+                              : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <div
+                              className={`w-3 h-3 rounded-full ${
+                                player.connected ? "bg-green-500" : "bg-red-500"
+                              }`}
+                            />
+                            <span className="font-semibold text-slate-800 dark:text-white text-sm truncate">
+                              {player.name}
+                              {player.id === playerId && " (You)"}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center mt-1">
+                            {player.isHost && (
+                              <span className="text-xs text-blue-600 dark:text-blue-400 font-medium">Host</span>
+                            )}
+                            {isHost && player.id !== playerId && (
+                              <button
+                                onClick={() => {
+                                  if (roomId && teams[1]) {
+                                    assignPlayerToTeam(roomId, playerId, player.id, teams[1].id);
+                                  }
+                                }}
+                                className="text-xs text-red-600 dark:text-red-400 hover:underline ml-auto"
+                              >
+                                → Team B
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                      {teamAPlayers.length === 0 && (
+                        <p className="text-slate-400 text-sm col-span-2 text-center py-2">No players</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Team B */}
+                  <div className="bg-red-50 dark:bg-red-900/20 rounded-xl p-4 border-2 border-red-300 dark:border-red-700">
+                    <h3 className="text-md font-bold text-red-600 dark:text-red-400 mb-3 flex items-center gap-2">
+                      🔴 Team B
+                    </h3>
+                    <div className="grid grid-cols-2 gap-3">
+                      {teamBPlayers.map((player) => (
+                        <div
+                          key={player.id}
+                          className={`p-3 rounded-xl border-2 ${
+                            player.id === playerId
+                              ? "bg-red-100 dark:bg-red-800/30 border-red-400 dark:border-red-600"
+                              : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <div
+                              className={`w-3 h-3 rounded-full ${
+                                player.connected ? "bg-green-500" : "bg-red-500"
+                              }`}
+                            />
+                            <span className="font-semibold text-slate-800 dark:text-white text-sm truncate">
+                              {player.name}
+                              {player.id === playerId && " (You)"}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center mt-1">
+                            {player.isHost && (
+                              <span className="text-xs text-blue-600 dark:text-blue-400 font-medium">Host</span>
+                            )}
+                            {isHost && player.id !== playerId && (
+                              <button
+                                onClick={() => {
+                                  if (roomId && teams[0]) {
+                                    assignPlayerToTeam(roomId, playerId, player.id, teams[0].id);
+                                  }
+                                }}
+                                className="text-xs text-blue-600 dark:text-blue-400 hover:underline ml-auto"
+                              >
+                                → Team A
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                      {teamBPlayers.length === 0 && (
+                        <p className="text-slate-400 text-sm col-span-2 text-center py-2">No players</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                /* FFA Mode or waiting for players */
+                <div className="grid grid-cols-2 gap-4">
+                  {players.map((player) => (
+                    <div
+                      key={player.id}
+                      className={`p-4 rounded-xl border-2 ${
+                        player.id === playerId
+                          ? "bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700"
+                          : "bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <div
+                          className={`w-3 h-3 rounded-full ${
+                            player.connected ? "bg-green-500" : "bg-red-500"
+                          }`}
+                        />
+                        <span className="font-semibold text-slate-800 dark:text-white">
+                          {player.name}
+                          {player.id === playerId && " (You)"}
+                        </span>
+                      </div>
+                      {player.isHost && (
+                        <span className="text-xs text-blue-600 dark:text-blue-400 font-medium">Host</span>
+                      )}
+                    </div>
+                  ))}
+                  {/* Empty slots */}
+                  {Array.from({ length: maxPlayers - players.length }).map((_, i) => (
+                    <div
+                      key={`empty-${i}`}
+                      className="p-4 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-600 flex items-center justify-center"
+                    >
+                      <span className="text-slate-400 dark:text-slate-500">
+                        Waiting for players...
                       </span>
                     </div>
-                    {player.isHost && (
-                      <span className="text-xs text-blue-600 dark:text-blue-400 font-medium">Host</span>
-                    )}
-                  </div>
-                ))}
-                {players.length < 2 && (
-                  <div className="p-4 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-600 flex items-center justify-center">
-                    <span className="text-slate-400 dark:text-slate-500">Waiting for opponent...</span>
-                  </div>
-                )}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Game Settings (only host can edit) */}
             <div className="border-t border-slate-200 dark:border-slate-700 pt-6">
               <h2 className="text-lg font-semibold text-slate-700 dark:text-slate-200 mb-4">Game Settings</h2>
+
+              {/* Max Players */}
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-2">
+                  Max Players
+                </label>
+                <div className="flex gap-2">
+                  {[2, 3, 4].map((num) => (
+                    <button
+                      key={num}
+                      onClick={() => {
+                        if (!isHost) return;
+                        setMaxPlayers(num as 2 | 3 | 4);
+                        // If reducing max players below current count, don't allow
+                        if (num < players.length) return;
+                        // If going below 4 players, disable team mode
+                        const newGameMode = num < 4 ? 'ffa' : gameMode;
+                        if (newGameMode !== gameMode) {
+                          setGameMode(newGameMode);
+                        }
+                        handleSettingsChange({ maxPlayers: num as 2 | 3 | 4, gameMode: newGameMode });
+                      }}
+                      disabled={!isHost || num < players.length}
+                      className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                        maxPlayers === num
+                          ? "bg-blue-600 text-white"
+                          : !isHost || num < players.length
+                          ? "bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 cursor-not-allowed"
+                          : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
+                      }`}
+                    >
+                      {num} Players
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Game Mode */}
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-2">
+                  Game Mode
+                </label>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      if (!isHost) return;
+                      setGameMode('ffa');
+                      handleSettingsChange({ gameMode: 'ffa' });
+                    }}
+                    disabled={!isHost}
+                    className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                      gameMode === 'ffa'
+                        ? "bg-blue-600 text-white"
+                        : isHost
+                        ? "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
+                        : "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-500 cursor-not-allowed"
+                    }`}
+                  >
+                    Free For All
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (!isHost || maxPlayers < 4) return;
+                      setGameMode('teams');
+                      handleSettingsChange({ gameMode: 'teams' });
+                    }}
+                    disabled={!isHost || maxPlayers < 4}
+                    className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                      gameMode === 'teams'
+                        ? "bg-purple-600 text-white"
+                        : !isHost || maxPlayers < 4
+                        ? "bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 cursor-not-allowed"
+                        : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
+                    }`}
+                    title={maxPlayers < 4 ? "Teams require 4 players" : ""}
+                  >
+                    Teams (2v2)
+                  </button>
+                </div>
+                {maxPlayers < 4 && (
+                  <p className="text-xs text-slate-400 mt-1">Teams mode requires 4 players</p>
+                )}
+              </div>
 
               {/* Operation */}
               <div className="mb-4">
@@ -941,17 +1306,28 @@ export const MultiplayerLobbyScreen: React.FC<MultiplayerLobbyScreenProps> = ({
 
               {/* Start Button */}
               {isHost && (
-                <button
-                  onClick={handleStartGame}
-                  disabled={players.length < 2 || isStarting}
-                  className={`w-full py-4 rounded-xl text-xl font-bold transition-colors ${
-                    players.length < 2 || isStarting
-                      ? "bg-slate-300 dark:bg-slate-700 text-slate-500 dark:text-slate-400 cursor-not-allowed"
-                      : "bg-green-600 text-white hover:bg-green-700"
-                  }`}
-                >
-                  {isStarting ? "Starting..." : players.length < 2 ? "Waiting for Opponent..." : "Start Game"}
-                </button>
+                <>
+                  <button
+                    onClick={handleStartGame}
+                    disabled={!hasEnoughPlayers || isStarting}
+                    className={`w-full py-4 rounded-xl text-xl font-bold transition-colors ${
+                      !hasEnoughPlayers || isStarting
+                        ? "bg-slate-300 dark:bg-slate-700 text-slate-500 dark:text-slate-400 cursor-not-allowed"
+                        : "bg-green-600 text-white hover:bg-green-700"
+                    }`}
+                  >
+                    {isStarting 
+                      ? "Starting..." 
+                      : !hasEnoughPlayers 
+                        ? "Waiting for Players..." 
+                        : `Start Game (${players.length} Players)`}
+                  </button>
+                  {players.length < maxPlayers && players.length >= minPlayers && (
+                    <p className="text-center text-slate-500 dark:text-slate-400 text-sm mt-2">
+                      You can start now or wait for more players ({players.length}/{maxPlayers})
+                    </p>
+                  )}
+                </>
               )}
               {!isHost && (
                 <div className="text-center py-4 text-slate-500 dark:text-slate-400">

@@ -1,4 +1,4 @@
-import { Room, Player, RoomSettings, Question, PlayerGameState } from "../../types.js";
+import { Room, Player, RoomSettings, Question, PlayerGameState, Team } from "../../types.js";
 import { generateRoomCode, generatePlayerId } from "./pusher.js";
 
 // In-memory room storage (for production, use Supabase)
@@ -41,11 +41,14 @@ export function createRoom(hostId: string, hostName: string, isQuickMatch: boole
       isReady: false,
       connected: true,
     }],
+    teams: [],
     settings: {
       operation: "multiplication",
       selectedNumbers: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
       questionCount: 10,
       timeLimit: 0,
+      maxPlayers: 2,
+      gameMode: "ffa",
     },
     questions: [],
     gameState: "waiting",
@@ -81,7 +84,8 @@ export function joinRoom(code: string, odId: string, odName: string): { success:
     return { success: false, error: "Game already in progress" };
   }
   
-  if (room.players.length >= 2) {
+  const maxPlayers = room.settings.maxPlayers || 2;
+  if (room.players.length >= maxPlayers) {
     return { success: false, error: "Room is full" };
   }
   
@@ -128,9 +132,15 @@ export function updateRoom(room: Room): void {
 
 export function startGame(roomId: string, questions: Question[]): Room | undefined {
   const room = rooms.get(roomId);
-  if (room && room.players.length === 2) {
+  if (room && room.players.length >= 2) {
     room.questions = questions;
     room.gameState = "countdown";
+    
+    // Assign teams if in team mode and teams aren't already assigned
+    if (room.settings.gameMode === "teams" && room.teams.length === 0) {
+      assignRandomTeams(room);
+    }
+    
     room.playerStates = room.players.map(p => ({
       odId: p.id,
       odName: p.name,
@@ -142,6 +152,76 @@ export function startGame(roomId: string, questions: Question[]): Room | undefin
     }));
   }
   return room;
+}
+
+// Randomly assign players to Team A and Team B
+export function assignRandomTeams(room: Room): void {
+  const playerIds = room.players.map(p => p.id);
+  
+  // Shuffle players randomly
+  for (let i = playerIds.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [playerIds[i], playerIds[j]] = [playerIds[j], playerIds[i]];
+  }
+  
+  // Split into two teams
+  const halfPoint = Math.ceil(playerIds.length / 2);
+  const teamAPlayerIds = playerIds.slice(0, halfPoint);
+  const teamBPlayerIds = playerIds.slice(halfPoint);
+  
+  room.teams = [
+    { id: 'team-a', name: 'Team A', playerIds: teamAPlayerIds },
+    { id: 'team-b', name: 'Team B', playerIds: teamBPlayerIds },
+  ];
+  
+  // Update player teamId references
+  for (const player of room.players) {
+    if (teamAPlayerIds.includes(player.id)) {
+      player.teamId = 'team-a';
+    } else {
+      player.teamId = 'team-b';
+    }
+  }
+}
+
+// Allow host to manually reassign a player to a different team
+export function assignPlayerToTeam(roomId: string, playerId: string, teamId: string): Room | undefined {
+  const room = rooms.get(roomId);
+  if (!room || room.settings.gameMode !== "teams") {
+    return room;
+  }
+  
+  // Initialize teams if not already done
+  if (room.teams.length === 0) {
+    room.teams = [
+      { id: 'team-a', name: 'Team A', playerIds: [] },
+      { id: 'team-b', name: 'Team B', playerIds: [] },
+    ];
+  }
+  
+  // Remove player from current team
+  for (const team of room.teams) {
+    team.playerIds = team.playerIds.filter(id => id !== playerId);
+  }
+  
+  // Add player to new team
+  const targetTeam = room.teams.find(t => t.id === teamId);
+  if (targetTeam) {
+    targetTeam.playerIds.push(playerId);
+  }
+  
+  // Update player's teamId
+  const player = room.players.find(p => p.id === playerId);
+  if (player) {
+    player.teamId = teamId;
+  }
+  
+  return room;
+}
+
+// Re-randomize teams for rematch
+export function reshuffleTeams(room: Room): void {
+  assignRandomTeams(room);
 }
 
 export function setGamePlaying(roomId: string): Room | undefined {
@@ -169,10 +249,10 @@ export function submitPlayerAnswers(
   odId: string,
   answers: string[],
   score: number
-): { room?: Room; bothFinished: boolean } {
+): { room?: Room; allFinished: boolean } {
   const room = rooms.get(roomId);
   if (!room) {
-    return { bothFinished: false };
+    return { allFinished: false };
   }
 
   const playerState = room.playerStates.find(p => p.odId === odId);
@@ -183,12 +263,12 @@ export function submitPlayerAnswers(
     playerState.score = score;
   }
 
-  const bothFinished = room.playerStates.every(p => p.finished);
-  if (bothFinished) {
+  const allFinished = room.playerStates.every(p => p.finished);
+  if (allFinished) {
     room.gameState = "finished";
   }
 
-  return { room, bothFinished };
+  return { room, allFinished };
 }
 
 export function playerDisconnected(roomId: string, odId: string): Room | undefined {
@@ -208,9 +288,9 @@ export function playerDisconnected(roomId: string, odId: string): Room | undefin
         playerState.score = 0; // Disconnected = 0 score
       }
       
-      // Check if game should end
-      const bothFinished = room.playerStates.every(p => p.finished);
-      if (bothFinished) {
+      // Check if game should end (all players finished)
+      const allFinished = room.playerStates.every(p => p.finished);
+      if (allFinished) {
         room.gameState = "finished";
       }
     }

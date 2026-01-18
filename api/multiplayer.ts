@@ -17,8 +17,56 @@ import {
   removeFromQuickMatchQueue,
   findQuickMatchOpponent,
   setPlayerReady,
+  assignPlayerToTeam as assignPlayerToTeamInStore,
+  assignRandomTeams,
+  reshuffleTeams,
 } from "../lib/api/room-store.js";
-import { Question, Operation, MultiplayerResult } from "../types.js";
+import { Question, Operation, MultiplayerResult, TeamResult } from "../types.js";
+
+// Conversion data for fraction/decimal/percent operations
+interface Conversion {
+  numerator: number;
+  denominator: number;
+  decimal: number;
+  fractionString: string;
+  decimalString: string;
+}
+
+const conversions: Conversion[] = [
+  { numerator: 1, denominator: 2, decimal: 0.5, fractionString: '1/2', decimalString: '0.5' },
+  { numerator: 1, denominator: 3, decimal: 0.333, fractionString: '1/3', decimalString: '0.333' },
+  { numerator: 2, denominator: 3, decimal: 0.666, fractionString: '2/3', decimalString: '0.666' },
+  { numerator: 1, denominator: 4, decimal: 0.25, fractionString: '1/4', decimalString: '0.25' },
+  { numerator: 3, denominator: 4, decimal: 0.75, fractionString: '3/4', decimalString: '0.75' },
+  { numerator: 1, denominator: 5, decimal: 0.2, fractionString: '1/5', decimalString: '0.2' },
+  { numerator: 2, denominator: 5, decimal: 0.4, fractionString: '2/5', decimalString: '0.4' },
+  { numerator: 3, denominator: 5, decimal: 0.6, fractionString: '3/5', decimalString: '0.6' },
+  { numerator: 4, denominator: 5, decimal: 0.8, fractionString: '4/5', decimalString: '0.8' },
+  { numerator: 1, denominator: 6, decimal: 0.166, fractionString: '1/6', decimalString: '0.166' },
+  { numerator: 5, denominator: 6, decimal: 0.833, fractionString: '5/6', decimalString: '0.833' },
+  { numerator: 1, denominator: 8, decimal: 0.125, fractionString: '1/8', decimalString: '0.125' },
+  { numerator: 3, denominator: 8, decimal: 0.375, fractionString: '3/8', decimalString: '0.375' },
+  { numerator: 5, denominator: 8, decimal: 0.625, fractionString: '5/8', decimalString: '0.625' },
+  { numerator: 7, denominator: 8, decimal: 0.875, fractionString: '7/8', decimalString: '0.875' },
+  { numerator: 1, denominator: 9, decimal: 0.111, fractionString: '1/9', decimalString: '0.111' },
+  { numerator: 2, denominator: 9, decimal: 0.222, fractionString: '2/9', decimalString: '0.222' },
+  { numerator: 4, denominator: 9, decimal: 0.444, fractionString: '4/9', decimalString: '0.444' },
+  { numerator: 5, denominator: 9, decimal: 0.555, fractionString: '5/9', decimalString: '0.555' },
+  { numerator: 7, denominator: 9, decimal: 0.777, fractionString: '7/9', decimalString: '0.777' },
+  { numerator: 8, denominator: 9, decimal: 0.888, fractionString: '8/9', decimalString: '0.888' },
+  { numerator: 1, denominator: 10, decimal: 0.1, fractionString: '1/10', decimalString: '0.1' },
+  { numerator: 3, denominator: 10, decimal: 0.3, fractionString: '3/10', decimalString: '0.3' },
+  { numerator: 7, denominator: 10, decimal: 0.7, fractionString: '7/10', decimalString: '0.7' },
+  { numerator: 9, denominator: 10, decimal: 0.9, fractionString: '9/10', decimalString: '0.9' },
+];
+
+const formatPercentString = (decimal: number): string => {
+  const percentValue = Number((decimal * 100).toFixed(1));
+  if (Number.isInteger(percentValue)) {
+    return `${percentValue.toFixed(0)}%`;
+  }
+  return `${percentValue.toFixed(1)}%`;
+};
 
 // Question generation logic
 function generateQuestions(
@@ -28,6 +76,65 @@ function generateQuestions(
 ): Question[] {
   const questions: Question[] = [];
   const usedQuestions = new Set<string>();
+
+  // For conversion operations, use the pre-defined conversions data
+  if (
+    operation === "fraction-to-decimal" ||
+    operation === "decimal-to-fraction" ||
+    operation === "fraction-to-percent" ||
+    operation === "percent-to-fraction"
+  ) {
+    const shuffledConversions = [...conversions].sort(() => 0.5 - Math.random());
+    const selectedConversions = shuffledConversions.slice(0, Math.min(count, conversions.length));
+
+    for (const conv of selectedConversions) {
+      let question: Question;
+      switch (operation) {
+        case "fraction-to-decimal":
+          question = {
+            operation,
+            display: conv.fractionString,
+            answer: conv.decimalString,
+            num1: conv.numerator,
+            num2: conv.denominator,
+          };
+          break;
+        case "decimal-to-fraction":
+          question = {
+            operation,
+            display: conv.decimalString,
+            answer: conv.fractionString,
+            num1: conv.decimal,
+          };
+          break;
+        case "fraction-to-percent": {
+          const percentString = formatPercentString(conv.decimal);
+          question = {
+            operation,
+            display: conv.fractionString,
+            answer: percentString,
+            num1: conv.numerator,
+            num2: conv.denominator,
+          };
+          break;
+        }
+        case "percent-to-fraction": {
+          const percentString = formatPercentString(conv.decimal);
+          question = {
+            operation,
+            display: percentString,
+            answer: conv.fractionString,
+            num1: percentString.endsWith('%') ? parseFloat(percentString.slice(0, -1)) : conv.decimal * 100,
+          };
+          break;
+        }
+      }
+      questions.push(question);
+    }
+    return questions;
+  }
+
+  // For other operations, generate randomly
   let attempts = 0;
   const maxAttempts = count * 20;
 
@@ -53,63 +160,6 @@ function generateQuestions(
         const squared = num1 * num1;
         question = { num1: squared, operation, answer: num1 };
         break;
-      case "fraction-to-decimal": {
-        const fractionNum = num1;
-        const fractionDen = num2 === 0 ? 1 : num2;
-        const decimal = fractionNum / fractionDen;
-        question = {
-          num1: fractionNum,
-          num2: fractionDen,
-          operation,
-          answer: Number.isInteger(decimal) ? decimal : parseFloat(decimal.toFixed(4)),
-          display: `${fractionNum}/${fractionDen}`,
-        };
-        break;
-      }
-      case "decimal-to-fraction": {
-        const fractionNum2 = num1;
-        const fractionDen2 = num2 === 0 ? 1 : num2;
-        const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b));
-        const divisor = gcd(Math.abs(fractionNum2), Math.abs(fractionDen2));
-        const simplifiedNum = fractionNum2 / divisor;
-        const simplifiedDen = fractionDen2 / divisor;
-        const decimal2 = fractionNum2 / fractionDen2;
-        question = {
-          num1: fractionNum2,
-          num2: fractionDen2,
-          operation,
-          answer: simplifiedDen === 1 ? `${simplifiedNum}` : `${simplifiedNum}/${simplifiedDen}`,
-          display: Number.isInteger(decimal2) ? `${decimal2}` : decimal2.toFixed(4).replace(/\.?0+$/, ""),
-        };
-        break;
-      }
-      case "fraction-to-percent": {
-        const fractionNum3 = num1;
-        const fractionDen3 = num2 === 0 ? 1 : num2;
-        const percent = (fractionNum3 / fractionDen3) * 100;
-        question = {
-          num1: fractionNum3,
-          num2: fractionDen3,
-          operation,
-          answer: Number.isInteger(percent) ? percent : parseFloat(percent.toFixed(2)),
-          display: `${fractionNum3}/${fractionDen3}`,
-        };
-        break;
-      }
-      case "percent-to-fraction": {
-        const percentVal = num1;
-        const gcd2 = (a: number, b: number): number => (b === 0 ? a : gcd2(b, a % b));
-        const divisor2 = gcd2(Math.abs(percentVal), 100);
-        const simplifiedNum2 = percentVal / divisor2;
-        const simplifiedDen2 = 100 / divisor2;
-        question = {
-          num1: percentVal,
-          operation,
-          answer: simplifiedDen2 === 1 ? `${simplifiedNum2}` : `${simplifiedNum2}/${simplifiedDen2}`,
-          display: `${percentVal}%`,
-        };
-        break;
-      }
       case "negative-numbers": {
         const ops = ["+", "-", "*"];
         const op = ops[Math.floor(Math.random() * ops.length)];
@@ -191,10 +241,41 @@ async function handleJoinRoom(body: any, res: VercelResponse) {
 
   const room = result.room!;
   const pusher = getPusher();
+  const newPlayer = room.players.find(p => p.id === odId);
+
+  // Handle team assignment for the new player if in team mode
+  if (room.settings.gameMode === "teams" && newPlayer) {
+    if (room.teams.length === 0) {
+      // Teams not initialized yet (e.g., 2nd player just joined). Initialize if we have enough players.
+      if (room.players.length >= 2) {
+        assignRandomTeams(room);
+        await pusher.trigger(`room-${room.id}`, "teams-updated", {
+          type: "teams-updated",
+          teams: room.teams,
+          players: room.players,
+        });
+      }
+    } else {
+      // Teams exist, assign to the smaller team
+      const teamACount = room.teams[0].playerIds.length;
+      const teamBCount = room.teams[1].playerIds.length;
+      const targetTeam = teamACount <= teamBCount ? room.teams[0] : room.teams[1];
+      
+      targetTeam.playerIds.push(odId);
+      newPlayer.teamId = targetTeam.id;
+      
+      // Notify about team update
+      await pusher.trigger(`room-${room.id}`, "teams-updated", {
+        type: "teams-updated",
+        teams: room.teams,
+        players: room.players,
+      });
+    }
+  }
 
   await pusher.trigger(`room-${room.id}`, "player-joined", {
     type: "player-joined",
-    player: room.players.find(p => p.id === odId),
+    player: newPlayer,
   });
 
   return res.status(200).json({
@@ -207,6 +288,7 @@ async function handleJoinRoom(body: any, res: VercelResponse) {
       settings: room.settings,
       gameState: room.gameState,
       hostId: room.hostId,
+      teams: room.teams,
     },
   });
 }
@@ -277,6 +359,8 @@ async function handleQuickMatch(body: any, method: string, res: VercelResponse) 
       selectedNumbers: allNumbers,
       questionCount: 10,
       timeLimit: 0,
+      maxPlayers: 2,
+      gameMode: "ffa",
     };
 
     joinRoomInStore(room.code, odId, odName.substring(0, 20));
@@ -334,8 +418,9 @@ async function handleSetReady(body: any, res: VercelResponse) {
     isReady,
   });
 
-  const allReady = room.players.length === 2 && room.players.every((p) => p.isReady);
-  console.log(`[SetReady] Room ${roomId}: Player ${odId} isReady=${isReady}, allReady=${allReady}`);
+  const minPlayers = room.isQuickMatch ? 2 : 2; // Min 2 players to start
+  const allReady = room.players.length >= minPlayers && room.players.every((p) => p.isReady);
+  console.log(`[SetReady] Room ${roomId}: Player ${odId} isReady=${isReady}, allReady=${allReady}, playerCount=${room.players.length}`);
 
   if (allReady) {
     console.log(`[SetReady] All players ready! Starting game for room ${roomId}`);
@@ -345,6 +430,12 @@ async function handleSetReady(body: any, res: VercelResponse) {
       room.settings.questionCount
     );
     console.log(`[SetReady] Generated ${questions.length} questions`);
+
+    // Assign teams if in team mode and not already assigned
+    if (room.settings.gameMode === "teams" && room.teams.length === 0) {
+      assignRandomTeams(room);
+      console.log(`[SetReady] Assigned teams:`, room.teams);
+    }
 
     room.gameState = "playing";
     room.questions = questions;
@@ -363,6 +454,8 @@ async function handleSetReady(body: any, res: VercelResponse) {
     console.log(`[SetReady] Triggering game-starting event`);
     await pusher.trigger(`room-${roomId}`, "game-starting", {
       questions,
+      teams: room.teams,
+      players: room.players,
     });
     console.log(`[SetReady] game-starting event sent`);
   }
@@ -391,7 +484,12 @@ async function handleStartReadyPhase(body: any, res: VercelResponse) {
   }
 
   if (room.players.length < 2) {
-    return res.status(400).json({ error: "Need 2 players to start" });
+    return res.status(400).json({ error: "Need at least 2 players to start" });
+  }
+
+  // For team mode, validate we have enough players
+  if (settings?.gameMode === "teams" && room.players.length < 2) {
+    return res.status(400).json({ error: "Need at least 2 players for team mode" });
   }
 
   if (settings) {
@@ -403,9 +501,11 @@ async function handleStartReadyPhase(body: any, res: VercelResponse) {
   }
 
   const pusher = getPusher();
-  await pusher.trigger(`room-${roomId}`, "ready-phase", {});
+  await pusher.trigger(`room-${roomId}`, "ready-phase", {
+    settings: room.settings,
+  });
 
-  console.log(`[StartReadyPhase] Room ${roomId} entering ready phase`);
+  console.log(`[StartReadyPhase] Room ${roomId} entering ready phase with ${room.players.length} players`);
 
   return res.status(200).json({ success: true });
 }
@@ -434,15 +534,48 @@ async function handleUpdateRoomSettings(body: any, res: VercelResponse) {
 
   if (updatedRoom) {
     const pusher = getPusher();
-    await pusher.trigger(`room-${roomId}`, "settings-updated", {
-      type: "settings-updated",
-      settings: updatedRoom.settings,
-    });
+    
+    // If switching to team mode, assign teams immediately so UI can show them
+    if (settings.gameMode === "teams" && updatedRoom.players.length >= 2) {
+      assignRandomTeams(updatedRoom);
+      // Send both settings and teams update
+      await pusher.trigger(`room-${roomId}`, "settings-updated", {
+        type: "settings-updated",
+        settings: updatedRoom.settings,
+      });
+      await pusher.trigger(`room-${roomId}`, "teams-updated", {
+        type: "teams-updated",
+        teams: updatedRoom.teams,
+        players: updatedRoom.players,
+      });
+    } else if (settings.gameMode === "ffa") {
+      // If switching to FFA, clear teams
+      updatedRoom.teams = [];
+      for (const player of updatedRoom.players) {
+        player.teamId = undefined;
+      }
+      await pusher.trigger(`room-${roomId}`, "settings-updated", {
+        type: "settings-updated",
+        settings: updatedRoom.settings,
+      });
+      await pusher.trigger(`room-${roomId}`, "teams-updated", {
+        type: "teams-updated",
+        teams: [],
+        players: updatedRoom.players,
+      });
+    } else {
+      await pusher.trigger(`room-${roomId}`, "settings-updated", {
+        type: "settings-updated",
+        settings: updatedRoom.settings,
+      });
+    }
   }
 
   return res.status(200).json({
     success: true,
     settings: updatedRoom?.settings,
+    teams: updatedRoom?.teams,
+    players: updatedRoom?.players,
   });
 }
 
@@ -463,7 +596,7 @@ async function handleStartGame(body: any, res: VercelResponse) {
   }
 
   if (room.players.length < 2) {
-    return res.status(400).json({ error: "Need 2 players to start" });
+    return res.status(400).json({ error: "Need at least 2 players to start" });
   }
 
   if (room.gameState !== "waiting") {
@@ -484,6 +617,8 @@ async function handleStartGame(body: any, res: VercelResponse) {
     type: "game-starting",
     countdown: 3,
     questions,
+    teams: room.teams,
+    players: room.players,
   });
 
   setTimeout(async () => {
@@ -542,7 +677,7 @@ async function handleSubmitMultiplayer(body: any, res: VercelResponse) {
     return res.status(404).json({ error: "Room not found" });
   }
 
-  const { room: updatedRoom, bothFinished } = submitPlayerAnswers(roomId, odId, answers, score);
+  const { room: updatedRoom, allFinished } = submitPlayerAnswers(roomId, odId, answers, score);
 
   if (!updatedRoom) {
     return res.status(500).json({ error: "Failed to submit answers" });
@@ -557,8 +692,21 @@ async function handleSubmitMultiplayer(body: any, res: VercelResponse) {
     finishTime: playerState?.finishTime,
   });
 
-  if (bothFinished) {
-    const results: MultiplayerResult[] = updatedRoom.playerStates.map(ps => ({
+  if (allFinished) {
+    // Calculate rankings for FFA mode
+    const rankedStates = [...updatedRoom.playerStates].sort((a, b) => {
+      // Sort by score descending, then by time ascending
+      if (b.score !== a.score) return b.score - a.score;
+      return (a.finishTime || Infinity) - (b.finishTime || Infinity);
+    });
+
+    // Get player's teamId from the room's players array
+    const getPlayerTeamId = (playerId: string): string | undefined => {
+      const player = updatedRoom.players.find(p => p.id === playerId);
+      return player?.teamId;
+    };
+
+    const results: MultiplayerResult[] = rankedStates.map((ps, index) => ({
       odId: ps.odId,
       odName: ps.odName,
       score: ps.score,
@@ -566,23 +714,70 @@ async function handleSubmitMultiplayer(body: any, res: VercelResponse) {
       timeTaken: ps.finishTime || 0,
       answers: ps.answers,
       questions: updatedRoom.questions,
+      teamId: getPlayerTeamId(ps.odId),
+      rank: index + 1,
     }));
+
+    // Calculate team results if in team mode
+    let teamResults: TeamResult[] | undefined;
+    if (updatedRoom.settings.gameMode === "teams" && updatedRoom.teams.length > 0) {
+      teamResults = updatedRoom.teams.map(team => {
+        const teamPlayerStates = updatedRoom.playerStates.filter(ps => {
+          const player = updatedRoom.players.find(p => p.id === ps.odId);
+          return player?.teamId === team.id;
+        });
+
+        const totalScore = teamPlayerStates.reduce((sum, ps) => sum + ps.score, 0);
+        const totalTime = teamPlayerStates.reduce((sum, ps) => sum + (ps.finishTime || 0), 0);
+        const playerCount = teamPlayerStates.length || 1;
+
+        return {
+          teamId: team.id,
+          teamName: team.name,
+          playerIds: team.playerIds,
+          averageScore: totalScore / playerCount,
+          averageTime: totalTime / playerCount,
+          totalScore,
+          totalTime,
+          isWinner: false, // Will be set below
+        };
+      });
+
+      // Determine winner (higher average score wins, tiebreaker: lower average time)
+      if (teamResults.length === 2) {
+        const [teamA, teamB] = teamResults;
+        if (teamA.averageScore > teamB.averageScore) {
+          teamA.isWinner = true;
+        } else if (teamB.averageScore > teamA.averageScore) {
+          teamB.isWinner = true;
+        } else {
+          // Tiebreaker: lower average time wins
+          if (teamA.averageTime < teamB.averageTime) {
+            teamA.isWinner = true;
+          } else if (teamB.averageTime < teamA.averageTime) {
+            teamB.isWinner = true;
+          }
+          // Else it's a draw, no winner
+        }
+      }
+    }
 
     await pusher.trigger(`room-${roomId}`, "game-ended", {
       type: "game-ended",
       results,
+      teamResults,
     });
   }
 
   return res.status(200).json({
     success: true,
-    bothFinished,
+    allFinished,
     finishTime: playerState?.finishTime,
   });
 }
 
 async function handleRematch(body: any, res: VercelResponse) {
-  const { roomId, odId, odName, rematchAction } = body;
+  const { roomId, odId, odName, rematchAction, keepTeams } = body;
 
   if (!roomId || !odId || !odName || !rematchAction) {
     return res.status(400).json({ error: "Room ID, player ID, name, and rematchAction are required" });
@@ -600,26 +795,99 @@ async function handleRematch(body: any, res: VercelResponse) {
     return res.status(403).json({ error: "Player not in room" });
   }
 
+  const connectedPlayers = room.players.filter(p => p.connected);
+  const totalPlayersNeeded = connectedPlayers.length;
+
   if (rematchAction === "request") {
+    // For 2 players, just send request normally
+    // For 3+ players, we need everyone to accept
+    room.rematchState = {
+      requesterId: odId,
+      requesterName: odName,
+      keepTeams: keepTeams || false,
+      acceptedPlayerIds: [odId], // Requester is automatically "accepted"
+    };
+    
     await pusher.trigger(`room-${roomId}`, "rematch-requested", {
       type: "rematch-requested",
       fromPlayerId: odId,
       fromPlayerName: odName,
+      keepTeams: keepTeams || false,
+      totalNeeded: totalPlayersNeeded,
     });
 
-    return res.status(200).json({ success: true, message: "Rematch request sent" });
+    // For 2 players, we still need the other player to accept
+    return res.status(200).json({ success: true, message: "Rematch request sent", totalNeeded: totalPlayersNeeded });
   }
 
   if (rematchAction === "accept") {
-    const opponent = room.players.find(p => p.id !== odId);
-    if (!opponent) {
-      return res.status(400).json({ error: "No opponent to rematch with" });
+    // Make sure there's an active rematch request
+    if (!room.rematchState) {
+      return res.status(400).json({ error: "No pending rematch request" });
     }
 
-    const newRoom = createRoomInStore(opponent.id, opponent.name, room.isQuickMatch);
+    // Add this player to accepted list if not already
+    if (!room.rematchState.acceptedPlayerIds.includes(odId)) {
+      room.rematchState.acceptedPlayerIds.push(odId);
+    }
+
+    const acceptedCount = room.rematchState.acceptedPlayerIds.length;
+    const allAccepted = acceptedCount >= totalPlayersNeeded;
+
+    if (!allAccepted) {
+      // Not everyone has accepted yet - notify others
+      await pusher.trigger(`room-${roomId}`, "rematch-player-accepted", {
+        type: "rematch-player-accepted",
+        odId,
+        odName,
+        acceptedCount,
+        totalNeeded: totalPlayersNeeded,
+      });
+
+      return res.status(200).json({ 
+        success: true, 
+        message: "Acceptance recorded, waiting for other players",
+        acceptedCount,
+        totalNeeded: totalPlayersNeeded,
+      });
+    }
+
+    // All players accepted! Create the new room
+    const originalHost = room.players.find(p => p.isHost);
+    const newRoom = createRoomInStore(
+      originalHost?.id || connectedPlayers[0].id,
+      originalHost?.name || connectedPlayers[0].name,
+      room.isQuickMatch
+    );
     newRoom.settings = { ...room.settings };
-    
-    joinRoomInStore(newRoom.code, odId, odName);
+
+    // Add all connected players to the new room
+    for (const p of connectedPlayers) {
+      if (p.id !== newRoom.hostId) {
+        joinRoomInStore(newRoom.code, p.id, p.name);
+      }
+    }
+
+    // If keeping teams and in team mode, restore team assignments
+    const shouldKeepTeams = room.rematchState.keepTeams;
+    if (room.settings.gameMode === "teams") {
+      if (shouldKeepTeams && room.teams.length > 0) {
+        // Keep the same teams
+        newRoom.teams = room.teams.map(t => ({ ...t }));
+        for (const newPlayer of newRoom.players) {
+          const oldPlayer = room.players.find(p => p.id === newPlayer.id);
+          if (oldPlayer?.teamId) {
+            newPlayer.teamId = oldPlayer.teamId;
+          }
+        }
+      } else {
+        // Shuffle teams - assign new random teams
+        assignRandomTeams(newRoom);
+      }
+    }
+
+    // Clear rematch state
+    room.rematchState = undefined;
 
     await pusher.trigger(`room-${roomId}`, "rematch-accepted", {
       type: "rematch-accepted",
@@ -628,6 +896,8 @@ async function handleRematch(body: any, res: VercelResponse) {
       isQuickMatch: room.isQuickMatch,
       settings: newRoom.settings,
       players: newRoom.players,
+      teams: newRoom.teams,
+      keepTeams: shouldKeepTeams,
     });
 
     return res.status(200).json({
@@ -637,12 +907,17 @@ async function handleRematch(body: any, res: VercelResponse) {
       isQuickMatch: room.isQuickMatch,
       settings: newRoom.settings,
       players: newRoom.players,
+      teams: newRoom.teams,
     });
   }
 
   if (rematchAction === "decline") {
+    // Clear rematch state
+    room.rematchState = undefined;
+
     await pusher.trigger(`room-${roomId}`, "rematch-declined", {
       type: "rematch-declined",
+      declinedBy: odName,
     });
 
     return res.status(200).json({ success: true, message: "Rematch declined" });
@@ -687,6 +962,60 @@ async function handlePlayerDisconnect(body: any, res: VercelResponse) {
   }
 
   return res.status(200).json({ success: true });
+}
+
+// Handle host assigning a player to a team
+async function handleAssignTeam(body: any, res: VercelResponse) {
+  const { roomId, odId, targetPlayerId, teamId } = body;
+
+  if (!roomId || !odId || !targetPlayerId || !teamId) {
+    return res.status(400).json({ error: "Room ID, host player ID, target player ID, and team ID are required" });
+  }
+
+  const room = getRoom(roomId);
+  if (!room) {
+    return res.status(404).json({ error: "Room not found" });
+  }
+
+  // Only host can assign teams
+  if (room.hostId !== odId) {
+    return res.status(403).json({ error: "Only the host can assign teams" });
+  }
+
+  if (room.settings.gameMode !== "teams") {
+    return res.status(400).json({ error: "Room is not in team mode" });
+  }
+
+  // Initialize teams if not already done
+  if (room.teams.length === 0) {
+    room.teams = [
+      { id: 'team-a', name: 'Team A', playerIds: [] },
+      { id: 'team-b', name: 'Team B', playerIds: [] },
+    ];
+    // Assign all current players to teams initially
+    room.players.forEach((p, index) => {
+      const assignedTeam = index % 2 === 0 ? 'team-a' : 'team-b';
+      p.teamId = assignedTeam;
+      room.teams.find(t => t.id === assignedTeam)?.playerIds.push(p.id);
+    });
+  }
+
+  const updatedRoom = assignPlayerToTeamInStore(roomId, targetPlayerId, teamId);
+
+  if (updatedRoom) {
+    const pusher = getPusher();
+    await pusher.trigger(`room-${roomId}`, "teams-updated", {
+      type: "teams-updated",
+      teams: updatedRoom.teams,
+      players: updatedRoom.players,
+    });
+  }
+
+  return res.status(200).json({
+    success: true,
+    teams: updatedRoom?.teams,
+    players: updatedRoom?.players,
+  });
 }
 
 // Main handler - routes by action parameter
@@ -734,6 +1063,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return handleSubmitMultiplayer(rest, res);
       case "rematch":
         return handleRematch(rest, res);
+      case "assign-team":
+        return handleAssignTeam(rest, res);
       case "player-disconnect":
         return handlePlayerDisconnect(rest, res);
       default:
