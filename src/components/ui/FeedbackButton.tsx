@@ -65,16 +65,16 @@ export const FeedbackButton: React.FC<FeedbackButtonProps> = ({ className = '' }
 
   return (
     <>
-      {/* Floating button - positioned at bottom right, subtle but accessible */}
+      {/* Floating button - positioned at bottom right */}
       <button
         onClick={() => setIsOpen(true)}
-        className={`fixed bottom-4 right-4 z-40 flex items-center gap-2 px-3 py-2 text-sm font-medium text-slate-600 dark:text-slate-400 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full shadow-md hover:shadow-lg hover:text-slate-800 dark:hover:text-slate-200 transition-all duration-200 opacity-70 hover:opacity-100 ${className}`}
+        className={`fixed bottom-4 right-4 z-40 flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 rounded-full shadow-lg hover:shadow-xl transition-all duration-200 ${className}`}
         aria-label="Submit feedback"
       >
-        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
         </svg>
-        <span className="hidden sm:inline">Feedback</span>
+        <span>Feedback</span>
       </button>
 
       {/* Modal backdrop */}

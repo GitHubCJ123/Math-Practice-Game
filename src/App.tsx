@@ -525,8 +525,8 @@ const SelectionScreenWrapper: React.FC<SelectionScreenWrapperProps> = ({
         toggleDarkMode={toggleDarkMode}
       />
       
-      {/* Ad for large screens - absolute positioned */}
-      <div className="absolute right-4 top-8 hidden 2xl:block">
+      {/* Ad for large screens - absolute positioned, centered in right gap */}
+      <div className="absolute right-0 top-8 hidden 2xl:flex 2xl:items-center 2xl:justify-center" style={{ width: 'calc((100vw - 896px) / 2)' }}>
         <MathDashAd />
       </div>
       
