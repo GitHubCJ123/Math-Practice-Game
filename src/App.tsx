@@ -9,6 +9,7 @@ import { MultiplayerLobbyScreen } from './components/screens/MultiplayerLobbyScr
 import { MultiplayerQuizScreen } from './components/screens/MultiplayerQuizScreen';
 import { MultiplayerResultsScreen } from './components/screens/MultiplayerResultsScreen';
 import { MathDashAd } from './components/ui/MathDashAd';
+import { FeedbackButton } from './components/ui/FeedbackButton';
 import { conversions, formatPercentString } from './lib/conversions';
 import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/react";
@@ -462,6 +463,7 @@ const App: React.FC = () => {
         
         <Analytics />
         <SpeedInsights />
+        <FeedbackButton />
       </div>
     </BrowserRouter>
   );
