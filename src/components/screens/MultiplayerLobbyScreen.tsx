@@ -17,6 +17,7 @@ import {
   assignPlayerToTeam,
 } from "../../lib/multiplayer";
 import { SunIcon, MoonIcon } from "../ui/icons";
+import { BetaFeedback } from "../ui/BetaFeedback";
 
 interface MultiplayerLobbyScreenProps {
   isDarkMode: boolean;
@@ -1388,9 +1389,12 @@ export const MultiplayerLobbyScreen: React.FC<MultiplayerLobbyScreenProps> = ({
           <h1 className="text-3xl md:text-4xl font-bold text-center text-slate-800 dark:text-white mb-2">
             Multiplayer Mode
           </h1>
-          <p className="text-center text-slate-500 dark:text-slate-400 mb-6">
+          <p className="text-center text-slate-500 dark:text-slate-400 mb-4">
             Challenge a friend or find a random opponent!
           </p>
+          
+          {/* Beta Warning with Feedback */}
+          <BetaFeedback className="mb-6" />
 
           {/* Name Input */}
           <div className="mb-6">

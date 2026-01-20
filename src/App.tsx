@@ -463,7 +463,7 @@ const App: React.FC = () => {
         
         <Analytics />
         <SpeedInsights />
-        <FeedbackButton />
+        <FeedbackButtonConditional />
       </div>
     </BrowserRouter>
   );
@@ -477,6 +477,15 @@ const RouteChangeTracker: React.FC = () => {
   }, [location.pathname, location.search]);
 
   return null;
+};
+
+// Only show feedback button on home screen (not during quizzes or results)
+const FeedbackButtonConditional: React.FC = () => {
+  const location = useLocation();
+  const isHomeScreen = location.pathname === '/';
+  
+  if (!isHomeScreen) return null;
+  return <FeedbackButton />;
 };
 
 interface SelectionScreenWrapperProps {
