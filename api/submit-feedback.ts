@@ -58,15 +58,11 @@ export default async function handler(req: any, res: any) {
   try {
     const supabase = getSupabase();
 
-    // Get user agent for additional context (helpful for debugging bug reports)
-    const userAgent = req.headers['user-agent'] || 'Unknown';
-
     const { error: insertError } = await supabase
       .from('feedback')
       .insert({
         type,
         message: message.trim(),
-        user_agent: userAgent,
         created_at: new Date().toISOString(),
       });
 
