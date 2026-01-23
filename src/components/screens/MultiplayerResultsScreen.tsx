@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Pusher, { Channel } from "pusher-js";
-import type { Question, MultiplayerResult, Operation, Team, GameMode, TeamResult } from "../../../types";
+import type { Question, MultiplayerResult, Operation, Team, GameMode, TeamResult, AIDifficulty } from "../../../types";
 import { CheckCircleIcon, XCircleIcon, TrophyIcon } from "../ui/icons";
 import {
   getPusherClient,
@@ -20,7 +20,9 @@ interface MultiplayerResultsScreenProps {
   teams: Team[];
   gameMode: GameMode;
   teamResults?: TeamResult[];
+  players?: { id: string; name: string; isAI?: boolean; aiDifficulty?: AIDifficulty }[];
   onRematch: (data: { newRoomId: string; newRoomCode: string; isQuickMatch: boolean; players: any[]; settings: any; teams: Team[] }) => void;
+  onPlayAgainAI?: () => void; // For AI games - return to AI mode tab
   onExit: () => void;
 }
 
@@ -32,7 +34,9 @@ export const MultiplayerResultsScreen: React.FC<MultiplayerResultsScreenProps> =
   teams,
   gameMode,
   teamResults,
+  players = [],
   onRematch,
+  onPlayAgainAI,
   onExit,
 }) => {
   const navigate = useNavigate();
@@ -62,6 +66,10 @@ export const MultiplayerResultsScreen: React.FC<MultiplayerResultsScreenProps> =
   const myTeamResultFallback = teamResults?.find((tr) => tr.playerIds?.includes(odId));
   const finalMyTeamResult = myTeamResult || myTeamResultFallback;
   const isTeamWinner = finalMyTeamResult?.isWinner || false;
+
+  // AI game detection
+  const isAIGame = players.some((p) => p.isAI);
+  const aiOpponent = players.find((p) => p.isAI);
 
   // Subscribe to room channel for rematch events
   useEffect(() => {
@@ -451,7 +459,23 @@ export const MultiplayerResultsScreen: React.FC<MultiplayerResultsScreenProps> =
 
         {/* Action Buttons */}
         <div className="flex flex-col sm:flex-row gap-4 justify-center">
-          {gameMode === 'teams' ? (
+          {isAIGame ? (
+            /* AI Game - Show Play Again button */
+            <>
+              <button
+                onClick={onPlayAgainAI}
+                className="px-10 py-4 rounded-xl text-lg font-bold transition-all transform hover:scale-105 bg-green-600 text-white hover:bg-green-700 shadow-lg"
+              >
+                🤖 Play Again vs AI
+              </button>
+              <button
+                onClick={onExit}
+                className="px-10 py-4 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-lg font-bold hover:bg-slate-300 dark:hover:bg-slate-600 transition-all transform hover:scale-105 shadow-lg"
+              >
+                Back to Menu
+              </button>
+            </>
+          ) : gameMode === 'teams' ? (
             <>
               <button
                 onClick={() => handleRequestRematch(true)}

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import Pusher, { Channel } from "pusher-js";
-import type { Question, Operation, MultiplayerResult, Team, GameMode, Player, TeamResult } from "../../../types";
+import type { Question, Operation, MultiplayerResult, Team, GameMode, Player, TeamResult, AIDifficulty } from "../../../types";
 import { ClockIcon } from "../ui/icons";
 import {
   getPusherClient,
@@ -8,6 +8,73 @@ import {
   submitMultiplayerAnswers,
   notifyDisconnect,
 } from "../../lib/multiplayer";
+
+// AI difficulty profiles for client-side simulation
+const AI_PROFILES: Record<AIDifficulty, { accuracy: number; minTime: number; maxTime: number }> = {
+  easy: { accuracy: 0.75, minTime: 4000, maxTime: 6000 },
+  medium: { accuracy: 0.85, minTime: 2000, maxTime: 4000 },
+  hard: { accuracy: 0.95, minTime: 1000, maxTime: 2000 },
+  expert: { accuracy: 1.0, minTime: 500, maxTime: 1000 },
+};
+
+// Simulate AI game results - respects both time limit AND actual elapsed time
+function simulateAIResults(
+  difficulty: AIDifficulty,
+  questions: Question[],
+  aiPlayer: Player,
+  timeLimitMs: number, // 0 means no limit
+  elapsedMs: number // How long the game actually took (human's time)
+): MultiplayerResult {
+  const profile = AI_PROFILES[difficulty];
+  const answers: string[] = [];
+  let cumulativeTime = 0;
+  let score = 0;
+  
+  // AI can only work within the actual elapsed time (when human finished/time ran out)
+  // Also respect time limit if set
+  const effectiveTimeLimit = timeLimitMs > 0 ? Math.min(timeLimitMs, elapsedMs) : elapsedMs;
+
+  for (const question of questions) {
+    const questionTime = Math.random() * (profile.maxTime - profile.minTime) + profile.minTime;
+    cumulativeTime += questionTime;
+
+    // If AI ran out of time (either game ended or AI is too slow), leave unanswered
+    if (cumulativeTime > effectiveTimeLimit) {
+      answers.push(""); // Unanswered - same as human not answering
+      continue;
+    }
+
+    const isCorrect = Math.random() < profile.accuracy;
+    if (isCorrect) {
+      answers.push(String(question.answer));
+      score++;
+    } else {
+      // Generate a wrong answer
+      const correctAnswer = question.answer;
+      if (typeof correctAnswer === "number") {
+        const offset = Math.floor(Math.random() * 3) + 1;
+        const direction = Math.random() < 0.5 ? -1 : 1;
+        answers.push(String(correctAnswer + offset * direction));
+      } else {
+        answers.push("0.5"); // Default wrong answer for string types
+      }
+    }
+  }
+
+  // AI's time taken is the cumulative time (but capped at effective limit)
+  const aiTimeTaken = Math.min(cumulativeTime, effectiveTimeLimit);
+
+  return {
+    odId: aiPlayer.id,
+    odName: aiPlayer.name,
+    score,
+    totalQuestions: questions.length,
+    timeTaken: aiTimeTaken,
+    answers,
+    questions,
+    rank: 0, // Will be calculated later
+  };
+}
 
 interface MultiplayerQuizScreenProps {
   roomId: string;
@@ -67,12 +134,14 @@ export const MultiplayerQuizScreen: React.FC<MultiplayerQuizScreenProps> = ({
   
   // Derived values
   const opponents = players.filter((p) => p.id !== odId);
+  const aiOpponent = opponents.find((p) => p.isAI);
+  const isAIGame = !!aiOpponent;
   const myTeam = teams.find((t) => t.playerIds.includes(odId));
   const myTeammates = myTeam ? players.filter((p) => myTeam.playerIds.includes(p.id) && p.id !== odId) : [];
   const myOpponents = gameMode === 'teams' 
     ? players.filter((p) => !myTeam?.playerIds.includes(p.id))
     : opponents;
-  const allOpponentsFinished = opponents.every((p) => opponentFinished[p.id] || disconnectedPlayers.has(p.id));
+  const allOpponentsFinished = opponents.every((p) => opponentFinished[p.id] || disconnectedPlayers.has(p.id) || p.isAI);
 
   const answersRef = useRef(answers);
   useEffect(() => {
@@ -80,6 +149,62 @@ export const MultiplayerQuizScreen: React.FC<MultiplayerQuizScreenProps> = ({
   }, [answers]);
 
   const lastProgressRef = useRef(0);
+  const gameStartTimeRef = useRef<number | null>(null);
+
+  // Set the game start time when intro finishes
+  useEffect(() => {
+    if (introStage === "finished" && gameStartTimeRef.current === null) {
+      gameStartTimeRef.current = Date.now();
+    }
+  }, [introStage]);
+
+  // Simulate AI progress during the game
+  useEffect(() => {
+    if (!isAIGame || !aiOpponent || introStage !== "finished" || quizFinished) return;
+    if (gameStartTimeRef.current === null) return;
+
+    const difficulty = aiOpponent.aiDifficulty || "medium";
+    const profile = AI_PROFILES[difficulty];
+    const avgTimePerQuestion = (profile.minTime + profile.maxTime) / 2;
+    const timeLimitMs = timeLimit > 0 ? timeLimit * 1000 : Infinity;
+
+    // Initialize AI progress to 0
+    setOpponentProgress((prev) => ({
+      ...prev,
+      [aiOpponent.id]: prev[aiOpponent.id] ?? 0,
+    }));
+
+    const intervalId = setInterval(() => {
+      if (gameStartTimeRef.current === null) return;
+      
+      const elapsed = Date.now() - gameStartTimeRef.current;
+      
+      // If time limit reached, AI stops where it is
+      if (timeLimit > 0 && elapsed >= timeLimitMs) {
+        clearInterval(intervalId);
+        return;
+      }
+
+      const estimatedProgress = Math.min(
+        Math.floor(elapsed / avgTimePerQuestion),
+        questions.length
+      );
+
+      setOpponentProgress((prev) => ({
+        ...prev,
+        [aiOpponent.id]: estimatedProgress,
+      }));
+
+      // AI finishes when it reaches all questions (and time hasn't run out)
+      if (estimatedProgress >= questions.length && !opponentFinished[aiOpponent.id]) {
+        setOpponentFinished((prev) => ({ ...prev, [aiOpponent.id]: true }));
+        setShowFinishedPopup(aiOpponent.name);
+        setTimeout(() => setShowFinishedPopup(null), 2000);
+      }
+    }, 500);
+
+    return () => clearInterval(intervalId);
+  }, [isAIGame, aiOpponent, introStage, quizFinished, questions.length, opponentFinished, timeLimit]);
 
   // Subscribe to room channel for opponent events
   useEffect(() => {
@@ -199,8 +324,45 @@ export const MultiplayerQuizScreen: React.FC<MultiplayerQuizScreenProps> = ({
     setTimerRunning(false);
 
     const score = calculateScore(finalAnswers);
-    setWaitingForOpponents(true);
 
+    // For AI games, calculate results locally
+    if (isAIGame && aiOpponent) {
+      const difficulty = aiOpponent.aiDifficulty || "medium";
+      
+      // Create my result
+      const myResult: MultiplayerResult = {
+        odId,
+        odName,
+        score,
+        totalQuestions: questions.length,
+        timeTaken: finalTime * 1000, // Convert to ms
+        answers: finalAnswers,
+        questions,
+        rank: 0,
+      };
+
+      // Simulate AI result - pass time limit (converted to ms) and elapsed time
+      const timeLimitMs = timeLimit > 0 ? timeLimit * 1000 : 0;
+      const elapsedMs = finalTime * 1000;
+      const aiResult = simulateAIResults(difficulty, questions, aiOpponent, timeLimitMs, elapsedMs);
+
+      // Determine rankings
+      const allResults = [myResult, aiResult].sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        return a.timeTaken - b.timeTaken;
+      });
+
+      allResults.forEach((r, idx) => {
+        r.rank = idx + 1;
+      });
+
+      // Call onFinish directly for AI games
+      onFinish(allResults);
+      return;
+    }
+
+    // For real multiplayer games, wait for server response
+    setWaitingForOpponents(true);
     await submitMultiplayerAnswers(roomId, odId, finalAnswers, score);
   };
 

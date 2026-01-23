@@ -1,5 +1,5 @@
 import Pusher from "pusher-js";
-import type { RoomSettings, GameMode, Team, Player } from "../../types";
+import type { RoomSettings, GameMode, Team, Player, AIDifficulty, Question } from "../../types";
 
 let pusherClient: Pusher | null = null;
 
@@ -216,4 +216,30 @@ export function getOrCreatePlayerId(): string {
   const newId = `player_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
   sessionStorage.setItem("mathWhizPlayerId", newId);
   return newId;
+}
+
+// Create an AI game - immediately starts a game against an AI opponent
+export async function createAIGame(
+  playerId: string,
+  playerName: string,
+  aiDifficulty: AIDifficulty,
+  settings: {
+    operation: string;
+    selectedNumbers: number[];
+    questionCount: number;
+    timeLimit: number;
+  }
+): Promise<{
+  success: boolean;
+  roomId?: string;
+  questions?: Question[];
+  players?: Player[];
+  error?: string;
+}> {
+  return multiplayerApi("create-ai-game", {
+    odId: playerId,
+    odName: playerName,
+    aiDifficulty,
+    settings,
+  });
 }

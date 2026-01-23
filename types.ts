@@ -54,6 +54,7 @@ export type AllQuizStats = Partial<Record<Operation, QuizStats>>;
 
 // Multiplayer Types
 export type GameMode = 'ffa' | 'teams';
+export type AIDifficulty = 'easy' | 'medium' | 'hard' | 'expert';
 
 export interface Player {
   id: string;
@@ -62,6 +63,8 @@ export interface Player {
   isReady: boolean;
   connected: boolean;
   teamId?: string; // Only set when gameMode is 'teams'
+  isAI?: boolean; // True if this player is an AI opponent
+  aiDifficulty?: AIDifficulty; // Difficulty level for AI players
 }
 
 export interface Team {

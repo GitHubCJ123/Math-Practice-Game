@@ -21,7 +21,8 @@ import {
   assignRandomTeams,
   reshuffleTeams,
 } from "../lib/api/room-store.js";
-import { Question, Operation, MultiplayerResult, TeamResult } from "../types.js";
+import { createAIPlayer } from "../lib/api/ai-player.js";
+import { Question, Operation, MultiplayerResult, TeamResult, AIDifficulty } from "../types.js";
 
 // Conversion data for fraction/decimal/percent operations
 interface Conversion {
@@ -1039,6 +1040,71 @@ async function handleAssignTeam(body: any, res: VercelResponse) {
   });
 }
 
+// Handle creating an AI game - creates room with AI player and starts immediately
+async function handleCreateAIGame(body: any, res: VercelResponse) {
+  const { odId, odName, aiDifficulty, settings } = body;
+
+  if (!odId || !odName || !aiDifficulty || !settings) {
+    return res.status(400).json({ error: "Player ID, name, AI difficulty, and settings are required" });
+  }
+
+  // Validate AI difficulty
+  const validDifficulties: AIDifficulty[] = ['easy', 'medium', 'hard', 'expert'];
+  if (!validDifficulties.includes(aiDifficulty)) {
+    return res.status(400).json({ error: "Invalid AI difficulty" });
+  }
+
+  // Create the room
+  const room = createRoomInStore(odId, odName.substring(0, 20), false);
+
+  // Configure room settings
+  room.settings = {
+    operation: settings.operation as Operation,
+    selectedNumbers: settings.selectedNumbers || [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+    questionCount: settings.questionCount || 10,
+    timeLimit: settings.timeLimit || 0,
+    maxPlayers: 2,
+    gameMode: "ffa",
+  };
+
+  // Create and add AI player
+  const aiPlayer = createAIPlayer(aiDifficulty);
+  room.players.push(aiPlayer);
+
+  // Generate questions
+  const questions = generateQuestions(
+    room.settings.operation,
+    room.settings.selectedNumbers,
+    room.settings.questionCount
+  );
+
+  // Start the game immediately
+  room.gameState = "playing";
+  room.questions = questions;
+  room.gameStartTime = Date.now();
+  room.playerStates = room.players.map(p => ({
+    odId: p.id,
+    odName: p.name,
+    answers: [],
+    currentQuestion: 0,
+    finished: false,
+    finishTime: null,
+    score: 0,
+  }));
+
+  updateRoom(room);
+
+  console.log(`[CreateAIGame] Created AI game for ${odName} vs ${aiPlayer.name} (${aiDifficulty})`);
+
+  return res.status(200).json({
+    success: true,
+    roomId: room.id,
+    questions: questions,
+    players: room.players,
+    aiPlayer: aiPlayer,
+  });
+}
+
 // Main handler - routes by action parameter
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Enable CORS
@@ -1086,6 +1152,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return handleRematch(rest, res);
       case "assign-team":
         return handleAssignTeam(rest, res);
+      case "create-ai-game":
+        return handleCreateAIGame(rest, res);
       case "player-disconnect":
         return handlePlayerDisconnect(rest, res);
       default:

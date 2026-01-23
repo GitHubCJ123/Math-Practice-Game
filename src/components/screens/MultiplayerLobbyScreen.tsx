@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams, useLocation } from "react-router-dom";
 import Pusher, { Channel } from "pusher-js";
-import type { Operation, RoomSettings, Player, Question, Team, GameMode } from "../../../types";
+import type { Operation, RoomSettings, Player, Question, Team, GameMode, AIDifficulty } from "../../../types";
 import {
   getPusherClient,
   createRoom,
@@ -15,6 +15,7 @@ import {
   setReady,
   getOrCreatePlayerId,
   assignPlayerToTeam,
+  createAIGame,
 } from "../../lib/multiplayer";
 import { SunIcon, MoonIcon } from "../ui/icons";
 import { BetaFeedback } from "../ui/BetaFeedback";
@@ -44,7 +45,7 @@ interface MultiplayerLobbyScreenProps {
   onRematchConsumed?: () => void;
 }
 
-type LobbyTab = "create" | "join" | "quickmatch";
+type LobbyTab = "create" | "join" | "quickmatch" | "aimode";
 
 const operationLabels: Record<Operation, string> = {
   multiplication: "Multiplication",
@@ -68,6 +69,13 @@ const getNumbersForOperation = (op: Operation): number[] => {
   return Array.from({ length: 12 }, (_, i) => i + 1);
 };
 
+const aiDifficultyLabels: Record<AIDifficulty, { name: string; description: string; emoji: string }> = {
+  easy: { name: "Easy", description: "75% accuracy, slow pace", emoji: "🐢" },
+  medium: { name: "Medium", description: "85% accuracy, moderate pace", emoji: "🐇" },
+  hard: { name: "Hard", description: "95% accuracy, fast pace", emoji: "🦊" },
+  expert: { name: "Expert", description: "100% accuracy, very fast", emoji: "🤖" },
+};
+
 export const MultiplayerLobbyScreen: React.FC<MultiplayerLobbyScreenProps> = ({
   isDarkMode,
   toggleDarkMode,
@@ -76,9 +84,29 @@ export const MultiplayerLobbyScreen: React.FC<MultiplayerLobbyScreenProps> = ({
   onRematchConsumed,
 }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { roomCode: joinCodeFromUrl } = useParams<{ roomCode?: string }>();
+  const [searchParams] = useSearchParams();
 
-  const [activeTab, setActiveTab] = useState<LobbyTab>(joinCodeFromUrl ? "join" : "create");
+  // Get initial tab from URL or default
+  const getInitialTab = (): LobbyTab => {
+    if (joinCodeFromUrl) return "join";
+    const tabFromUrl = searchParams.get("tab") as LobbyTab | null;
+    if (tabFromUrl && ["create", "join", "quickmatch", "aimode"].includes(tabFromUrl)) {
+      return tabFromUrl;
+    }
+    return "create";
+  };
+
+  const [activeTab, setActiveTab] = useState<LobbyTab>(getInitialTab);
+  
+  // Handle tab query param changes (for when component doesn't remount)
+  useEffect(() => {
+    const tabFromUrl = searchParams.get("tab") as LobbyTab | null;
+    if (tabFromUrl && ["create", "join", "quickmatch", "aimode"].includes(tabFromUrl)) {
+      setActiveTab(tabFromUrl);
+    }
+  }, [searchParams, location.search]);
   const [playerName, setPlayerName] = useState(() => localStorage.getItem("mathWhizPlayerName") || "");
   const [playerId] = useState(() => getOrCreatePlayerId());
 
@@ -99,6 +127,15 @@ export const MultiplayerLobbyScreen: React.FC<MultiplayerLobbyScreenProps> = ({
   const [maxPlayers, setMaxPlayers] = useState(2);
   const [gameMode, setGameMode] = useState<GameMode>("ffa");
   const [teams, setTeams] = useState<Team[]>([]);
+
+  // AI Mode state
+  const [aiDifficulty, setAiDifficulty] = useState<AIDifficulty>("medium");
+  const [aiOperation, setAiOperation] = useState<Operation>("multiplication");
+  const [aiAdvancedMode, setAiAdvancedMode] = useState(false);
+  const [aiQuestionCount, setAiQuestionCount] = useState(10);
+  const [aiTimeLimit, setAiTimeLimit] = useState(0);
+  const [aiSelectedNumbers, setAiSelectedNumbers] = useState<number[]>([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+  const [isStartingAIGame, setIsStartingAIGame] = useState(false);
 
   // Refs for callback values (to avoid Pusher re-subscriptions)
   const playersRef = useRef(players);
@@ -1413,7 +1450,7 @@ export const MultiplayerLobbyScreen: React.FC<MultiplayerLobbyScreenProps> = ({
 
           {/* Tabs */}
           <div className="flex border-b border-slate-200 dark:border-slate-700 mb-6">
-            {(["create", "join", "quickmatch"] as LobbyTab[]).map((tab) => (
+            {(["create", "join", "quickmatch", "aimode"] as LobbyTab[]).map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -1426,6 +1463,7 @@ export const MultiplayerLobbyScreen: React.FC<MultiplayerLobbyScreenProps> = ({
                 {tab === "create" && "Create Room"}
                 {tab === "join" && "Join Room"}
                 {tab === "quickmatch" && "Quick Match"}
+                {tab === "aimode" && "AI Mode"}
               </button>
             ))}
           </div>
@@ -1508,6 +1546,234 @@ export const MultiplayerLobbyScreen: React.FC<MultiplayerLobbyScreenProps> = ({
                 }`}
               >
                 Find Opponent
+              </button>
+            </div>
+          )}
+
+          {activeTab === "aimode" && (
+            <div>
+              <p className="text-slate-600 dark:text-slate-400 mb-4 text-center">
+                Practice against an AI opponent at your own pace.
+              </p>
+
+              {/* Difficulty Selection */}
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-3">
+                  AI Difficulty
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  {(Object.keys(aiDifficultyLabels) as AIDifficulty[]).map((diff) => (
+                    <button
+                      key={diff}
+                      onClick={() => setAiDifficulty(diff)}
+                      className={`p-4 rounded-xl border-2 text-left transition-all ${
+                        aiDifficulty === diff
+                          ? "border-green-500 bg-green-50 dark:bg-green-900/20"
+                          : "border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:border-slate-300 dark:hover:border-slate-600"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-xl">{aiDifficultyLabels[diff].emoji}</span>
+                        <span className="font-bold text-slate-800 dark:text-white">
+                          {aiDifficultyLabels[diff].name}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        {aiDifficultyLabels[diff].description}
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Operation Selection */}
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-2">
+                  Operation
+                </label>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                  {(Object.keys(operationLabels) as Operation[]).map((op) => (
+                    <button
+                      key={op}
+                      onClick={() => {
+                        setAiOperation(op);
+                        // Reset selected numbers when operation changes
+                        setAiSelectedNumbers(getNumbersForOperation(op));
+                      }}
+                      className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        aiOperation === op
+                          ? "bg-blue-600 text-white"
+                          : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
+                      }`}
+                    >
+                      {operationLabels[op]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Advanced Mode Toggle */}
+              <div className="mb-4">
+                <button
+                  onClick={() => setAiAdvancedMode(!aiAdvancedMode)}
+                  className="text-sm text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
+                >
+                  {aiAdvancedMode ? "▼ Hide Advanced Settings" : "▶ Show Advanced Settings"}
+                </button>
+              </div>
+
+              {/* Advanced Settings (collapsible) */}
+              {aiAdvancedMode && (
+                <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-4 mb-6 space-y-4">
+                  {/* Question Count */}
+                  <div>
+                    <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-2">
+                      Number of Questions: {aiQuestionCount}
+                    </label>
+                    <input
+                      type="range"
+                      min="5"
+                      max="30"
+                      value={aiQuestionCount}
+                      onChange={(e) => setAiQuestionCount(parseInt(e.target.value))}
+                      className="w-full"
+                    />
+                  </div>
+
+                  {/* Time Limit */}
+                  <div>
+                    <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-2">
+                      Time Limit
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      {[
+                        { label: "30s", value: 30 },
+                        { label: "1m", value: 60 },
+                        { label: "2m", value: 120 },
+                        { label: "5m", value: 300 },
+                        { label: "None", value: 0 },
+                      ].map((opt) => (
+                        <button
+                          key={opt.value}
+                          onClick={() => setAiTimeLimit(opt.value)}
+                          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                            aiTimeLimit === opt.value
+                              ? "bg-blue-600 text-white"
+                              : "bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-600"
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Numbers */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="text-sm font-medium text-slate-600 dark:text-slate-400">Numbers</label>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setAiSelectedNumbers(getNumbersForOperation(aiOperation))}
+                          className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                        >
+                          Select All
+                        </button>
+                        <button
+                          onClick={() => setAiSelectedNumbers([1])}
+                          className="text-xs text-slate-500 dark:text-slate-400 hover:underline"
+                        >
+                          Clear
+                        </button>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {getNumbersForOperation(aiOperation).map((num) => (
+                        <button
+                          key={num}
+                          onClick={() => {
+                            const newNumbers = aiSelectedNumbers.includes(num)
+                              ? aiSelectedNumbers.filter((n) => n !== num)
+                              : [...aiSelectedNumbers, num];
+                            if (newNumbers.length > 0) {
+                              setAiSelectedNumbers(newNumbers);
+                            }
+                          }}
+                          className={`w-10 h-10 rounded-lg font-semibold transition-colors ${
+                            aiSelectedNumbers.includes(num)
+                              ? "bg-blue-600 text-white"
+                              : "bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-600"
+                          }`}
+                        >
+                          {num}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Simple Mode Info */}
+              {!aiAdvancedMode && (
+                <p className="text-xs text-slate-400 dark:text-slate-500 text-center mb-4">
+                  Default: 10 questions, no time limit, all numbers
+                </p>
+              )}
+
+              {/* Start Button */}
+              <button
+                onClick={async () => {
+                  if (!playerName.trim()) {
+                    alert("Please enter your name");
+                    return;
+                  }
+                  setIsStartingAIGame(true);
+                  try {
+                    const settings = aiAdvancedMode
+                      ? {
+                          operation: aiOperation,
+                          selectedNumbers: aiSelectedNumbers,
+                          questionCount: aiQuestionCount,
+                          timeLimit: aiTimeLimit,
+                        }
+                      : {
+                          operation: aiOperation,
+                          selectedNumbers: getNumbersForOperation(aiOperation),
+                          questionCount: 10,
+                          timeLimit: 0,
+                        };
+                    const result = await createAIGame(playerId, playerName, aiDifficulty, settings);
+                    if (result.success && result.roomId) {
+                      // Game starts immediately - the API returns questions and AI player
+                      onGameStart(
+                        result.roomId,
+                        playerId,
+                        playerName,
+                        result.questions,
+                        false, // Not host in the traditional sense
+                        result.players,
+                        [], // No teams in AI mode
+                        'ffa',
+                        settings.timeLimit
+                      );
+                    } else {
+                      alert(result.error || "Failed to start AI game");
+                    }
+                  } catch (error) {
+                    console.error("Error starting AI game:", error);
+                    alert("Failed to start AI game");
+                  } finally {
+                    setIsStartingAIGame(false);
+                  }
+                }}
+                disabled={!playerName.trim() || isStartingAIGame}
+                className={`w-full py-4 rounded-xl text-lg font-bold transition-colors ${
+                  !playerName.trim() || isStartingAIGame
+                    ? "bg-slate-300 dark:bg-slate-700 text-slate-500 cursor-not-allowed"
+                    : "bg-green-600 text-white hover:bg-green-700"
+                }`}
+              >
+                {isStartingAIGame ? "Starting..." : `Play vs ${aiDifficultyLabels[aiDifficulty].emoji} ${aiDifficultyLabels[aiDifficulty].name}`}
               </button>
             </div>
           )}

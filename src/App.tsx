@@ -453,6 +453,7 @@ const App: React.FC = () => {
                   teams={multiplayerTeams}
                   gameMode={multiplayerGameMode}
                   teamResults={multiplayerTeamResults}
+                  players={multiplayerPlayers}
                   onRematch={handleMultiplayerRematch}
                   onExit={handleMultiplayerExit}
                 />
@@ -677,8 +678,11 @@ const MultiplayerLobbyWrapper: React.FC<MultiplayerLobbyWrapperProps> = ({
     }
   }, [rematchData, navigate]);
 
+  const location = useLocation();
+
   return (
     <MultiplayerLobbyScreen
+      key={location.search} // Force remount when query params change
       isDarkMode={isDarkMode}
       toggleDarkMode={toggleDarkMode}
       onGameStart={handleGameStart}
@@ -751,6 +755,7 @@ interface MultiplayerResultsWrapperProps {
   teams: Team[];
   gameMode: GameMode;
   teamResults?: TeamResult[];
+  players: Player[];
   onRematch: (data: { newRoomId: string; newRoomCode: string; isQuickMatch: boolean; players: any[]; settings: any; teams: Team[] }) => void;
   onExit: () => void;
 }
@@ -763,6 +768,7 @@ const MultiplayerResultsWrapper: React.FC<MultiplayerResultsWrapperProps> = ({
   teams,
   gameMode,
   teamResults,
+  players,
   onRematch,
   onExit,
 }) => {
@@ -777,6 +783,11 @@ const MultiplayerResultsWrapper: React.FC<MultiplayerResultsWrapperProps> = ({
   const handleRematch = (data: { newRoomId: string; newRoomCode: string; isQuickMatch: boolean; players: any[]; settings: any; teams: Team[] }) => {
     onRematch(data);
     navigate('/multiplayer', { replace: true });
+  };
+
+  const handlePlayAgainAI = () => {
+    onExit();
+    navigate('/multiplayer?tab=aimode', { replace: true });
   };
 
   const handleExit = () => {
@@ -797,7 +808,9 @@ const MultiplayerResultsWrapper: React.FC<MultiplayerResultsWrapperProps> = ({
       teams={teams}
       gameMode={gameMode}
       teamResults={teamResults}
+      players={players}
       onRematch={handleRematch}
+      onPlayAgainAI={handlePlayAgainAI}
       onExit={handleExit}
     />
   );
