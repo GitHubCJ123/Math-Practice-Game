@@ -5,101 +5,6 @@ import { DEFAULT_QUESTION_COUNT, MIN_QUESTION_COUNT, MAX_QUESTION_COUNT, MAX_CON
 import { StarIcon, SunIcon, MoonIcon, ChartBarIcon, BullseyeIcon, ListBulletIcon, ClockIcon, TrashIcon } from '../ui/icons';
 import { Leaderboard } from '../ui/Leaderboard';
 
-// Multiplayer launch date: January 22, 2026, 6:00 PM EST
-const MULTIPLAYER_LAUNCH_DATE = new Date('2026-01-22T18:00:00-05:00');
-const SECRET_CODE = 'multiplayeradmin67';
-
-// Countdown Banner Component
-const CountdownBanner: React.FC = () => {
-  const [timeLeft, setTimeLeft] = useState<{ days: number; hours: number; minutes: number; seconds: number } | null>(null);
-
-  useEffect(() => {
-    const calculateTimeLeft = () => {
-      const now = new Date().getTime();
-      const target = MULTIPLAYER_LAUNCH_DATE.getTime();
-      const difference = target - now;
-
-      if (difference <= 0) {
-        return null;
-      }
-
-      return {
-        days: Math.floor(difference / (1000 * 60 * 60 * 24)),
-        hours: Math.floor((difference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)),
-        minutes: Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60)),
-        seconds: Math.floor((difference % (1000 * 60)) / 1000),
-      };
-    };
-
-    setTimeLeft(calculateTimeLeft());
-    const timer = setInterval(() => {
-      setTimeLeft(calculateTimeLeft());
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, []);
-
-  if (!timeLeft) return null;
-
-  return (
-    <div className="w-full mb-6 overflow-hidden rounded-2xl bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 p-1 shadow-2xl">
-      <div className="relative bg-gradient-to-r from-purple-900/90 via-indigo-900/90 to-blue-900/90 rounded-xl px-4 py-4 sm:px-6 sm:py-5">
-        {/* Sparkle effects */}
-        <div className="absolute inset-0 overflow-hidden rounded-xl">
-          <div className="absolute top-2 left-[10%] w-2 h-2 bg-white rounded-full animate-ping opacity-75" />
-          <div className="absolute top-4 left-[30%] w-1.5 h-1.5 bg-yellow-300 rounded-full animate-ping opacity-75" style={{ animationDelay: '0.3s' }} />
-          <div className="absolute bottom-3 left-[60%] w-2 h-2 bg-pink-300 rounded-full animate-ping opacity-75" style={{ animationDelay: '0.6s' }} />
-          <div className="absolute top-3 right-[20%] w-1.5 h-1.5 bg-cyan-300 rounded-full animate-ping opacity-75" style={{ animationDelay: '0.9s' }} />
-        </div>
-        
-        <div className="relative flex flex-col sm:flex-row items-center justify-center gap-4 text-white">
-          {/* Icon and Title */}
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-white/10 rounded-full">
-              <svg className="w-8 h-8 text-yellow-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-              </svg>
-            </div>
-            <div className="text-center sm:text-left">
-              <h3 className="text-lg sm:text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-200 via-pink-200 to-cyan-200">
-                🎮 MULTIPLAYER MODE LAUNCHING! 🎮
-              </h3>
-              <p className="text-sm text-purple-200">January 22nd at 6:00 PM EST</p>
-            </div>
-          </div>
-          
-          {/* Countdown Timer */}
-          <div className="flex items-center gap-2 sm:gap-3">
-            <div className="flex flex-col items-center bg-white/10 backdrop-blur-sm rounded-lg px-3 py-2 min-w-[60px]">
-              <span className="text-2xl sm:text-3xl font-bold text-yellow-300">{timeLeft.days}</span>
-              <span className="text-xs text-purple-200 uppercase tracking-wide">Days</span>
-            </div>
-            <span className="text-2xl font-bold text-yellow-300">:</span>
-            <div className="flex flex-col items-center bg-white/10 backdrop-blur-sm rounded-lg px-3 py-2 min-w-[60px]">
-              <span className="text-2xl sm:text-3xl font-bold text-yellow-300">{String(timeLeft.hours).padStart(2, '0')}</span>
-              <span className="text-xs text-purple-200 uppercase tracking-wide">Hours</span>
-            </div>
-            <span className="text-2xl font-bold text-yellow-300">:</span>
-            <div className="flex flex-col items-center bg-white/10 backdrop-blur-sm rounded-lg px-3 py-2 min-w-[60px]">
-              <span className="text-2xl sm:text-3xl font-bold text-yellow-300">{String(timeLeft.minutes).padStart(2, '0')}</span>
-              <span className="text-xs text-purple-200 uppercase tracking-wide">Min</span>
-            </div>
-            <span className="text-2xl font-bold text-yellow-300">:</span>
-            <div className="flex flex-col items-center bg-white/10 backdrop-blur-sm rounded-lg px-3 py-2 min-w-[60px]">
-              <span className="text-2xl sm:text-3xl font-bold text-pink-300 animate-pulse">{String(timeLeft.seconds).padStart(2, '0')}</span>
-              <span className="text-xs text-purple-200 uppercase tracking-wide">Sec</span>
-            </div>
-          </div>
-        </div>
-        
-        <p className="relative text-center text-sm text-purple-200 mt-3 font-medium">
-          ⚡ Challenge your friends in real-time math battles! ⚡
-        </p>
-      </div>
-    </div>
-  );
-};
-
 interface Score {
   playerName: string;
   score: number;
@@ -672,49 +577,6 @@ export const SelectionScreen: React.FC<SelectionScreenProps> = ({ onStartQuiz, i
   const [timeLimit, setTimeLimit] = useState<number>(initialSettings?.timeLimit ?? 0);
   const [questionCount, setQuestionCount] = useState<number>(initialSettings?.questionCount ?? DEFAULT_QUESTION_COUNT);
   const [showStats, setShowStats] = useState(false);
-  
-  // Multiplayer unlock state
-  const [multiplayerUnlocked, setMultiplayerUnlocked] = useState<boolean>(() => {
-    // Check if launch date has passed
-    const now = new Date().getTime();
-    const launchTime = MULTIPLAYER_LAUNCH_DATE.getTime();
-    return now >= launchTime;
-  });
-  const [secretCodeBuffer, setSecretCodeBuffer] = useState('');
-
-  // Secret code listener
-  useEffect(() => {
-    const handleKeyPress = (e: KeyboardEvent) => {
-      // Only listen for alphanumeric keys
-      if (e.key.length === 1 && /[a-z0-9]/i.test(e.key)) {
-        setSecretCodeBuffer(prev => {
-          const newBuffer = (prev + e.key.toLowerCase()).slice(-SECRET_CODE.length);
-          if (newBuffer === SECRET_CODE) {
-            setMultiplayerUnlocked(true);
-          }
-          return newBuffer;
-        });
-      }
-    };
-
-    window.addEventListener('keypress', handleKeyPress);
-    return () => window.removeEventListener('keypress', handleKeyPress);
-  }, []);
-
-  // Check if launch date has passed (re-check every second)
-  useEffect(() => {
-    const checkLaunchDate = () => {
-      const now = new Date().getTime();
-      const launchTime = MULTIPLAYER_LAUNCH_DATE.getTime();
-      if (now >= launchTime && !multiplayerUnlocked) {
-        setMultiplayerUnlocked(true);
-      }
-    };
-
-    checkLaunchDate();
-    const timer = setInterval(checkLaunchDate, 1000);
-    return () => clearInterval(timer);
-  }, [multiplayerUnlocked]);
 
   const isConversionMode =
     operation === 'fraction-to-decimal' ||
@@ -818,23 +680,18 @@ export const SelectionScreen: React.FC<SelectionScreenProps> = ({ onStartQuiz, i
         <h1 className="text-4xl sm:text-5xl font-extrabold text-center text-slate-800 dark:text-white mb-2">Math Practice</h1>
         <p className="text-center text-slate-500 dark:text-slate-400 mb-6">Sharpen your skills. Select your challenge below.</p>
         
-        {/* Countdown Banner - only show if multiplayer not unlocked */}
-        {!multiplayerUnlocked && <CountdownBanner />}
-        
-        {/* Multiplayer Button - only show if unlocked */}
-        {multiplayerUnlocked && (
-          <div className="flex justify-center mb-10">
-            <Link
-              to="/multiplayer"
-              className="px-8 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold text-lg rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 flex items-center gap-2"
-            >
-              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-              </svg>
-              Multiplayer Mode
-            </Link>
-          </div>
-        )}
+        {/* Multiplayer Button */}
+        <div className="flex justify-center mb-10">
+          <Link
+            to="/multiplayer"
+            className="px-8 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold text-lg rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 flex items-center gap-2"
+          >
+            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+            </svg>
+            Multiplayer Mode
+          </Link>
+        </div>
 
         <div className="space-y-8">
             <Section title="Pick Your Operation" step={1}>
