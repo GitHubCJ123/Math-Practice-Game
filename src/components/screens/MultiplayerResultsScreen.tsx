@@ -468,12 +468,6 @@ export const MultiplayerResultsScreen: React.FC<MultiplayerResultsScreenProps> =
               >
                 🤖 Play Again vs AI
               </button>
-              <button
-                onClick={onExit}
-                className="px-10 py-4 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-lg font-bold hover:bg-slate-300 dark:hover:bg-slate-600 transition-all transform hover:scale-105 shadow-lg"
-              >
-                Back to Menu
-              </button>
             </>
           ) : gameMode === 'teams' ? (
             <>
