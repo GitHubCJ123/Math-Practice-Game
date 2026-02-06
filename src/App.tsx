@@ -49,8 +49,15 @@ const App: React.FC = () => {
   } | null>(null);
 
   useEffect(() => {
-    const userPrefersDark = localStorage.getItem('theme') === 'dark';
-    setIsDarkMode(userPrefersDark);
+    const params = new URLSearchParams(window.location.search);
+    const themeParam = params.get('theme');
+    if (themeParam === 'dark' || themeParam === 'light') {
+      setIsDarkMode(themeParam === 'dark');
+      localStorage.setItem('theme', themeParam);
+    } else {
+      const userPrefersDark = localStorage.getItem('theme') === 'dark';
+      setIsDarkMode(userPrefersDark);
+    }
   }, []);
 
   useEffect(() => {
