@@ -49,30 +49,40 @@ export default async function handler(req, res) {
       }
     }
 
-    // Step 2: Check which winners are not already in Hall of Fame and insert them
+    // Step 2: Batch-insert winners that aren't already in Hall of Fame
+    // First, fetch all existing hall_of_fame entries for this month in one query
+    const { data: existingHof, error: hofError } = await supabase
+      .from('hall_of_fame')
+      .select('operation_type')
+      .eq('year', year)
+      .eq('month', month);
+
+    if (hofError) {
+      throw hofError;
+    }
+
+    const existingOperations = new Set((existingHof || []).map(r => r.operation_type));
+    const newWinners: { player_name: string; score: number; operation_type: string; month: number; year: number }[] = [];
+
     for (const [operationType, winner] of winnersByOperation) {
-      const { data: existing } = await supabase
+      if (!existingOperations.has(operationType)) {
+        newWinners.push({
+          player_name: winner.player_name,
+          score: winner.score,
+          operation_type: operationType,
+          month: month,
+          year: year,
+        });
+      }
+    }
+
+    if (newWinners.length > 0) {
+      const { error: insertError } = await supabase
         .from('hall_of_fame')
-        .select('id')
-        .eq('operation_type', operationType)
-        .eq('year', year)
-        .eq('month', month)
-        .limit(1);
+        .insert(newWinners);
 
-      if (!existing || existing.length === 0) {
-        const { error: insertError } = await supabase
-          .from('hall_of_fame')
-          .insert({
-            player_name: winner.player_name,
-            score: winner.score,
-            operation_type: operationType,
-            month: month,
-            year: year,
-          });
-
-        if (insertError) {
-          console.error(`[api/archive-scores] Error inserting hall of fame for ${operationType}`, insertError);
-        }
+      if (insertError) {
+        console.error(`[api/archive-scores] Error batch-inserting hall of fame winners`, insertError);
       }
     }
 
@@ -109,30 +119,39 @@ export default async function handler(req, res) {
       }
     }
 
-    // Insert missing historical winners
-    for (const [, winner] of historicalWinners) {
-      const { data: existing } = await supabase
+    // Insert missing historical winners in a single batch
+    const backfillWinners: { player_name: string; score: number; operation_type: string; month: number; year: number }[] = [];
+
+    // Fetch ALL existing hall_of_fame entries in one query to avoid N lookups
+    const { data: allExistingHof, error: allHofError } = await supabase
+      .from('hall_of_fame')
+      .select('operation_type, year, month');
+
+    if (allHofError) {
+      throw allHofError;
+    }
+
+    const existingHofKeys = new Set((allExistingHof || []).map(r => `${r.operation_type}-${r.year}-${r.month}`));
+
+    for (const [key, winner] of historicalWinners) {
+      if (!existingHofKeys.has(key)) {
+        backfillWinners.push({
+          player_name: winner.player_name,
+          score: winner.score,
+          operation_type: winner.operation_type,
+          month: winner.month,
+          year: winner.year,
+        });
+      }
+    }
+
+    if (backfillWinners.length > 0) {
+      const { error: backfillInsertError } = await supabase
         .from('hall_of_fame')
-        .select('id')
-        .eq('operation_type', winner.operation_type)
-        .eq('year', winner.year)
-        .eq('month', winner.month)
-        .limit(1);
+        .insert(backfillWinners);
 
-      if (!existing || existing.length === 0) {
-        const { error: insertError } = await supabase
-          .from('hall_of_fame')
-          .insert({
-            player_name: winner.player_name,
-            score: winner.score,
-            operation_type: winner.operation_type,
-            month: winner.month,
-            year: winner.year,
-          });
-
-        if (insertError) {
-          console.error(`[api/archive-scores] Error backfilling hall of fame`, insertError);
-        }
+      if (backfillInsertError) {
+        console.error(`[api/archive-scores] Error batch-backfilling hall of fame`, backfillInsertError);
       }
     }
 

@@ -1,65 +1,31 @@
-# Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
-# More GitHub Actions for Azure: https://github.com/Azure/actions
+# Monthly cron backup to trigger score archival on Vercel.
+# Vercel's own cron also fires — the endpoint is idempotent so double-firing is harmless.
 
-name: Build and deploy Node.js app to Azure Web App - mathpracticegame
+name: Monthly Score Archive (Backup)
 
 on:
-  push:
-    branches:
-      - main
+  schedule:
+    # Midnight EST on the 1st of every month (05:00 UTC)
+    - cron: '0 5 1 * *'
   workflow_dispatch:
 
 jobs:
-  build:
+  archive-scores:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read #This is required for actions/checkout
-
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Node.js version
-        uses: actions/setup-node@v3
-        with:
-          node-version: '22.x'
-
-      - name: npm install, build, and test
+      - name: Trigger archive-scores endpoint
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          VERCEL_URL: ${{ secrets.VERCEL_URL }}
         run: |
-          npm install
-          npm run build --if-present
-          npm run test --if-present
-
-      - name: Upload artifact for deployment job
-        uses: actions/upload-artifact@v4
-        with:
-          name: node-app
-          path: .
-
-  deploy:
-    runs-on: ubuntu-latest
-    needs: build
-    permissions:
-      id-token: write #This is required for requesting the JWT
-      contents: read #This is required for actions/checkout
-
-    steps:
-      - name: Download artifact from build job
-        uses: actions/download-artifact@v4
-        with:
-          name: node-app
-      
-      - name: Login to Azure
-        uses: azure/login@v2
-        with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_17CB24D96C8F4592848EA5C1EC9C9D7F }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_8B90C0E622724CA2855CFBDCB7032484 }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_F3246B539FB04197B1D2B076EBCC6068 }}
-
-      - name: 'Deploy to Azure Web App'
-        id: deploy-to-webapp
-        uses: azure/webapps-deploy@v3
-        with:
-          app-name: 'mathpracticegame'
-          slot-name: 'Production'
-          package: .
+          echo "Triggering score archive at $(date -u)"
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X POST "${VERCEL_URL}/api/archive-scores" \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            -H "Content-Type: application/json")
+          echo "Response status: $HTTP_STATUS"
+          if [ "$HTTP_STATUS" -ne 200 ]; then
+            echo "::error::Archive endpoint returned HTTP $HTTP_STATUS"
+            exit 1
+          fi
           
