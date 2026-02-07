@@ -40,6 +40,7 @@ export const QuizScreen: React.FC<QuizScreenProps> = ({ questions, timeLimit, on
   const [quizFinished, setQuizFinished] = useState(false);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const [introStage, setIntroStage] = useState<'ready' | 'set' | 'go' | 'finished'>('ready');
+  const timerStartRef = useRef<number | null>(null);
 
   // Create a ref to hold the latest answers to avoid stale closures in setInterval
   const answersRef = useRef(answers);
@@ -86,24 +87,28 @@ export const QuizScreen: React.FC<QuizScreenProps> = ({ questions, timeLimit, on
     if (!timerRunning) {
       return;
     }
+    // Use wall-clock time for accurate timing regardless of device performance
+    if (timerStartRef.current === null) {
+      timerStartRef.current = performance.now();
+    }
+    const startTime = timerStartRef.current;
     const intervalId = setInterval(() => {
-      setElapsedTime(prev => {
-        const newElapsedTime = prev + 0.01; // Update every 10ms for smoother timer
-        if (timeLimit > 0 && newElapsedTime >= timeLimit) {
-          clearInterval(intervalId);
-          setTimerRunning(false);
-          playTimeUpSound();
-          setTimeout(() => {
-            if (!quizFinished) {
-              setQuizFinished(true);
-              onFinishQuiz(answersRef.current, timeLimit);
-            }
-          }, 300); // Delay to allow sound to play
-          return timeLimit;
-        }
-        return newElapsedTime;
-      });
-    }, 10); // Interval of 10ms
+      const newElapsedTime = (performance.now() - startTime) / 1000;
+      if (timeLimit > 0 && newElapsedTime >= timeLimit) {
+        clearInterval(intervalId);
+        setTimerRunning(false);
+        setElapsedTime(timeLimit);
+        playTimeUpSound();
+        setTimeout(() => {
+          if (!quizFinished) {
+            setQuizFinished(true);
+            onFinishQuiz(answersRef.current, timeLimit);
+          }
+        }, 300); // Delay to allow sound to play
+      } else {
+        setElapsedTime(newElapsedTime);
+      }
+    }, 10);
     return () => clearInterval(intervalId);
      // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timerRunning, timeLimit, onFinishQuiz]);

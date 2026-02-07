@@ -124,6 +124,7 @@ export const MultiplayerQuizScreen: React.FC<MultiplayerQuizScreenProps> = ({
   const [quizFinished, setQuizFinished] = useState(false);
   const [introStage, setIntroStage] = useState<"ready" | "set" | "go" | "finished">("ready");
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const timerStartRef = useRef<number | null>(null);
 
   // Opponent state - now tracks multiple opponents
   const [opponentProgress, setOpponentProgress] = useState<Record<string, number>>({});
@@ -271,25 +272,28 @@ export const MultiplayerQuizScreen: React.FC<MultiplayerQuizScreenProps> = ({
     }
   }, [introStage]);
 
-  // Timer
+  // Timer — uses wall-clock time for accurate timing regardless of device performance
   useEffect(() => {
     if (!timerRunning) return;
+    if (timerStartRef.current === null) {
+      timerStartRef.current = performance.now();
+    }
+    const startTime = timerStartRef.current;
     const intervalId = setInterval(() => {
-      setElapsedTime((prev) => {
-        const newElapsedTime = prev + 0.01;
-        if (timeLimit > 0 && newElapsedTime >= timeLimit) {
-          clearInterval(intervalId);
-          setTimerRunning(false);
-          playTimeUpSound();
-          setTimeout(() => {
-            if (!quizFinished) {
-              handleSubmitQuiz(answersRef.current, timeLimit);
-            }
-          }, 300);
-          return timeLimit;
-        }
-        return newElapsedTime;
-      });
+      const newElapsedTime = (performance.now() - startTime) / 1000;
+      if (timeLimit > 0 && newElapsedTime >= timeLimit) {
+        clearInterval(intervalId);
+        setTimerRunning(false);
+        setElapsedTime(timeLimit);
+        playTimeUpSound();
+        setTimeout(() => {
+          if (!quizFinished) {
+            handleSubmitQuiz(answersRef.current, timeLimit);
+          }
+        }, 300);
+      } else {
+        setElapsedTime(newElapsedTime);
+      }
     }, 10);
     return () => clearInterval(intervalId);
   }, [timerRunning, timeLimit]);
