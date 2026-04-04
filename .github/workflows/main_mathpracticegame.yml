@@ -19,7 +19,7 @@ jobs:
           VERCEL_URL: ${{ secrets.VERCEL_URL }}
         run: |
           echo "Triggering score archive at $(date -u)"
-          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+          HTTP_STATUS=$(curl -sL -o /dev/null -w "%{http_code}" \
             -X POST "${VERCEL_URL}/api/archive-scores" \
             -H "Authorization: Bearer ${CRON_SECRET}" \
             -H "Content-Type: application/json")
