@@ -1,9 +1,10 @@
+import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getSupabase } from "../lib/api/db-pool.js";
 import { getCurrentEasternMonthBounds, getPreviousEasternMonthBounds } from "../lib/api/time-utils.js";
 import { clearHallOfFameDatesCache } from "./get-hall-of-fame-dates.js";
 import { clearLeaderboardCache } from "./get-leaderboard.js";
 
-export default async function handler(req, res) {
+export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ message: 'Method Not Allowed' });
   }
@@ -208,8 +209,9 @@ export default async function handler(req, res) {
 
     console.log('Leaderboard maintenance completed successfully.');
     return res.status(200).json({ message: 'Scores archived successfully.' });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('[api/archive-scores] Error running maintenance', error);
-    return res.status(500).json({ message: 'Error archiving scores', error: error.message });
+    const message = error instanceof Error ? error.message : String(error);
+    return res.status(500).json({ message: 'Error archiving scores', error: message });
   }
 }
