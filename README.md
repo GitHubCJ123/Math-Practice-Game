@@ -9,9 +9,9 @@ Solo drills&nbsp;·&nbsp;live multiplayer&nbsp;·&nbsp;AI opponents&nbsp;·&nbsp
 <br/>
 
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)](https://react.dev)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.8-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
-[![Vite](https://img.shields.io/badge/Vite-6-646CFF?logo=vite&logoColor=white)](https://vitejs.dev)
-[![Tailwind CSS](https://img.shields.io/badge/Tailwind-3.4-38BDF8?logo=tailwindcss&logoColor=white)](https://tailwindcss.com)
+[![TypeScript](https://img.shields.io/badge/TypeScript-6-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
+[![Vite](https://img.shields.io/badge/Vite-8-646CFF?logo=vite&logoColor=white)](https://vitejs.dev)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind-4-38BDF8?logo=tailwindcss&logoColor=white)](https://tailwindcss.com)
 [![Vercel](https://img.shields.io/badge/Deployed%20on-Vercel-000000?logo=vercel&logoColor=white)](https://vercel.com)
 [![Supabase](https://img.shields.io/badge/Supabase-Postgres-3ECF8E?logo=supabase&logoColor=white)](https://supabase.com)
 [![Pusher](https://img.shields.io/badge/Realtime-Pusher-300D4F?logo=pusher&logoColor=white)](https://pusher.com)
@@ -105,7 +105,7 @@ Pick exactly what you want to drill — the question engine handles the rest.
 
 | Layer | Technology |
 |---|---|
-| **Frontend** | [React 19](https://react.dev), [TypeScript 5.8](https://www.typescriptlang.org), [Vite 6](https://vitejs.dev), [React Router 7](https://reactrouter.com), [Tailwind CSS 3.4](https://tailwindcss.com) (PostCSS build) |
+| **Frontend** | [React 19](https://react.dev), [TypeScript 6](https://www.typescriptlang.org), [Vite 8](https://vitejs.dev), [React Router 7](https://reactrouter.com), [Tailwind CSS 4](https://tailwindcss.com) (CSS-first config via PostCSS) |
 | **Realtime** | [Pusher Channels](https://pusher.com/channels) — `pusher-js` on the client, `pusher` SDK on the server |
 | **Backend** | [Vercel Serverless Functions](https://vercel.com/docs/functions) (`@vercel/node`); [Express 5](https://expressjs.com) for the local dev API only |
 | **Database** | [Supabase](https://supabase.com) / Postgres via `@supabase/supabase-js` |
@@ -164,7 +164,7 @@ flowchart TD
 ├─ src/                        # React client
 │  ├─ App.tsx                  # Providers + router + global solo state
 │  ├─ index.tsx                # React root
-│  ├─ index.css                # Tailwind layers + custom keyframe animations
+│  ├─ index.css                # Tailwind v4 CSS-first config + custom keyframe animations
 │  ├─ components/
 │  │  ├─ screens/              # Selection, Quiz, Results (solo + multiplayer)
 │  │  │  └─ multiplayer-lobby/ # Lobby home, create/join/quick-match/AI flows
