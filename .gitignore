@@ -7,6 +7,10 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Dev server / debug output redirects
+*.err
+*.out
+
 node_modules
 dist
 dist-ssr
@@ -27,3 +31,4 @@ dist-ssr
 .vercel
 .env.test
 todo.md
+.cursor/

@@ -8,6 +8,7 @@ export function getSupabase(): SupabaseClient {
     const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
     if (!supabaseUrl || !supabaseServiceKey) {
+      console.error("[lib/api/db-pool] Missing Supabase configuration; database calls will fail until env vars are set.");
       throw new Error("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY environment variables are required");
     }
 
@@ -24,5 +25,4 @@ export function getSupabase(): SupabaseClient {
 
 // Legacy export for compatibility during migration
 export const getPool = getSupabase;
-
 

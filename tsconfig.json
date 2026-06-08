@@ -17,15 +17,28 @@
     "moduleResolution": "bundler",
     "isolatedModules": true,
     "moduleDetection": "force",
-    "allowJs": true,
     "jsx": "react-jsx",
     "paths": {
       "@/*": [
         "./*"
+      ],
+      "@shared/*": [
+        "./shared/*"
       ]
     },
     "allowImportingTsExtensions": true,
-    "noEmit": true
+    "noEmit": true,
+    "strict": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true
   },
-  "include": ["src", "api", "lib", "types.ts"]
+  "include": [
+    "src/**/*",
+    "api/**/*",
+    "lib/**/*",
+    "shared/**/*",
+    "server-dev.ts",
+    "vite.config.ts"
+  ]
 }

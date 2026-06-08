@@ -1,4 +1,4 @@
-import { Room, Player, RoomSettings, Question, PlayerGameState, Team } from "../../types.js";
+import type { Room, RoomSettings, Question } from "../../shared/types.js";
 import { generateRoomCode, generatePlayerId } from "./pusher.js";
 
 // In-memory room storage (for production, use Supabase)
@@ -11,18 +11,22 @@ const ROOM_EXPIRY_MS = 60 * 60 * 1000; // 1 hour
 
 // Cleanup expired rooms periodically
 setInterval(() => {
-  const now = Date.now();
-  for (const [roomId, room] of rooms.entries()) {
-    if (now - room.createdAt > ROOM_EXPIRY_MS) {
-      rooms.delete(roomId);
-      roomsByCode.delete(room.code);
+  try {
+    const now = Date.now();
+    for (const [roomId, room] of rooms.entries()) {
+      if (now - room.createdAt > ROOM_EXPIRY_MS) {
+        rooms.delete(roomId);
+        roomsByCode.delete(room.code);
+      }
     }
-  }
-  // Cleanup old queue entries (5 minutes)
-  for (const [odId, entry] of quickMatchQueue.entries()) {
-    if (now - entry.timestamp > 5 * 60 * 1000) {
-      quickMatchQueue.delete(odId);
+    // Cleanup old queue entries (5 minutes)
+    for (const [odId, entry] of quickMatchQueue.entries()) {
+      if (now - entry.timestamp > 5 * 60 * 1000) {
+        quickMatchQueue.delete(odId);
+      }
     }
+  } catch (error) {
+    console.error("[lib/api/room-store] Room/quick-match cleanup interval failed:", error);
   }
 }, 60000); // Check every minute
 
@@ -308,29 +312,20 @@ export function deleteRoom(roomId: string): void {
 
 // Quick Match Queue Functions
 export function addToQuickMatchQueue(odId: string, odName: string, operation: string): void {
-  console.log(`[QuickMatch] Adding to queue: ${odId} for ${operation}`);
-  console.log(`[QuickMatch] Queue before add:`, Array.from(quickMatchQueue.entries()));
   quickMatchQueue.set(odId, { odId, odName, operation, timestamp: Date.now() });
-  console.log(`[QuickMatch] Queue after add:`, Array.from(quickMatchQueue.entries()));
 }
 
 export function removeFromQuickMatchQueue(odId: string): void {
-  console.log(`[QuickMatch] Removing from queue: ${odId}`);
   quickMatchQueue.delete(odId);
 }
 
 export function findQuickMatchOpponent(odId: string, operation: string): { odId: string; odName: string } | null {
-  console.log(`[QuickMatch] Finding opponent for ${odId}, operation: ${operation}`);
-  console.log(`[QuickMatch] Current queue:`, Array.from(quickMatchQueue.entries()));
   for (const [queuedId, entry] of quickMatchQueue.entries()) {
-    console.log(`[QuickMatch] Checking queue entry: ${queuedId}, operation: ${entry.operation}`);
     if (queuedId !== odId && entry.operation === operation) {
-      console.log(`[QuickMatch] Found match! ${queuedId}`);
       quickMatchQueue.delete(queuedId);
       return { odId: entry.odId, odName: entry.odName };
     }
   }
-  console.log(`[QuickMatch] No match found`);
   return null;
 }
 

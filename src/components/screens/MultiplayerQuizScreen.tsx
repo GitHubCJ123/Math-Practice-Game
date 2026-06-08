@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import Pusher, { Channel } from "pusher-js";
-import type { Question, Operation, MultiplayerResult, Team, GameMode, Player, TeamResult, AIDifficulty } from "../../../types";
+import type { Question, Operation, MultiplayerResult, Team, GameMode, Player, TeamResult, AIDifficulty } from "@shared/types";
 import { ClockIcon } from "../ui/icons";
 import {
   getPusherClient,
@@ -8,6 +7,7 @@ import {
   submitMultiplayerAnswers,
   notifyDisconnect,
 } from "../../lib/multiplayer";
+import { playTimeUpSound } from "../../lib/audio";
 
 // AI difficulty profiles for client-side simulation
 const AI_PROFILES: Record<AIDifficulty, { accuracy: number; minTime: number; maxTime: number }> = {
@@ -88,24 +88,6 @@ interface MultiplayerQuizScreenProps {
   onFinish: (results: MultiplayerResult[], teamResults?: TeamResult[]) => void;
 }
 
-const playTimeUpSound = () => {
-  try {
-    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-    if (!audioContext) return;
-    const oscillator = audioContext.createOscillator();
-    const gainNode = audioContext.createGain();
-    oscillator.connect(gainNode);
-    gainNode.connect(audioContext.destination);
-    oscillator.type = "sine";
-    oscillator.frequency.setValueAtTime(523.25, audioContext.currentTime);
-    gainNode.gain.setValueAtTime(0.5, audioContext.currentTime);
-    gainNode.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 0.3);
-    oscillator.start(audioContext.currentTime);
-    oscillator.stop(audioContext.currentTime + 0.3);
-  } catch (error) {
-    console.error("Could not play sound:", error);
-  }
-};
 
 export const MultiplayerQuizScreen: React.FC<MultiplayerQuizScreenProps> = ({
   roomId,

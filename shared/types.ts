@@ -31,6 +31,12 @@ export interface QuizResult {
 
 export type GameState = 'selection' | 'quiz' | 'results';
 
+declare global {
+  interface Window {
+    onFinishQuiz?: (answers: string[], time: number) => void;
+  }
+}
+
 export interface HighScore {
   score: number;
   time: number;
@@ -54,6 +60,7 @@ export type AllQuizStats = Partial<Record<Operation, QuizStats>>;
 
 // Multiplayer Types
 export type GameMode = 'ffa' | 'teams';
+export type TimeLimit = number;
 export type AIDifficulty = 'easy' | 'medium' | 'hard' | 'expert';
 
 export interface Player {
@@ -73,6 +80,9 @@ export interface Team {
   playerIds: string[];
 }
 
+export type LobbyPlayer = Player;
+export type LobbyTeams = Team[];
+
 export interface PlayerGameState {
   odId: string;
   odName: string;
@@ -87,7 +97,7 @@ export interface RoomSettings {
   operation: Operation;
   selectedNumbers: number[];
   questionCount: number;
-  timeLimit: number; // 0 for no limit
+  timeLimit: TimeLimit; // 0 for no limit
   maxPlayers: number; // 2, 3, or 4
   gameMode: GameMode; // 'ffa' or 'teams'
 }
@@ -113,6 +123,18 @@ export interface Room {
   createdAt: number;
   isQuickMatch: boolean;
   rematchState?: RematchState; // Tracks pending rematch for 3+ players
+}
+
+export type RoomState = Pick<Room, 'id' | 'code' | 'players' | 'settings' | 'gameState'> &
+  Partial<Pick<Room, 'hostId' | 'teams' | 'questions' | 'gameStartTime' | 'playerStates' | 'createdAt' | 'isQuickMatch' | 'rematchState'>>;
+
+export interface RematchPayload {
+  newRoomId: string;
+  newRoomCode: string;
+  isQuickMatch: boolean;
+  players: Player[];
+  settings: RoomSettings;
+  teams: Team[];
 }
 
 export interface MultiplayerResult {
@@ -154,3 +176,80 @@ export type RoomEvent =
   | { type: 'rematch-accepted'; newRoomCode: string }
   | { type: 'rematch-declined'; declinedBy?: string }
   | { type: 'player-disconnected'; odId: string };
+
+export type MultiplayerAction =
+  | 'create-room'
+  | 'join-room'
+  | 'leave-room'
+  | 'quick-match'
+  | 'set-ready'
+  | 'start-ready-phase'
+  | 'update-room-settings'
+  | 'start-game'
+  | 'update-progress'
+  | 'submit-multiplayer'
+  | 'rematch'
+  | 'assign-team'
+  | 'create-ai-game'
+  | 'player-disconnect';
+
+interface MultiplayerSuccessByAction {
+  'create-room': {
+    roomId: string;
+    roomCode: string;
+    joinUrl: string;
+    room: RoomState;
+  };
+  'join-room': {
+    roomId: string;
+    room: RoomState;
+  };
+  'leave-room': Record<string, never>;
+  'quick-match': {
+    matched: boolean;
+    roomId?: string;
+    roomCode?: string;
+    opponent?: { id: string; name: string };
+  };
+  'set-ready': {
+    allReady: boolean;
+  };
+  'start-ready-phase': Record<string, never>;
+  'update-room-settings': {
+    settings: RoomSettings;
+    teams?: Team[];
+    players?: Player[];
+  };
+  'start-game': Record<string, never>;
+  'update-progress': Record<string, never>;
+  'submit-multiplayer': {
+    allFinished: boolean;
+    finishTime?: number;
+  };
+  'rematch': {
+    message?: string;
+    totalNeeded?: number;
+    newRoomId?: string;
+    newRoomCode?: string;
+    teams?: Team[];
+    players?: Player[];
+  };
+  'assign-team': {
+    teams?: Team[];
+    players?: Player[];
+  };
+  'create-ai-game': {
+    roomId: string;
+    questions: Question[];
+    players: Player[];
+  };
+  'player-disconnect': Record<string, never>;
+}
+
+export type MultiplayerApiResponse<TAction extends MultiplayerAction> =
+  | ({ success: true; action?: TAction; error?: never } & MultiplayerSuccessByAction[TAction])
+  | ({ success: false; action?: TAction; error: string } & Partial<MultiplayerSuccessByAction[TAction]>);
+
+// TODO(strict): Re-enable noUnusedLocals after lobby-split updates these owned files:
+// - src/components/screens/multiplayer-lobby/index.tsx: TS6196 unused AIDifficulty.
+// - src/components/screens/multiplayer-lobby/PrivateRoomScreen.tsx: TS6196 unused RoomSettings.

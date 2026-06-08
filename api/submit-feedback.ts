@@ -1,7 +1,10 @@
 import { getSupabase } from "../lib/api/db-pool.js";
+import { apiError, handleApiError } from "../lib/api/errors.js";
+import { FeedbackSchema, validate } from "../lib/api/validation.js";
+import type { VercelRequest, VercelResponse } from "@vercel/node";
 
 const RATE_LIMIT_WINDOW_MS = 60_000;
-const RATE_LIMIT_MAX = 5; // More restrictive rate limit for feedback
+const RATE_LIMIT_MAX = 5;
 const rateLimit = new Map<string, { count: number; resetAt: number }>();
 
 function allowRequest(key: string) {
@@ -18,7 +21,7 @@ function allowRequest(key: string) {
   return true;
 }
 
-function getClientKey(req: any): string {
+function getClientKey(req: VercelRequest): string {
   const xff = req.headers["x-forwarded-for"];
   if (typeof xff === "string" && xff.length > 0) {
     return xff.split(",")[0].trim();
@@ -26,43 +29,28 @@ function getClientKey(req: any): string {
   return req.socket?.remoteAddress || "unknown";
 }
 
-export default async function handler(req: any, res: any) {
-  console.log('[api/submit-feedback] Function invoked.');
-  
-  if (req.method !== 'POST') {
-    return res.status(405).json({ message: 'Method Not Allowed' });
-  }
-
-  const { type, message } = req.body;
-
-  // Validate type
-  if (!type || (type !== 'feature' && type !== 'bug')) {
-    return res.status(400).json({ message: 'Type must be either "feature" or "bug".' });
-  }
-
-  // Validate message
-  if (!message || typeof message !== 'string' || message.trim().length === 0) {
-    return res.status(400).json({ message: 'Message is required.' });
-  }
-
-  if (message.length > 2000) {
-    return res.status(400).json({ message: 'Message must be 2000 characters or less.' });
-  }
-
-  // Rate limiting
-  const clientKey = getClientKey(req);
-  if (!allowRequest(clientKey)) {
-    return res.status(429).json({ message: 'Too many requests. Please slow down.' });
-  }
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  console.log("[api/submit-feedback] Function invoked.");
 
   try {
+    if (req.method !== "POST") {
+      return apiError(res, 405, "Method Not Allowed");
+    }
+
+    const { type, message } = validate(FeedbackSchema, req.body);
+
+    const clientKey = getClientKey(req);
+    if (!allowRequest(clientKey)) {
+      return apiError(res, 429, "Too many requests. Please slow down.");
+    }
+
     const supabase = getSupabase();
 
     const { error: insertError } = await supabase
-      .from('feedback')
+      .from("feedback")
       .insert({
         type,
-        message: message.trim(),
+        message,
         created_at: new Date().toISOString(),
       });
 
@@ -71,9 +59,8 @@ export default async function handler(req: any, res: any) {
     }
 
     console.log(`[api/submit-feedback] Feedback submitted: type=${type}, message length=${message.length}`);
-    return res.status(201).json({ message: 'Feedback submitted successfully!' });
-  } catch (error: any) {
-    console.error('[api/submit-feedback] Error handling request', error);
-    return res.status(500).json({ message: 'Failed to submit feedback. Please try again later.', error: error.message });
+    return res.status(201).json({ message: "Feedback submitted successfully!" });
+  } catch (error) {
+    return handleApiError(res, "api/submit-feedback", "Validation/DB feedback submission failed", error);
   }
 }

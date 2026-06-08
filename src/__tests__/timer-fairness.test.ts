@@ -15,7 +15,7 @@
  *   → Elapsed time always matches real wall-clock time.
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 
 // ── Simulate the timer logic extracted from the components ──────────
 
@@ -25,7 +25,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
  */
 function runOldTimer(
   tickCount: number,
-  realIntervalMs: number, // how often the tick *actually* fires
+  _realIntervalMs: number, // how often the tick *actually* fires
 ): number {
   let elapsed = 0;
   for (let i = 0; i < tickCount; i++) {
@@ -179,8 +179,8 @@ describe('Timer fairness', () => {
       const filePath = path.resolve(__dirname, '../components/screens/QuizScreen.tsx');
       const source = fs.readFileSync(filePath, 'utf-8');
 
-      // Should use performance.now() for timing
-      expect(source).toContain('performance.now()');
+      // Should use the wall-clock timer hook (which calls performance.now())
+      expect(source).toMatch(/useQuizTimer|performance\.now\(\)/);
       // Should NOT have the old accumulator pattern
       expect(source).not.toContain('prev + 0.01');
       expect(source).not.toMatch(/prev\s*\+\s*0\.01/);
@@ -192,8 +192,8 @@ describe('Timer fairness', () => {
       const filePath = path.resolve(__dirname, '../components/screens/MultiplayerQuizScreen.tsx');
       const source = fs.readFileSync(filePath, 'utf-8');
 
-      // Should use performance.now() for timing
-      expect(source).toContain('performance.now()');
+      // Should use the wall-clock timer hook (which calls performance.now())
+      expect(source).toMatch(/useQuizTimer|performance\.now\(\)/);
       // Should NOT have the old accumulator pattern
       expect(source).not.toContain('prev + 0.01');
       expect(source).not.toMatch(/prev\s*\+\s*0\.01/);

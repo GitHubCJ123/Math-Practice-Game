@@ -3,11 +3,11 @@
     "api/archive-scores.ts": {
       "memory": 1024,
       "maxDuration": 60,
-      "includeFiles": "{lib/api/**,types.ts}"
+      "includeFiles": "{lib/api/**,shared/**}"
     },
     "api/**/*.ts": {
       "memory": 1024,
-      "includeFiles": "{lib/api/**,types.ts}"
+      "includeFiles": "{lib/api/**,shared/**}"
     }
   },
   "rewrites": [

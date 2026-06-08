@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import type { Question, Operation } from '../../../types';
+import type { Question, Operation } from '@shared/types';
 import { ClockIcon } from '../ui/icons';
+import { playTimeUpSound } from '../../lib/audio';
+import { useQuizTimer } from '../../hooks/useQuizTimer';
+import { useIntroCountdown } from '../../hooks/useIntroCountdown';
 
 interface QuizScreenProps {
   questions: Question[];
@@ -8,110 +11,56 @@ interface QuizScreenProps {
   onFinishQuiz: (answers: string[], timeTaken: number) => void;
 }
 
-const playTimeUpSound = () => {
-    // Use a try-catch block to handle browsers that might block audio context creation
-    try {
-        const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-        if (!audioContext) return;
-
-        const oscillator = audioContext.createOscillator();
-        const gainNode = audioContext.createGain();
-
-        oscillator.connect(gainNode);
-        gainNode.connect(audioContext.destination);
-
-        oscillator.type = 'sine';
-        oscillator.frequency.setValueAtTime(523.25, audioContext.currentTime); // C5 note
-        gainNode.gain.setValueAtTime(0.5, audioContext.currentTime);
-        gainNode.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 0.3);
-
-
-        oscillator.start(audioContext.currentTime);
-        oscillator.stop(audioContext.currentTime + 0.3);
-    } catch (error) {
-        console.error("Could not play sound:", error);
-    }
-};
-
 export const QuizScreen: React.FC<QuizScreenProps> = ({ questions, timeLimit, onFinishQuiz }) => {
   const [answers, setAnswers] = useState<string[]>(Array(questions.length).fill(''));
-  const [elapsedTime, setElapsedTime] = useState(0);
-  const [timerRunning, setTimerRunning] = useState(false);
   const [quizFinished, setQuizFinished] = useState(false);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
-  const [introStage, setIntroStage] = useState<'ready' | 'set' | 'go' | 'finished'>('ready');
-  const timerStartRef = useRef<number | null>(null);
+  const introStage = useIntroCountdown();
 
-  // Create a ref to hold the latest answers to avoid stale closures in setInterval
   const answersRef = useRef(answers);
   useEffect(() => {
     answersRef.current = answers;
   }, [answers]);
 
+  const quizFinishedRef = useRef(quizFinished);
+  useEffect(() => {
+    quizFinishedRef.current = quizFinished;
+  }, [quizFinished]);
+
+  const handleTick = (ms: number) => {
+    const seconds = ms / 1000;
+    if (timeLimit > 0 && seconds >= timeLimit) {
+      stop();
+      playTimeUpSound();
+      window.setTimeout(() => {
+        if (!quizFinishedRef.current) {
+          setQuizFinished(true);
+          onFinishQuiz(answersRef.current, timeLimit);
+        }
+      }, 300);
+    }
+  };
+
+  const { elapsedMs, isRunning, start, stop } = useQuizTimer({ tickMs: 10, onTick: handleTick });
+  const elapsedTime = timeLimit > 0 && elapsedMs / 1000 >= timeLimit ? timeLimit : elapsedMs / 1000;
+
+  useEffect(() => {
+    if (introStage === 'finished') {
+      start();
+      if (inputRefs.current[0]) inputRefs.current[0].focus();
+    }
+  }, [introStage, start]);
+
   useEffect(() => {
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'hidden' && timerRunning && !quizFinished) {
-        setQuizFinished(true); // Prevent multiple submissions
+      if (document.visibilityState === 'hidden' && isRunning && !quizFinished) {
+        setQuizFinished(true);
         onFinishQuiz(answersRef.current, elapsedTime);
       }
     };
-
     document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [timerRunning, onFinishQuiz, elapsedTime, quizFinished]);
-
-  useEffect(() => {
-    if (introStage === 'ready') {
-      setTimeout(() => setIntroStage('set'), 1000);
-    } else if (introStage === 'set') {
-      setTimeout(() => setIntroStage('go'), 1000);
-    } else if (introStage === 'go') {
-      setTimeout(() => {
-        setIntroStage('finished');
-        setTimerRunning(true); // Start the timer automatically
-      }, 1000);
-    }
-  }, [introStage]);
-
-  useEffect(() => {
-    if (introStage === 'finished' && inputRefs.current[0]) {
-      inputRefs.current[0].focus();
-    }
-  }, [introStage]);
-
-
-  useEffect(() => {
-    if (!timerRunning) {
-      return;
-    }
-    // Use wall-clock time for accurate timing regardless of device performance
-    if (timerStartRef.current === null) {
-      timerStartRef.current = performance.now();
-    }
-    const startTime = timerStartRef.current;
-    const intervalId = setInterval(() => {
-      const newElapsedTime = (performance.now() - startTime) / 1000;
-      if (timeLimit > 0 && newElapsedTime >= timeLimit) {
-        clearInterval(intervalId);
-        setTimerRunning(false);
-        setElapsedTime(timeLimit);
-        playTimeUpSound();
-        setTimeout(() => {
-          if (!quizFinished) {
-            setQuizFinished(true);
-            onFinishQuiz(answersRef.current, timeLimit);
-          }
-        }, 300); // Delay to allow sound to play
-      } else {
-        setElapsedTime(newElapsedTime);
-      }
-    }, 10);
-    return () => clearInterval(intervalId);
-     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [timerRunning, timeLimit, onFinishQuiz]);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [isRunning, onFinishQuiz, elapsedTime, quizFinished]);
 
   const normalizeDecimalInput = (input: string) => {
     const cleaned = input.replace(/[^0-9.]/g, '');
@@ -187,7 +136,7 @@ export const QuizScreen: React.FC<QuizScreenProps> = ({ questions, timeLimit, on
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setTimerRunning(false);
+    stop();
     if (!quizFinished) {
       setQuizFinished(true);
       onFinishQuiz(answers, elapsedTime);

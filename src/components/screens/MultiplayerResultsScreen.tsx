@@ -1,14 +1,11 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import Pusher, { Channel } from "pusher-js";
-import type { Question, MultiplayerResult, Operation, Team, GameMode, TeamResult, AIDifficulty } from "../../../types";
-import { CheckCircleIcon, XCircleIcon, TrophyIcon } from "../ui/icons";
+import type { Question, MultiplayerResult, Operation, Team, GameMode, TeamResult, AIDifficulty, RematchPayload } from "@shared/types";
+import { CheckCircleIcon, XCircleIcon } from "../ui/icons";
 import {
   getPusherClient,
   requestRematch,
   acceptRematch,
   declineRematch,
-  getOrCreatePlayerId,
 } from "../../lib/multiplayer";
 import { formatPercentString } from "../../lib/conversions";
 
@@ -21,7 +18,7 @@ interface MultiplayerResultsScreenProps {
   gameMode: GameMode;
   teamResults?: TeamResult[];
   players?: { id: string; name: string; isAI?: boolean; aiDifficulty?: AIDifficulty }[];
-  onRematch: (data: { newRoomId: string; newRoomCode: string; isQuickMatch: boolean; players: any[]; settings: any; teams: Team[] }) => void;
+  onRematch: (data: RematchPayload) => void;
   onPlayAgainAI?: () => void; // For AI games - return to AI mode tab
   onExit: () => void;
 }
@@ -39,7 +36,6 @@ export const MultiplayerResultsScreen: React.FC<MultiplayerResultsScreenProps> =
   onPlayAgainAI,
   onExit,
 }) => {
-  const navigate = useNavigate();
   const [rematchRequested, setRematchRequested] = useState(false);
   const [rematchPending, setRematchPending] = useState(false);
   const [rematchFromPlayer, setRematchFromPlayer] = useState<string | null>(null);
@@ -56,7 +52,6 @@ export const MultiplayerResultsScreen: React.FC<MultiplayerResultsScreenProps> =
   
   // Determine my position
   const myRank = myResult?.rank || 1;
-  const iWin = myRank === 1;
   const totalPlayers = results.length;
   
   // Team mode calculations - use team.playerIds for reliable matching
@@ -69,7 +64,6 @@ export const MultiplayerResultsScreen: React.FC<MultiplayerResultsScreenProps> =
 
   // AI game detection
   const isAIGame = players.some((p) => p.isAI);
-  const aiOpponent = players.find((p) => p.isAI);
 
   // Subscribe to room channel for rematch events
   useEffect(() => {
@@ -101,7 +95,7 @@ export const MultiplayerResultsScreen: React.FC<MultiplayerResultsScreenProps> =
       }
     );
 
-    channel.bind("rematch-accepted", (data: { newRoomId: string; newRoomCode: string; isQuickMatch: boolean; players: any[]; settings: any; teams: Team[] }) => {
+    channel.bind("rematch-accepted", (data: RematchPayload) => {
       onRematch(data);
     });
 

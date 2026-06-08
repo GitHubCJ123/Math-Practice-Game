@@ -10,6 +10,7 @@ export function getPusher(): Pusher {
     const cluster = process.env.PUSHER_CLUSTER;
 
     if (!appId || !key || !secret || !cluster) {
+      console.error("[lib/api/pusher] Missing Pusher configuration; realtime calls will fail until env vars are set.");
       throw new Error(
         "PUSHER_APP_ID, PUSHER_KEY, PUSHER_SECRET, and PUSHER_CLUSTER environment variables are required"
       );

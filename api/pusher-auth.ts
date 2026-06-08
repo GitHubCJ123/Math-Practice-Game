@@ -1,22 +1,23 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getPusher } from "../lib/api/pusher.js";
+import { apiError, handleApiError } from "../lib/api/errors.js";
 
 // Pusher auth endpoint for presence channels
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // Enable CORS
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-
-  if (req.method === "OPTIONS") {
-    return res.status(200).end();
-  }
-
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
-  }
-
   try {
+    // Enable CORS
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+    if (req.method === "OPTIONS") {
+      return res.status(200).end();
+    }
+
+    if (req.method !== "POST") {
+      return apiError(res, 405, "Method not allowed");
+    }
+
     const { socket_id, channel_name, odId, odName } = req.body;
 
     if (!socket_id || !channel_name) {
@@ -46,7 +47,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Public channels don't need auth
     return res.status(200).json({ auth: "" });
   } catch (error) {
-    console.error("Error authenticating Pusher:", error);
-    return res.status(500).json({ error: "Failed to authenticate" });
+    return handleApiError(res, "api/pusher-auth", "Pusher channel authentication failed", error);
   }
 }

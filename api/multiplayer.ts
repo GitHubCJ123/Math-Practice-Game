@@ -1,10 +1,12 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { apiError, handleApiError } from "../lib/api/errors.js";
+import { MultiplayerActionSchema, validate } from "../lib/api/validation.js";
+import type { MultiplayerActionInput } from "../lib/api/validation.js";
 import { getPusher } from "../lib/api/pusher.js";
 import {
   createRoom as createRoomInStore,
   joinRoom as joinRoomInStore,
   getRoom,
-  getRoomByCode,
   updateRoom,
   deleteRoom,
   updateRoomSettings as updateRoomSettingsInStore,
@@ -19,10 +21,11 @@ import {
   setPlayerReady,
   assignPlayerToTeam as assignPlayerToTeamInStore,
   assignRandomTeams,
-  reshuffleTeams,
 } from "../lib/api/room-store.js";
 import { createAIPlayer } from "../lib/api/ai-player.js";
-import { Question, Operation, MultiplayerResult, TeamResult, AIDifficulty } from "../types.js";
+import type { Question, Operation, MultiplayerResult, TeamResult, AIDifficulty } from "../shared/types.js";
+
+type ActionBody<TAction extends MultiplayerActionInput["action"]> = Extract<MultiplayerActionInput, { action: TAction }>;
 
 // Conversion data for fraction/decimal/percent operations
 interface Conversion {
@@ -197,12 +200,21 @@ function generateQuestions(
   return questions;
 }
 
+async function triggerPusher(channel: string, event: string, data: unknown): Promise<void> {
+  try {
+    await getPusher().trigger(channel, event, data);
+  } catch (error) {
+    console.error(`[api/multiplayer] Pusher trigger failed (${event} on ${channel}):`, error);
+    throw error;
+  }
+}
+
 // Action handlers
-async function handleCreateRoom(body: any, res: VercelResponse) {
+async function handleCreateRoom(body: ActionBody<"create-room">, res: VercelResponse) {
   const { odId, odName } = body;
 
   if (!odId || !odName) {
-    return res.status(400).json({ error: "Player ID and name are required" });
+    return apiError(res, 400, "Player ID and name are required");
   }
 
   const room = createRoomInStore(odId, odName.substring(0, 20), false);
@@ -227,21 +239,20 @@ async function handleCreateRoom(body: any, res: VercelResponse) {
   });
 }
 
-async function handleJoinRoom(body: any, res: VercelResponse) {
+async function handleJoinRoom(body: ActionBody<"join-room">, res: VercelResponse) {
   const { roomCode, odId, odName } = body;
 
   if (!roomCode || !odId || !odName) {
-    return res.status(400).json({ error: "Room code, player ID, and name are required" });
+    return apiError(res, 400, "Room code, player ID, and name are required");
   }
 
   const result = joinRoomInStore(roomCode.toUpperCase(), odId, odName.substring(0, 20));
 
   if (!result.success) {
-    return res.status(400).json({ error: result.error });
+    return apiError(res, 400, result.error ?? "Unable to join room");
   }
 
   const room = result.room!;
-  const pusher = getPusher();
   const newPlayer = room.players.find(p => p.id === odId);
 
   // Handle team assignment for the new player if in team mode
@@ -250,7 +261,7 @@ async function handleJoinRoom(body: any, res: VercelResponse) {
       // Teams not initialized yet (e.g., 2nd player just joined). Initialize if we have enough players.
       if (room.players.length >= 2) {
         assignRandomTeams(room);
-        await pusher.trigger(`room-${room.id}`, "teams-updated", {
+        await triggerPusher(`room-${room.id}`, "teams-updated", {
           type: "teams-updated",
           teams: room.teams,
           players: room.players,
@@ -266,7 +277,7 @@ async function handleJoinRoom(body: any, res: VercelResponse) {
       newPlayer.teamId = targetTeam.id;
       
       // Notify about team update
-      await pusher.trigger(`room-${room.id}`, "teams-updated", {
+      await triggerPusher(`room-${room.id}`, "teams-updated", {
         type: "teams-updated",
         teams: room.teams,
         players: room.players,
@@ -274,7 +285,7 @@ async function handleJoinRoom(body: any, res: VercelResponse) {
     }
   }
 
-  await pusher.trigger(`room-${room.id}`, "player-joined", {
+  await triggerPusher(`room-${room.id}`, "player-joined", {
     type: "player-joined",
     player: newPlayer,
   });
@@ -294,42 +305,39 @@ async function handleJoinRoom(body: any, res: VercelResponse) {
   });
 }
 
-async function handleLeaveRoom(body: any, res: VercelResponse) {
+async function handleLeaveRoom(body: ActionBody<"leave-room">, res: VercelResponse) {
   const { roomId, odId, odName } = body;
 
   if (!roomId || !odId) {
-    return res.status(400).json({ error: "roomId and odId are required" });
+    return apiError(res, 400, "roomId and odId are required");
   }
 
   const room = getRoom(roomId);
   if (!room) {
-    return res.status(404).json({ error: "Room not found" });
+    return apiError(res, 404, "Room not found");
   }
 
   const leavingPlayer = room.players.find(p => p.id === odId);
   if (!leavingPlayer) {
-    return res.status(404).json({ error: "Player not in room" });
+    return apiError(res, 404, "Player not in room");
   }
 
   room.players = room.players.filter(p => p.id !== odId);
 
-  const pusher = getPusher();
-  await pusher.trigger(`room-${roomId}`, "player-left", {
+  await triggerPusher(`room-${roomId}`, "player-left", {
     playerId: odId,
     playerName: odName || leavingPlayer.name,
   });
 
-  console.log(`[LeaveRoom] Player ${odId} (${odName}) left room ${roomId}`);
 
   if (room.players.length === 0) {
     deleteRoom(roomId);
-    console.log(`[LeaveRoom] Room ${roomId} deleted (empty)`);
   }
 
   return res.status(200).json({ success: true });
 }
 
-async function handleQuickMatch(body: any, method: string, res: VercelResponse) {
+async function handleQuickMatch(body: ActionBody<"quick-match">, method: string, res: VercelResponse) {
   if (method === "DELETE") {
     const { odId } = body;
     if (odId) {
@@ -341,7 +349,7 @@ async function handleQuickMatch(body: any, method: string, res: VercelResponse) 
   const { odId, odName, operation } = body;
 
   if (!odId || !odName || !operation) {
-    return res.status(400).json({ error: "Player ID, name, and operation are required" });
+    return apiError(res, 400, "Player ID, name, and operation are required");
   }
 
   const opponent = findQuickMatchOpponent(odId, operation);
@@ -356,7 +364,7 @@ async function handleQuickMatch(body: any, method: string, res: VercelResponse) 
       : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
     room.settings = {
-      operation: operation as any,
+      operation,
       selectedNumbers: allNumbers,
       questionCount: 10,
       timeLimit: 0,
@@ -366,8 +374,7 @@ async function handleQuickMatch(body: any, method: string, res: VercelResponse) 
 
     joinRoomInStore(room.code, odId, odName.substring(0, 20));
 
-    const pusher = getPusher();
-    await pusher.trigger(`quickmatch-${opponent.odId}`, "match-found", {
+    await triggerPusher(`quickmatch-${opponent.odId}`, "match-found", {
       roomId: room.id,
       roomCode: room.code,
       opponent: { id: odId, name: odName },
@@ -392,50 +399,45 @@ async function handleQuickMatch(body: any, method: string, res: VercelResponse) 
   }
 }
 
-async function handleSetReady(body: any, res: VercelResponse) {
+async function handleSetReady(body: ActionBody<"set-ready">, res: VercelResponse) {
   const { roomId, odId, isReady } = body;
 
   if (!roomId || !odId || typeof isReady !== "boolean") {
-    return res.status(400).json({ error: "Room ID, player ID, and isReady status are required" });
+    return apiError(res, 400, "Room ID, player ID, and isReady status are required");
   }
 
   const room = getRoom(roomId);
   if (!room) {
-    return res.status(404).json({ error: "Room not found" });
+    return apiError(res, 404, "Room not found");
   }
 
   const playerIndex = room.players.findIndex((p) => p.id === odId);
   if (playerIndex === -1) {
-    return res.status(404).json({ error: "Player not in room" });
+    return apiError(res, 404, "Player not in room");
   }
 
   room.players[playerIndex].isReady = isReady;
   updateRoom(room);
 
-  const pusher = getPusher();
 
-  await pusher.trigger(`room-${roomId}`, "player-ready", {
+  await triggerPusher(`room-${roomId}`, "player-ready", {
     odId,
     isReady,
   });
 
   const minPlayers = room.isQuickMatch ? 2 : 2; // Min 2 players to start
   const allReady = room.players.length >= minPlayers && room.players.every((p) => p.isReady);
-  console.log(`[SetReady] Room ${roomId}: Player ${odId} isReady=${isReady}, allReady=${allReady}, playerCount=${room.players.length}`);
 
   if (allReady) {
-    console.log(`[SetReady] All players ready! Starting game for room ${roomId}`);
     const questions = generateQuestions(
       room.settings.operation,
       room.settings.selectedNumbers,
       room.settings.questionCount
     );
-    console.log(`[SetReady] Generated ${questions.length} questions`);
 
     // Assign teams if in team mode and not already assigned
     if (room.settings.gameMode === "teams" && room.teams.length === 0) {
       assignRandomTeams(room);
-      console.log(`[SetReady] Assigned teams:`, room.teams);
     }
 
     room.gameState = "playing";
@@ -452,13 +454,11 @@ async function handleSetReady(body: any, res: VercelResponse) {
     }));
     updateRoom(room);
 
-    console.log(`[SetReady] Triggering game-starting event`);
-    await pusher.trigger(`room-${roomId}`, "game-starting", {
+    await triggerPusher(`room-${roomId}`, "game-starting", {
       questions,
       teams: room.teams,
       players: room.players,
     });
-    console.log(`[SetReady] game-starting event sent`);
   }
 
   return res.status(200).json({
@@ -467,30 +467,30 @@ async function handleSetReady(body: any, res: VercelResponse) {
   });
 }
 
-async function handleStartReadyPhase(body: any, res: VercelResponse) {
+async function handleStartReadyPhase(body: ActionBody<"start-ready-phase">, res: VercelResponse) {
   const { roomId, odId, settings } = body;
 
   if (!roomId || !odId) {
-    return res.status(400).json({ error: "roomId and odId are required" });
+    return apiError(res, 400, "roomId and odId are required");
   }
 
   const room = getRoom(roomId);
   if (!room) {
-    return res.status(404).json({ error: "Room not found" });
+    return apiError(res, 404, "Room not found");
   }
 
   const player = room.players.find(p => p.id === odId);
   if (!player?.isHost) {
-    return res.status(403).json({ error: "Only host can start ready phase" });
+    return apiError(res, 403, "Only host can start ready phase");
   }
 
   if (room.players.length < 2) {
-    return res.status(400).json({ error: "Need at least 2 players to start" });
+    return apiError(res, 400, "Need at least 2 players to start");
   }
 
   // For team mode, validate we have enough players
   if (settings?.gameMode === "teams" && room.players.length < 2) {
-    return res.status(400).json({ error: "Need at least 2 players for team mode" });
+    return apiError(res, 400, "Need at least 2 players for team mode");
   }
 
   if (settings) {
@@ -501,50 +501,46 @@ async function handleStartReadyPhase(body: any, res: VercelResponse) {
     setPlayerReady(roomId, p.id, false);
   }
 
-  const pusher = getPusher();
-  await pusher.trigger(`room-${roomId}`, "ready-phase", {
+  await triggerPusher(`room-${roomId}`, "ready-phase", {
     settings: room.settings,
   });
 
-  console.log(`[StartReadyPhase] Room ${roomId} entering ready phase with ${room.players.length} players`);
 
   return res.status(200).json({ success: true });
 }
 
-async function handleUpdateRoomSettings(body: any, res: VercelResponse) {
+async function handleUpdateRoomSettings(body: ActionBody<"update-room-settings">, res: VercelResponse) {
   const { roomId, odId, settings } = body;
 
   if (!roomId || !odId || !settings) {
-    return res.status(400).json({ error: "Room ID, player ID, and settings are required" });
+    return apiError(res, 400, "Room ID, player ID, and settings are required");
   }
 
   const room = getRoom(roomId);
   if (!room) {
-    return res.status(404).json({ error: "Room not found" });
+    return apiError(res, 404, "Room not found");
   }
 
   if (room.hostId !== odId) {
-    return res.status(403).json({ error: "Only the host can update settings" });
+    return apiError(res, 403, "Only the host can update settings");
   }
 
   if (room.gameState !== "waiting") {
-    return res.status(400).json({ error: "Cannot update settings while game is in progress" });
+    return apiError(res, 400, "Cannot update settings while game is in progress");
   }
 
   const updatedRoom = updateRoomSettingsInStore(roomId, settings);
 
   if (updatedRoom) {
-    const pusher = getPusher();
-    
     // If switching to team mode, assign teams immediately so UI can show them
     if (settings.gameMode === "teams" && updatedRoom.players.length >= 2) {
       assignRandomTeams(updatedRoom);
       // Send both settings and teams update
-      await pusher.trigger(`room-${roomId}`, "settings-updated", {
+      await triggerPusher(`room-${roomId}`, "settings-updated", {
         type: "settings-updated",
         settings: updatedRoom.settings,
       });
-      await pusher.trigger(`room-${roomId}`, "teams-updated", {
+      await triggerPusher(`room-${roomId}`, "teams-updated", {
         type: "teams-updated",
         teams: updatedRoom.teams,
         players: updatedRoom.players,
@@ -555,17 +551,17 @@ async function handleUpdateRoomSettings(body: any, res: VercelResponse) {
       for (const player of updatedRoom.players) {
         player.teamId = undefined;
       }
-      await pusher.trigger(`room-${roomId}`, "settings-updated", {
+      await triggerPusher(`room-${roomId}`, "settings-updated", {
         type: "settings-updated",
         settings: updatedRoom.settings,
       });
-      await pusher.trigger(`room-${roomId}`, "teams-updated", {
+      await triggerPusher(`room-${roomId}`, "teams-updated", {
         type: "teams-updated",
         teams: [],
         players: updatedRoom.players,
       });
     } else {
-      await pusher.trigger(`room-${roomId}`, "settings-updated", {
+      await triggerPusher(`room-${roomId}`, "settings-updated", {
         type: "settings-updated",
         settings: updatedRoom.settings,
       });
@@ -580,28 +576,28 @@ async function handleUpdateRoomSettings(body: any, res: VercelResponse) {
   });
 }
 
-async function handleStartGame(body: any, res: VercelResponse) {
+async function handleStartGame(body: ActionBody<"start-game">, res: VercelResponse) {
   const { roomId, odId } = body;
 
   if (!roomId || !odId) {
-    return res.status(400).json({ error: "Room ID and player ID are required" });
+    return apiError(res, 400, "Room ID and player ID are required");
   }
 
   const room = getRoom(roomId);
   if (!room) {
-    return res.status(404).json({ error: "Room not found" });
+    return apiError(res, 404, "Room not found");
   }
 
   if (!room.isQuickMatch && room.hostId !== odId) {
-    return res.status(403).json({ error: "Only the host can start the game" });
+    return apiError(res, 403, "Only the host can start the game");
   }
 
   if (room.players.length < 2) {
-    return res.status(400).json({ error: "Need at least 2 players to start" });
+    return apiError(res, 400, "Need at least 2 players to start");
   }
 
   if (room.gameState !== "waiting") {
-    return res.status(400).json({ error: "Game already started" });
+    return apiError(res, 400, "Game already started");
   }
 
   const questions = generateQuestions(
@@ -612,9 +608,8 @@ async function handleStartGame(body: any, res: VercelResponse) {
 
   startGameInStore(roomId, questions);
 
-  const pusher = getPusher();
 
-  await pusher.trigger(`room-${roomId}`, "game-starting", {
+  await triggerPusher(`room-${roomId}`, "game-starting", {
     type: "game-starting",
     countdown: 3,
     questions,
@@ -623,12 +618,16 @@ async function handleStartGame(body: any, res: VercelResponse) {
   });
 
   setTimeout(async () => {
-    const updatedRoom = setGamePlaying(roomId);
-    if (updatedRoom) {
-      await pusher.trigger(`room-${roomId}`, "game-started", {
-        type: "game-started",
-        startTime: updatedRoom.gameStartTime,
-      });
+    try {
+      const updatedRoom = setGamePlaying(roomId);
+      if (updatedRoom) {
+        await triggerPusher(`room-${roomId}`, "game-started", {
+          type: "game-started",
+          startTime: updatedRoom.gameStartTime,
+        });
+      }
+    } catch (error) {
+      console.error(`[api/multiplayer] Delayed game-started transition failed for room ${roomId}:`, error);
     }
   }, 3000);
 
@@ -638,26 +637,25 @@ async function handleStartGame(body: any, res: VercelResponse) {
   });
 }
 
-async function handleUpdateProgress(body: any, res: VercelResponse) {
+async function handleUpdateProgress(body: ActionBody<"update-progress">, res: VercelResponse) {
   const { roomId, odId, currentQuestion } = body;
 
   if (!roomId || !odId || currentQuestion === undefined) {
-    return res.status(400).json({ error: "Room ID, player ID, and current question are required" });
+    return apiError(res, 400, "Room ID, player ID, and current question are required");
   }
 
   const room = getRoom(roomId);
   if (!room) {
-    return res.status(404).json({ error: "Room not found" });
+    return apiError(res, 404, "Room not found");
   }
 
   if (room.gameState !== "playing") {
-    return res.status(400).json({ error: "Game not in progress" });
+    return apiError(res, 400, "Game not in progress");
   }
 
   updatePlayerProgress(roomId, odId, currentQuestion);
 
-  const pusher = getPusher();
-  await pusher.trigger(`room-${roomId}`, "opponent-progress", {
+  await triggerPusher(`room-${roomId}`, "opponent-progress", {
     type: "opponent-progress",
     odId,
     currentQuestion,
@@ -666,28 +664,27 @@ async function handleUpdateProgress(body: any, res: VercelResponse) {
   return res.status(200).json({ success: true });
 }
 
-async function handleSubmitMultiplayer(body: any, res: VercelResponse) {
+async function handleSubmitMultiplayer(body: ActionBody<"submit-multiplayer">, res: VercelResponse) {
   const { roomId, odId, answers, score } = body;
 
   if (!roomId || !odId || !answers || score === undefined) {
-    return res.status(400).json({ error: "Room ID, player ID, answers, and score are required" });
+    return apiError(res, 400, "Room ID, player ID, answers, and score are required");
   }
 
   const room = getRoom(roomId);
   if (!room) {
-    return res.status(404).json({ error: "Room not found" });
+    return apiError(res, 404, "Room not found");
   }
 
   const { room: updatedRoom, allFinished } = submitPlayerAnswers(roomId, odId, answers, score);
 
   if (!updatedRoom) {
-    return res.status(500).json({ error: "Failed to submit answers" });
+    return apiError(res, 500, "Failed to submit answers");
   }
 
-  const pusher = getPusher();
   const playerState = updatedRoom.playerStates.find(p => p.odId === odId);
 
-  await pusher.trigger(`room-${roomId}`, "opponent-finished", {
+  await triggerPusher(`room-${roomId}`, "opponent-finished", {
     type: "opponent-finished",
     odId,
     finishTime: playerState?.finishTime,
@@ -732,12 +729,10 @@ async function handleSubmitMultiplayer(body: any, res: VercelResponse) {
     
     // Safety check: ensure teams exist if in team mode
     if (updatedRoom.settings.gameMode === "teams" && updatedRoom.teams.length === 0) {
-      console.log(`[Submit] Warning: Teams empty in team mode. Re-assigning random teams.`);
       assignRandomTeams(updatedRoom);
     }
 
     if (updatedRoom.settings.gameMode === "teams" && updatedRoom.teams.length > 0) {
-      console.log(`[Submit] Calculating team results. Teams: ${JSON.stringify(updatedRoom.teams.map(t => ({id: t.id, players: t.playerIds})))}`);
       
       teamResults = updatedRoom.teams.map(team => {
         // Use team.playerIds directly instead of relying on player.teamId
@@ -745,7 +740,6 @@ async function handleSubmitMultiplayer(body: any, res: VercelResponse) {
           team.playerIds.includes(ps.odId)
         );
         
-        console.log(`[Submit] Team ${team.name} has ${teamPlayerStates.length} players. IDs in team: ${team.playerIds.join(',')}. States: ${updatedRoom.playerStates.map(p => p.odId).join(',')}`);
 
         const totalScore = teamPlayerStates.reduce((sum, ps) => sum + ps.score, 0);
         const totalTime = teamPlayerStates.reduce((sum, ps) => sum + (ps.finishTime || 0), 0);
@@ -763,7 +757,6 @@ async function handleSubmitMultiplayer(body: any, res: VercelResponse) {
         };
       });
 
-      console.log(`[Submit] Team Results before winner check: ${JSON.stringify(teamResults.map(t => ({name: t.teamName, avg: t.averageScore})))}`);
 
       // Determine winner (higher average score wins, tiebreaker: lower average time)
       if (teamResults.length === 2) {
@@ -784,7 +777,7 @@ async function handleSubmitMultiplayer(body: any, res: VercelResponse) {
       }
     }
 
-    await pusher.trigger(`room-${roomId}`, "game-ended", {
+    await triggerPusher(`room-${roomId}`, "game-ended", {
       type: "game-ended",
       results,
       teamResults,
@@ -798,23 +791,22 @@ async function handleSubmitMultiplayer(body: any, res: VercelResponse) {
   });
 }
 
-async function handleRematch(body: any, res: VercelResponse) {
+async function handleRematch(body: ActionBody<"rematch">, res: VercelResponse) {
   const { roomId, odId, odName, rematchAction, keepTeams } = body;
 
   if (!roomId || !odId || !odName || !rematchAction) {
-    return res.status(400).json({ error: "Room ID, player ID, name, and rematchAction are required" });
+    return apiError(res, 400, "Room ID, player ID, name, and rematchAction are required");
   }
 
   const room = getRoom(roomId);
   if (!room) {
-    return res.status(404).json({ error: "Room not found" });
+    return apiError(res, 404, "Room not found");
   }
 
-  const pusher = getPusher();
   const player = room.players.find(p => p.id === odId);
 
   if (!player) {
-    return res.status(403).json({ error: "Player not in room" });
+    return apiError(res, 403, "Player not in room");
   }
 
   const connectedPlayers = room.players.filter(p => p.connected);
@@ -830,7 +822,7 @@ async function handleRematch(body: any, res: VercelResponse) {
       acceptedPlayerIds: [odId], // Requester is automatically "accepted"
     };
     
-    await pusher.trigger(`room-${roomId}`, "rematch-requested", {
+    await triggerPusher(`room-${roomId}`, "rematch-requested", {
       type: "rematch-requested",
       fromPlayerId: odId,
       fromPlayerName: odName,
@@ -845,7 +837,7 @@ async function handleRematch(body: any, res: VercelResponse) {
   if (rematchAction === "accept") {
     // Make sure there's an active rematch request
     if (!room.rematchState) {
-      return res.status(400).json({ error: "No pending rematch request" });
+      return apiError(res, 400, "No pending rematch request");
     }
 
     // Add this player to accepted list if not already
@@ -858,7 +850,7 @@ async function handleRematch(body: any, res: VercelResponse) {
 
     if (!allAccepted) {
       // Not everyone has accepted yet - notify others
-      await pusher.trigger(`room-${roomId}`, "rematch-player-accepted", {
+      await triggerPusher(`room-${roomId}`, "rematch-player-accepted", {
         type: "rematch-player-accepted",
         odId,
         odName,
@@ -911,7 +903,7 @@ async function handleRematch(body: any, res: VercelResponse) {
     // Clear rematch state
     room.rematchState = undefined;
 
-    await pusher.trigger(`room-${roomId}`, "rematch-accepted", {
+    await triggerPusher(`room-${roomId}`, "rematch-accepted", {
       type: "rematch-accepted",
       newRoomCode: newRoom.code,
       newRoomId: newRoom.id,
@@ -937,7 +929,7 @@ async function handleRematch(body: any, res: VercelResponse) {
     // Clear rematch state
     room.rematchState = undefined;
 
-    await pusher.trigger(`room-${roomId}`, "rematch-declined", {
+    await triggerPusher(`room-${roomId}`, "rematch-declined", {
       type: "rematch-declined",
       declinedBy: odName,
     });
@@ -945,22 +937,20 @@ async function handleRematch(body: any, res: VercelResponse) {
     return res.status(200).json({ success: true, message: "Rematch declined" });
   }
 
-  return res.status(400).json({ error: "Invalid rematchAction" });
+  return apiError(res, 400, "Invalid rematchAction");
 }
 
-async function handlePlayerDisconnect(body: any, res: VercelResponse) {
+async function handlePlayerDisconnect(body: ActionBody<"player-disconnect">, res: VercelResponse) {
   const { roomId, odId } = body;
 
   if (!roomId || !odId) {
-    return res.status(400).json({ error: "Room ID and player ID are required" });
+    return apiError(res, 400, "Room ID and player ID are required");
   }
 
   const room = playerDisconnected(roomId, odId);
 
   if (room) {
-    const pusher = getPusher();
-    
-    await pusher.trigger(`room-${roomId}`, "player-disconnected", {
+    await triggerPusher(`room-${roomId}`, "player-disconnected", {
       type: "player-disconnected",
       odId,
     });
@@ -976,7 +966,7 @@ async function handlePlayerDisconnect(body: any, res: VercelResponse) {
         questions: room.questions,
       }));
 
-      await pusher.trigger(`room-${roomId}`, "game-ended", {
+      await triggerPusher(`room-${roomId}`, "game-ended", {
         type: "game-ended",
         results,
       });
@@ -987,25 +977,25 @@ async function handlePlayerDisconnect(body: any, res: VercelResponse) {
 }
 
 // Handle host assigning a player to a team
-async function handleAssignTeam(body: any, res: VercelResponse) {
+async function handleAssignTeam(body: ActionBody<"assign-team">, res: VercelResponse) {
   const { roomId, odId, targetPlayerId, teamId } = body;
 
   if (!roomId || !odId || !targetPlayerId || !teamId) {
-    return res.status(400).json({ error: "Room ID, host player ID, target player ID, and team ID are required" });
+    return apiError(res, 400, "Room ID, host player ID, target player ID, and team ID are required");
   }
 
   const room = getRoom(roomId);
   if (!room) {
-    return res.status(404).json({ error: "Room not found" });
+    return apiError(res, 404, "Room not found");
   }
 
   // Only host can assign teams
   if (room.hostId !== odId) {
-    return res.status(403).json({ error: "Only the host can assign teams" });
+    return apiError(res, 403, "Only the host can assign teams");
   }
 
   if (room.settings.gameMode !== "teams") {
-    return res.status(400).json({ error: "Room is not in team mode" });
+    return apiError(res, 400, "Room is not in team mode");
   }
 
   // Initialize teams if not already done
@@ -1025,8 +1015,7 @@ async function handleAssignTeam(body: any, res: VercelResponse) {
   const updatedRoom = assignPlayerToTeamInStore(roomId, targetPlayerId, teamId);
 
   if (updatedRoom) {
-    const pusher = getPusher();
-    await pusher.trigger(`room-${roomId}`, "teams-updated", {
+      await triggerPusher(`room-${roomId}`, "teams-updated", {
       type: "teams-updated",
       teams: updatedRoom.teams,
       players: updatedRoom.players,
@@ -1041,17 +1030,17 @@ async function handleAssignTeam(body: any, res: VercelResponse) {
 }
 
 // Handle creating an AI game - creates room with AI player and starts immediately
-async function handleCreateAIGame(body: any, res: VercelResponse) {
+async function handleCreateAIGame(body: ActionBody<"create-ai-game">, res: VercelResponse) {
   const { odId, odName, aiDifficulty, settings } = body;
 
   if (!odId || !odName || !aiDifficulty || !settings) {
-    return res.status(400).json({ error: "Player ID, name, AI difficulty, and settings are required" });
+    return apiError(res, 400, "Player ID, name, AI difficulty, and settings are required");
   }
 
   // Validate AI difficulty
   const validDifficulties: AIDifficulty[] = ['easy', 'medium', 'hard', 'expert'];
   if (!validDifficulties.includes(aiDifficulty)) {
-    return res.status(400).json({ error: "Invalid AI difficulty" });
+    return apiError(res, 400, "Invalid AI difficulty");
   }
 
   // Create the room
@@ -1094,7 +1083,6 @@ async function handleCreateAIGame(body: any, res: VercelResponse) {
 
   updateRoom(room);
 
-  console.log(`[CreateAIGame] Created AI game for ${odName} vs ${aiPlayer.name} (${aiDifficulty})`);
 
   return res.status(200).json({
     success: true,
@@ -1107,63 +1095,60 @@ async function handleCreateAIGame(body: any, res: VercelResponse) {
 
 // Main handler - routes by action parameter
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // Enable CORS
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST, DELETE, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-
-  if (req.method === "OPTIONS") {
-    return res.status(200).end();
-  }
-
-  if (req.method !== "POST" && req.method !== "DELETE") {
-    return res.status(405).json({ error: "Method not allowed" });
-  }
-
   try {
-    const { action, ...rest } = req.body;
+    // Enable CORS
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "POST, DELETE, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
-    if (!action) {
-      return res.status(400).json({ error: "Action is required" });
+    if (req.method === "OPTIONS") {
+      return res.status(200).end();
     }
 
-    switch (action) {
-      case "create-room":
-        return handleCreateRoom(rest, res);
-      case "join-room":
-        return handleJoinRoom(rest, res);
-      case "leave-room":
-        return handleLeaveRoom(rest, res);
-      case "quick-match":
-        return handleQuickMatch(rest, req.method, res);
-      case "set-ready":
-        return handleSetReady(rest, res);
-      case "start-ready-phase":
-        return handleStartReadyPhase(rest, res);
-      case "update-room-settings":
-        return handleUpdateRoomSettings(rest, res);
-      case "start-game":
-        return handleStartGame(rest, res);
-      case "update-progress":
-        return handleUpdateProgress(rest, res);
-      case "submit-multiplayer":
-        return handleSubmitMultiplayer(rest, res);
-      case "rematch":
-        return handleRematch(rest, res);
-      case "assign-team":
-        return handleAssignTeam(rest, res);
-      case "create-ai-game":
-        return handleCreateAIGame(rest, res);
-      case "player-disconnect":
-        return handlePlayerDisconnect(rest, res);
-      default:
-        return res.status(400).json({ error: `Unknown action: ${action}` });
+    if (req.method !== "POST" && req.method !== "DELETE") {
+      return apiError(res, 405, "Method not allowed");
     }
-  } catch (error: any) {
-    console.error("Multiplayer error:", error);
-    return res.status(500).json({ 
-      error: "Internal server error", 
-      message: error?.message || String(error)
-    });
+
+    const body = validate(MultiplayerActionSchema, req.body);
+    const { action } = body;
+
+    try {
+      switch (action) {
+        case "create-room":
+          return await handleCreateRoom(body, res);
+        case "join-room":
+          return await handleJoinRoom(body, res);
+        case "leave-room":
+          return await handleLeaveRoom(body, res);
+        case "quick-match":
+          return await handleQuickMatch(body, req.method, res);
+        case "set-ready":
+          return await handleSetReady(body, res);
+        case "start-ready-phase":
+          return await handleStartReadyPhase(body, res);
+        case "update-room-settings":
+          return await handleUpdateRoomSettings(body, res);
+        case "start-game":
+          return await handleStartGame(body, res);
+        case "update-progress":
+          return await handleUpdateProgress(body, res);
+        case "submit-multiplayer":
+          return await handleSubmitMultiplayer(body, res);
+        case "rematch":
+          return await handleRematch(body, res);
+        case "assign-team":
+          return await handleAssignTeam(body, res);
+        case "create-ai-game":
+          return await handleCreateAIGame(body, res);
+        case "player-disconnect":
+          return await handlePlayerDisconnect(body, res);
+        default:
+          return apiError(res, 400, `Unknown action: ${action}`);
+      }
+    } catch (error) {
+      return handleApiError(res, "api/multiplayer", `Action "${action}" failed`, error);
+    }
+  } catch (error) {
+    return handleApiError(res, "api/multiplayer", "Validation/routing failed", error);
   }
 }

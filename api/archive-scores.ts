@@ -1,29 +1,41 @@
+import { timingSafeEqual } from "node:crypto";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getSupabase } from "../lib/api/db-pool.js";
+import { apiError, handleApiError } from "../lib/api/errors.js";
 import { getCurrentEasternMonthBounds, getPreviousEasternMonthBounds } from "../lib/api/time-utils.js";
 import { clearHallOfFameDatesCache } from "./get-hall-of-fame-dates.js";
 import { clearLeaderboardCache } from "./get-leaderboard.js";
 
+
+function safeCompare(value: string, expected: string): boolean {
+  const valueBuffer = Buffer.from(value);
+  const expectedBuffer = Buffer.from(expected);
+  return valueBuffer.length === expectedBuffer.length && timingSafeEqual(valueBuffer, expectedBuffer);
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ message: 'Method Not Allowed' });
-  }
-
-  // Vercel Cron jobs include the `x-vercel-cron` header instead of a custom Authorization token.
-  // We still allow the legacy bearer secret so the job can be triggered manually if needed.
-  const vercelCronHeader = req.headers['x-vercel-cron'];
-  const hasVercelCronHeader = typeof vercelCronHeader === 'string';
-  const bearer = req.headers.authorization;
-  const hasValidBearer = typeof bearer === 'string' && bearer === `Bearer ${process.env.CRON_SECRET}`;
-
-  if (!hasVercelCronHeader && !hasValidBearer) {
-    return res.status(401).json({ message: 'Unauthorized' });
-  }
-
-  const { startUtc: previousMonthStartUtc, endUtc: previousMonthEndUtc, year, month } = getPreviousEasternMonthBounds();
-  const { startUtc: currentMonthStartUtc } = getCurrentEasternMonthBounds();
-
   try {
+    if (req.method !== 'POST') {
+      return apiError(res, 405, 'Method Not Allowed');
+    }
+
+    const cronSecret = process.env.CRON_SECRET;
+    if (!cronSecret) {
+      console.error('[api/archive-scores] CRON_SECRET is not configured.');
+      return apiError(res, 503, 'Archive job is not configured.');
+    }
+
+    const bearer = req.headers.authorization;
+    const expected = `Bearer ${cronSecret}`;
+    const hasValidBearer = typeof bearer === 'string' && safeCompare(bearer, expected);
+
+    if (!hasValidBearer) {
+      return apiError(res, 401, 'Unauthorized');
+    }
+
+    const { startUtc: previousMonthStartUtc, endUtc: previousMonthEndUtc, year, month } = getPreviousEasternMonthBounds();
+    const { startUtc: currentMonthStartUtc } = getCurrentEasternMonthBounds();
+
     const supabase = getSupabase();
 
     // Step 1: Get previous month's top scorers per operation type
@@ -210,8 +222,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     console.log('Leaderboard maintenance completed successfully.');
     return res.status(200).json({ message: 'Scores archived successfully.' });
   } catch (error: unknown) {
-    console.error('[api/archive-scores] Error running maintenance', error);
-    const message = error instanceof Error ? error.message : String(error);
-    return res.status(500).json({ message: 'Error archiving scores', error: message });
+    return handleApiError(res, "api/archive-scores", "Auth/DB archive maintenance failed", error);
   }
 }

@@ -1,4 +1,4 @@
-import type { AIDifficulty, Question, PlayerGameState } from "../../types.js";
+import type { AIDifficulty, Question } from "../../shared/types.js";
 
 // AI difficulty profiles - defines speed and accuracy for each level
 export interface AIProfile {
@@ -75,7 +75,7 @@ function generateWrongAnswer(question: Question): string {
 export function simulateAIGame(
   difficulty: AIDifficulty,
   questions: Question[],
-  humanFinishTime: number // How long the human took in ms
+  _humanFinishTime: number // How long the human took in ms
 ): { answers: string[]; totalTime: number; score: number } {
   const profile = AI_PROFILES[difficulty];
   const answers: string[] = [];

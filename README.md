@@ -234,8 +234,8 @@ Push to GitHub, import into Vercel, set the env vars above, and you're live.
 ## 🤝 Contributing
 
 PRs welcome! Keep these in mind:
-- TypeScript strict mode — share types via [types.ts](types.ts).
-- Lint must pass with **zero warnings** (`npm run lint`).
+- TypeScript strict mode is enabled — share cross-runtime types via [shared/types.ts](shared/types.ts).
+- Lint must pass (`npm run lint`); existing warnings are being reduced incrementally.
 - Tailwind utility classes only — no separate CSS files.
 - Don't touch [vercel.json](vercel.json) cron without bumping the archive SQL.
 

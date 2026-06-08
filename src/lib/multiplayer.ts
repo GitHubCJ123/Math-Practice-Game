@@ -1,5 +1,12 @@
 import Pusher from "pusher-js";
-import type { RoomSettings, GameMode, Team, Player, AIDifficulty, Question } from "../../types";
+import type {
+  RoomSettings,
+  GameMode,
+  AIDifficulty,
+  Operation,
+  MultiplayerAction,
+  MultiplayerApiResponse,
+} from "@shared/types";
 
 let pusherClient: Pusher | null = null;
 
@@ -23,13 +30,17 @@ export function getPusherClient(): Pusher {
 // API helper - all multiplayer calls go to single endpoint with action parameter
 const API_BASE = "";
 
-async function multiplayerApi(action: string, data: Record<string, any> = {}, method: string = "POST") {
+async function multiplayerApi<TAction extends MultiplayerAction>(
+  action: TAction,
+  data: Record<string, unknown> = {},
+  method: string = "POST"
+): Promise<MultiplayerApiResponse<TAction>> {
   const response = await fetch(`${API_BASE}/api/multiplayer`, {
     method,
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ action, ...data }),
   });
-  return response.json();
+  return response.json() as Promise<MultiplayerApiResponse<TAction>>;
 }
 
 export async function createRoom(
@@ -37,14 +48,7 @@ export async function createRoom(
   playerName: string,
   maxPlayers: number = 2,
   gameMode: GameMode = 'ffa'
-): Promise<{
-  success: boolean;
-  roomId?: string;
-  roomCode?: string;
-  joinUrl?: string;
-  room?: any;
-  error?: string;
-}> {
+): Promise<MultiplayerApiResponse<"create-room">> {
   return multiplayerApi("create-room", { 
     odId: playerId, 
     odName: playerName,
@@ -53,12 +57,7 @@ export async function createRoom(
   });
 }
 
-export async function joinRoom(roomCode: string, playerId: string, playerName: string): Promise<{
-  success: boolean;
-  roomId?: string;
-  room?: any;
-  error?: string;
-}> {
+export async function joinRoom(roomCode: string, playerId: string, playerName: string): Promise<MultiplayerApiResponse<"join-room">> {
   return multiplayerApi("join-room", { roomCode, odId: playerId, odName: playerName });
 }
 
@@ -66,20 +65,11 @@ export async function updateRoomSettings(
   roomId: string,
   playerId: string,
   settings: Partial<RoomSettings>
-): Promise<{
-  success: boolean;
-  settings?: RoomSettings;
-  teams?: Team[];
-  players?: Player[];
-  error?: string;
-}> {
+): Promise<MultiplayerApiResponse<"update-room-settings">> {
   return multiplayerApi("update-room-settings", { roomId, odId: playerId, settings });
 }
 
-export async function startGame(roomId: string, playerId: string): Promise<{
-  success: boolean;
-  error?: string;
-}> {
+export async function startGame(roomId: string, playerId: string): Promise<MultiplayerApiResponse<"start-game">> {
   return multiplayerApi("start-game", { roomId, odId: playerId });
 }
 
@@ -87,10 +77,7 @@ export async function startReadyPhase(
   roomId: string,
   playerId: string,
   settings: Partial<RoomSettings>
-): Promise<{
-  success: boolean;
-  error?: string;
-}> {
+): Promise<MultiplayerApiResponse<"start-ready-phase">> {
   return multiplayerApi("start-ready-phase", { roomId, odId: playerId, settings });
 }
 
@@ -103,23 +90,11 @@ export async function submitMultiplayerAnswers(
   playerId: string,
   answers: string[],
   score: number
-): Promise<{
-  success: boolean;
-  allFinished: boolean;
-  finishTime?: number;
-  error?: string;
-}> {
+): Promise<MultiplayerApiResponse<"submit-multiplayer">> {
   return multiplayerApi("submit-multiplayer", { roomId, odId: playerId, answers, score });
 }
 
-export async function quickMatch(playerId: string, playerName: string, operation: string): Promise<{
-  success: boolean;
-  matched: boolean;
-  roomId?: string;
-  roomCode?: string;
-  opponent?: { id: string; name: string };
-  error?: string;
-}> {
+export async function quickMatch(playerId: string, playerName: string, operation: Operation): Promise<MultiplayerApiResponse<"quick-match">> {
   console.log('[Frontend QuickMatch] Starting quick match request:', { playerId, playerName, operation });
   return multiplayerApi("quick-match", { odId: playerId, odName: playerName, operation });
 }
@@ -137,10 +112,7 @@ export async function requestRematch(
   playerId: string,
   playerName: string,
   keepTeams: boolean = false
-): Promise<{
-  success: boolean;
-  error?: string;
-}> {
+): Promise<MultiplayerApiResponse<"rematch">> {
   return multiplayerApi("rematch", { 
     roomId, 
     odId: playerId, 
@@ -155,14 +127,7 @@ export async function acceptRematch(
   playerId: string,
   playerName: string,
   keepTeams: boolean = false
-): Promise<{
-  success: boolean;
-  newRoomId?: string;
-  newRoomCode?: string;
-  teams?: Team[];
-  players?: Player[];
-  error?: string;
-}> {
+): Promise<MultiplayerApiResponse<"rematch">> {
   return multiplayerApi("rematch", { 
     roomId, 
     odId: playerId, 
@@ -180,11 +145,7 @@ export async function notifyDisconnect(roomId: string, playerId: string): Promis
   await multiplayerApi("player-disconnect", { roomId, odId: playerId });
 }
 
-export async function setReady(roomId: string, playerId: string, isReady: boolean): Promise<{
-  success: boolean;
-  allReady: boolean;
-  error?: string;
-}> {
+export async function setReady(roomId: string, playerId: string, isReady: boolean): Promise<MultiplayerApiResponse<"set-ready">> {
   return multiplayerApi("set-ready", { roomId, odId: playerId, isReady });
 }
 
@@ -193,12 +154,7 @@ export async function assignPlayerToTeam(
   hostPlayerId: string,
   targetPlayerId: string,
   teamId: string
-): Promise<{
-  success: boolean;
-  teams?: Team[];
-  players?: Player[];
-  error?: string;
-}> {
+): Promise<MultiplayerApiResponse<"assign-team">> {
   return multiplayerApi("assign-team", { 
     roomId, 
     odId: hostPlayerId, 
@@ -224,18 +180,12 @@ export async function createAIGame(
   playerName: string,
   aiDifficulty: AIDifficulty,
   settings: {
-    operation: string;
+    operation: Operation;
     selectedNumbers: number[];
     questionCount: number;
     timeLimit: number;
   }
-): Promise<{
-  success: boolean;
-  roomId?: string;
-  questions?: Question[];
-  players?: Player[];
-  error?: string;
-}> {
+): Promise<MultiplayerApiResponse<"create-ai-game">> {
   return multiplayerApi("create-ai-game", {
     odId: playerId,
     odName: playerName,

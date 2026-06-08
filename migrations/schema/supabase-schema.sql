@@ -61,6 +61,7 @@ ALTER TABLE leaderboard_scores ENABLE ROW LEVEL SECURITY;
 ALTER TABLE hall_of_fame ENABLE ROW LEVEL SECURITY;
 
 -- Policy: Allow anyone to read leaderboard scores
+DROP POLICY IF EXISTS "Allow public read on leaderboard_scores" ON leaderboard_scores;
 CREATE POLICY "Allow public read on leaderboard_scores"
   ON leaderboard_scores
   FOR SELECT
@@ -68,6 +69,7 @@ CREATE POLICY "Allow public read on leaderboard_scores"
   USING (true);
 
 -- Policy: Allow service role to insert/update/delete leaderboard scores
+DROP POLICY IF EXISTS "Allow service role full access on leaderboard_scores" ON leaderboard_scores;
 CREATE POLICY "Allow service role full access on leaderboard_scores"
   ON leaderboard_scores
   FOR ALL
@@ -76,6 +78,7 @@ CREATE POLICY "Allow service role full access on leaderboard_scores"
   WITH CHECK (true);
 
 -- Policy: Allow anyone to read hall of fame
+DROP POLICY IF EXISTS "Allow public read on hall_of_fame" ON hall_of_fame;
 CREATE POLICY "Allow public read on hall_of_fame"
   ON hall_of_fame
   FOR SELECT
@@ -83,6 +86,7 @@ CREATE POLICY "Allow public read on hall_of_fame"
   USING (true);
 
 -- Policy: Allow service role to insert/update/delete hall of fame
+DROP POLICY IF EXISTS "Allow service role full access on hall_of_fame" ON hall_of_fame;
 CREATE POLICY "Allow service role full access on hall_of_fame"
   ON hall_of_fame
   FOR ALL

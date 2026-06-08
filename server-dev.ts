@@ -1,58 +1,77 @@
-import express from 'express';
-import { globSync } from 'glob';
+const start = Date.now();
+
+import express, { type NextFunction, type Request, type Response } from 'express';
 import path from 'path';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import { fileURLToPath, pathToFileURL } from 'url';
 
-// Self-invoking async function to allow top-level await for imports
-(async () => {
-    try {
-        const __filename = fileURLToPath(import.meta.url);
-        const __dirname = path.dirname(__filename);
-        const apiDir = path.join(__dirname, 'api');
+import submitScore from './api/submit-score.js';
+import submitFeedback from './api/submit-feedback.js';
+import pusherAuth from './api/pusher-auth.js';
+import multiplayer from './api/multiplayer.js';
+import getLeaderboard from './api/get-leaderboard.js';
+import getHallOfFame from './api/get-hall-of-fame.js';
+import getHallOfFameDates from './api/get-hall-of-fame-dates.js';
+import getExplanation from './api/get-explanation.js';
+import checkScore from './api/check-score.js';
+import archiveScores from './api/archive-scores.js';
 
-        dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
+// Keep the dev API process alive even if a handler throws or a promise rejects.
+process.on('unhandledRejection', (reason) => {
+    console.error('[API Server] Unhandled promise rejection:', reason);
+});
+process.on('uncaughtException', (err) => {
+    console.error('[API Server] Uncaught exception:', err);
+});
 
-        const app = express();
-        app.use(cors());
-        app.use(express.json());
+// Lifecycle logging — helps diagnose mysterious exits/crashes.
+process.on('exit', (code) => console.log('[API Server] process exit, code:', code));
+process.on('beforeExit', (code) => console.log('[API Server] beforeExit, code:', code));
+process.on('SIGINT', () => { console.log('[API Server] SIGINT received'); process.exit(0); });
+process.on('SIGTERM', () => { console.log('[API Server] SIGTERM received'); process.exit(0); });
 
-        console.log('[API Server] Loading routes from:', apiDir);
-        const apiFiles = globSync('*.ts', { cwd: apiDir });
-        console.log('[API Server] Found files:', apiFiles);
+type Handler = (req: Request, res: Response) => unknown | Promise<unknown>;
 
-        for (const file of apiFiles) {
-            // Skip utility files that aren't API endpoints
-            if (file.includes('server')) continue;
+const asyncRoute = (handler: Handler) =>
+    (req: Request, res: Response, next: NextFunction) => {
+        Promise.resolve(handler(req, res)).catch(next);
+    };
 
-            const routeName = path.basename(file, '.ts');
-            const fullPath = path.join(apiDir, file);
-            console.log(`[API Server] Loading route: ${routeName}`);
+dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
 
-            try {
-                // Convert the Windows file path to a valid file:// URL for ESM import
-                const moduleUrl = pathToFileURL(fullPath).href;
-                const { default: routeHandler } = await import(moduleUrl);
+const app = express();
+app.use(cors());
+app.use(express.json());
 
-                if (typeof routeHandler === 'function') {
-                    app.all(`/api/${routeName}`, routeHandler);
-                    console.log(`[API Server] ✓ Loaded: /api/${routeName}`);
-                } else {
-                    console.warn(`[API Server] Could not load route ${routeName}: default export is not a function.`);
-                }
-            } catch (error) {
-                console.error(`[API Server] Failed to load route ${file}:`, error);
-            }
-        }
+app.get('/health', (_req, res) => {
+    res.status(200).json({ ok: true });
+});
 
-        const port = 3001;
-        app.listen(port, () => {
-            console.log(`[API Server] Listening at http://localhost:${port}`);
-        });
+const routes: Array<[string, Handler]> = [
+    ['submit-score', submitScore as unknown as Handler],
+    ['submit-feedback', submitFeedback as unknown as Handler],
+    ['pusher-auth', pusherAuth as unknown as Handler],
+    ['multiplayer', multiplayer as unknown as Handler],
+    ['get-leaderboard', getLeaderboard as unknown as Handler],
+    ['get-hall-of-fame', getHallOfFame as unknown as Handler],
+    ['get-hall-of-fame-dates', getHallOfFameDates as unknown as Handler],
+    ['get-explanation', getExplanation as unknown as Handler],
+    ['check-score', checkScore as unknown as Handler],
+    ['archive-scores', archiveScores as unknown as Handler],
+];
 
-    } catch (e) {
-        console.error('[API Server] A critical error occurred during server setup:', e);
-        process.exit(1);
-    }
-})();
+for (const [name, handler] of routes) {
+    app.all(`/api/${name}`, asyncRoute(handler));
+}
+
+// Global error middleware — keeps the process alive on any thrown error.
+app.use((err: unknown, req: Request, res: Response, _next: NextFunction) => {
+    console.error(`[API Server] Error in ${req.method} ${req.path}:`, err);
+    if (res.headersSent) return;
+    res.status(500).json({ error: 'Internal server error' });
+});
+
+const port = 3001;
+app.listen(port, () => {
+    console.log(`[API Server] Boot complete in ${Date.now() - start}ms — Listening at http://localhost:${port}`);
+});

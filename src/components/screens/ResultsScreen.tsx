@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import type { Operation, Question, HighScores, AllQuizStats } from '../../../types';
-import { DEFAULT_QUESTION_COUNT } from '../../../types';
+import type { Operation, Question, HighScores, AllQuizStats } from '@shared/types';
+import { DEFAULT_QUESTION_COUNT } from '@shared/types';
 import { CheckCircleIcon, XCircleIcon, StarIcon, TrophyIcon } from '../ui/icons';
 import { feedbackMessages } from '../../lib/feedbackMessages';
 import { formatPercentString } from '../../lib/conversions';
+import { logger } from '../../lib/logger';
 
 const LEADERBOARD_SUPPORTED_OPERATIONS = new Set<Operation>([
   'multiplication',
@@ -173,7 +174,7 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({ questions, userAns
                          (isConversionMode || allNumbersSelected);
       const isEligible = isLeaderboardOperation && meetsScoreRequirements;
 
-      console.log('[ResultsScreen] Leaderboard eligibility check', {
+      logger.log('[ResultsScreen] Leaderboard eligibility check', {
         operation,
         correctCount,
         totalQuestions: questions.length,
@@ -187,7 +188,7 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({ questions, userAns
       if (isEligible) {
         const scoreInMs = Math.round(timeTaken * 1000);
         try {
-          console.log('[ResultsScreen] Submitting check-score request', {
+          logger.log('[ResultsScreen] Submitting check-score request', {
             operation,
             scoreInMs,
           });
@@ -200,7 +201,7 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({ questions, userAns
           });
           const response = await fetch(`/api/check-score?${params.toString()}`);
           const data = await response.json();
-          console.log('[ResultsScreen] check-score response', data);
+          logger.log('[ResultsScreen] check-score response', data);
           setIsTopScore(data.isTopScore);
         } catch (error) {
           console.error("Failed to check score:", error);
@@ -306,7 +307,7 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({ questions, userAns
       setSubmissionStatus('submitted');
     } catch (error) {
       setSubmissionStatus('error');
-      setErrorMessage(error.message);
+      setErrorMessage(error instanceof Error ? error.message : 'An error occurred.');
     }
   };
 
