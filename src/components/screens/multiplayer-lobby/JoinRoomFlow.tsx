@@ -32,7 +32,7 @@ export const JoinRoomFlow: React.FC<JoinRoomFlowProps> = ({
         onChange={e => onJoinCodeChange(e.target.value.toUpperCase().substring(0, 8))}
         placeholder='ABCD1234'
         maxLength={8}
-        className='w-full px-4 py-3 rounded-xl border-2 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-800 dark:text-white text-center text-2xl font-mono tracking-widest focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all outline-none mb-4'
+        className='w-full px-4 py-3 rounded-xl border-2 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-800 dark:text-white text-center text-2xl font-mono tracking-widest focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all outline-hidden mb-4'
       />
       {joinError && <p className='text-red-500 text-sm text-center mb-4'>{joinError}</p>}
       <button

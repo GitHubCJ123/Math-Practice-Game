@@ -67,7 +67,7 @@ export const LobbyHome: React.FC<LobbyHomeProps> = ({
             onChange={e => onPlayerNameChange(e.target.value.substring(0, 20))}
             placeholder='Enter your name'
             maxLength={20}
-            className='w-full px-4 py-3 rounded-xl border-2 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all outline-none'
+            className='w-full px-4 py-3 rounded-xl border-2 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all outline-hidden'
           />
         </div>
 

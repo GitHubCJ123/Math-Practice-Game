@@ -217,14 +217,14 @@ export const MultiplayerResultsScreen: React.FC<MultiplayerResultsScreenProps> =
   const getResultBannerStyle = () => {
     if (gameMode === 'teams') {
       return isTeamWinner
-        ? "bg-gradient-to-r from-green-500 to-emerald-600"
-        : "bg-gradient-to-r from-red-500 to-rose-600";
+        ? "bg-linear-to-r from-green-500 to-emerald-600"
+        : "bg-linear-to-r from-red-500 to-rose-600";
     }
     switch (myRank) {
-      case 1: return "bg-gradient-to-r from-yellow-400 to-amber-500";
-      case 2: return "bg-gradient-to-r from-slate-400 to-slate-500";
-      case 3: return "bg-gradient-to-r from-amber-600 to-orange-700";
-      default: return "bg-gradient-to-r from-slate-500 to-slate-600";
+      case 1: return "bg-linear-to-r from-yellow-400 to-amber-500";
+      case 2: return "bg-linear-to-r from-slate-400 to-slate-500";
+      case 3: return "bg-linear-to-r from-amber-600 to-orange-700";
+      default: return "bg-linear-to-r from-slate-500 to-slate-600";
     }
   };
 
@@ -427,9 +427,9 @@ export const MultiplayerResultsScreen: React.FC<MultiplayerResultsScreenProps> =
                       >
                         <div className="flex items-center gap-1">
                           {isCorrect ? (
-                            <CheckCircleIcon className="w-4 h-4 text-green-500 flex-shrink-0" />
+                            <CheckCircleIcon className="w-4 h-4 text-green-500 shrink-0" />
                           ) : (
-                            <XCircleIcon className="w-4 h-4 text-red-500 flex-shrink-0" />
+                            <XCircleIcon className="w-4 h-4 text-red-500 shrink-0" />
                           )}
                           <span className="font-medium text-slate-700 dark:text-slate-200">
                             {formatQuestion(q)} = {q.answer}
