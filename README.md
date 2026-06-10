@@ -113,7 +113,7 @@ Pick exactly what you want to drill — the question engine handles the rest.
 | **Validation** | [Zod](https://zod.dev) schemas at the API boundary |
 | **Dates** | [Luxon](https://moment.github.io/luxon/) — leaderboard months use `America/New_York` |
 | **Analytics** | `@vercel/analytics`, `@vercel/speed-insights`, optional Google Analytics (gtag) |
-| **Testing** | [Vitest](https://vitest.dev) |
+| **Testing** | [Vitest](https://vitest.dev) + [Testing Library](https://testing-library.com/) on `jsdom`, with V8 coverage |
 | **Tooling** | ESLint 9 (flat config), Prettier |
 
 <p align="right"><a href="#-math-practice-game">⬆ Back to top</a></p>
@@ -172,7 +172,7 @@ flowchart TD
 │  │  └─ ui/                   # Buttons, icons, toast, feedback, ad card
 │  ├─ contexts/                # ThemeContext, MultiplayerContext
 │  ├─ hooks/                   # useQuizTimer, usePusherChannel, useTheme, …
-│  └─ lib/                     # questions, operations, conversions, audio, ga, logger
+│  └─ lib/                     # operations, audio, ga, logger, feedbackMessages, multiplayer
 ├─ api/                        # Vercel serverless functions
 │  ├─ submit-score.ts          # Validate + store an eligible leaderboard score
 │  ├─ check-score.ts           # Is this run a top-5 score this month?
@@ -194,9 +194,12 @@ flowchart TD
 │  ├─ profanity.ts             # Player-name profanity filter
 │  ├─ time-utils.ts            # Luxon — Eastern-time month boundaries
 │  ├─ errors.ts                # ApiError + shared error handling
+│  ├─ logger.ts                # Server logger (silences debug logs in prod)
 │  └─ constants.ts             # Allowed operations
-├─ shared/
-│  └─ types.ts                 # Single source of truth shared by client + API
+├─ shared/                     # Single source of truth shared by client + API
+│  ├─ types.ts                 # Shared TypeScript contracts (Operation, Room, …)
+│  ├─ questions.ts             # Shared question-generation logic
+│  └─ conversions.ts           # Shared fraction/decimal/percent conversion table
 ├─ migrations/                 # SQL — see migrations/README.md
 │  ├─ schema/                  # Current Supabase schema (apply these)
 │  ├─ archive/                 # Point-in-time month archives (auditability)
@@ -320,9 +323,10 @@ npm run preview  # serve the built bundle locally
 | `npm run build` | `vite build` | Production bundle → `dist/` |
 | `npm run preview` | `vite preview` | Serve the production build locally |
 | `npm run typecheck` | `tsc --noEmit` | Full TypeScript type-check |
-| `npm run lint` | `eslint … --quiet` | Lint (errors only) |
+| `npm run lint` | `eslint …` | Lint the project (**blocking in CI**; warnings are shown) |
 | `npm test` | `vitest run` | Run the test suite once |
 | `npm run test:watch` | `vitest` | Run tests in watch mode |
+| `npm run test:coverage` | `vitest run --coverage` | Run the suite with a V8 coverage report |
 | `npm run format` | `prettier --write .` | Format the whole project |
 | `npm run format:check` | `prettier --check .` | Check formatting without writing |
 
@@ -360,7 +364,7 @@ The app is wired for **Vercel** out of the box. [`vercel.json`](vercel.json) dec
 
 **To deploy:** push to GitHub, import the repo into Vercel, set the environment variables above, and you're live.
 
-**Continuous integration:** [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs `typecheck`, `lint`, `test`, and `build` on every push and PR. A backup [`archive-scores-cron.yml`](.github/workflows/archive-scores-cron.yml) workflow provides a redundant monthly archive trigger.
+**Continuous integration:** [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs `typecheck`, `lint` (blocking), `test` with coverage, and `build` on every push and PR. A backup [`archive-scores-cron.yml`](.github/workflows/archive-scores-cron.yml) workflow provides a redundant monthly archive trigger.
 
 <p align="right"><a href="#-math-practice-game">⬆ Back to top</a></p>
 
@@ -371,6 +375,7 @@ The app is wired for **Vercel** out of the box. [`vercel.json`](vercel.json) dec
 A few details worth knowing if you're poking around the code:
 
 - **Fair timing.** Quizzes time with the wall clock (`performance.now()`), not an accumulating `setInterval` counter — so the clock stays accurate even when the browser throttles timers. This is locked in by [`src/__tests__/timer-fairness.test.ts`](src/__tests__/timer-fairness.test.ts), which even asserts the quiz screens don't reintroduce the old drifting pattern.
+- **Tested core.** A Vitest suite covers the logic-heavy pieces — question generation, conversions, score eligibility, Zod validation, Eastern-time month boundaries, the profanity filter, AI profiles, the in-memory room-store state machine, and the `useQuizTimer` hook (the last via Testing Library on `jsdom`). CI runs it with a V8 coverage floor so coverage can't slide backwards.
 - **Anti-cheat.** Hiding or switching away from the tab mid-quiz auto-submits your answers, in both solo and multiplayer.
 - **Leaderboard integrity.** A score only counts if it's a perfect run on exactly 10 questions with all numbers selected (enforced server-side in `score-eligibility.ts`). Player names are profanity-filtered.
 - **Eastern-time months.** Leaderboards roll over on `America/New_York` month boundaries (via Luxon), and the monthly cron archives the previous month's winners.
@@ -386,7 +391,7 @@ A few details worth knowing if you're poking around the code:
 PRs welcome! A few house rules:
 
 - **TypeScript strict mode** is on — share any cross-runtime types via [`shared/types.ts`](shared/types.ts).
-- **Keep CI green:** `npm run typecheck`, `npm run lint`, and `npm test` should all pass.
+- **Keep CI green:** `npm run typecheck`, `npm run lint`, and `npm run test:coverage` should all pass.
 - **Tailwind utility classes** for styling; custom animations belong in [`src/index.css`](src/index.css).
 - **Don't change the cron** in [`vercel.json`](vercel.json) without updating the archive logic in [`api/archive-scores.ts`](api/archive-scores.ts).
 - Run `npm run format` before committing.
