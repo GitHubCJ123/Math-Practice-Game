@@ -1,5 +1,5 @@
 import React from 'react';
-import type { GameMode, Operation, Player, RoomSettings, Team } from '@shared/types';
+import type { GameMode, Operation, Player, Team } from '@shared/types';
 import { LobbyHeader } from './LobbyHeader';
 import { ModeButton, RoomPlayerCard, TeamSection } from './RoomRoster';
 import { getNumbersForOperation, operationLabels, type SettingsPatch } from './types';

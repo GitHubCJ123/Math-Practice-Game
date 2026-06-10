@@ -23,182 +23,10 @@ import {
   assignRandomTeams,
 } from "../lib/api/room-store.js";
 import { createAIPlayer } from "../lib/api/ai-player.js";
-import type { Question, Operation, MultiplayerResult, TeamResult, AIDifficulty } from "../shared/types.js";
+import { generateQuestions } from "../shared/questions.js";
+import type { Operation, MultiplayerResult, TeamResult, AIDifficulty, RoomEventName, RoomEventPayloads } from "../shared/types.js";
 
 type ActionBody<TAction extends MultiplayerActionInput["action"]> = Extract<MultiplayerActionInput, { action: TAction }>;
-
-// Conversion data for fraction/decimal/percent operations
-interface Conversion {
-  numerator: number;
-  denominator: number;
-  decimal: number;
-  fractionString: string;
-  decimalString: string;
-}
-
-const conversions: Conversion[] = [
-  { numerator: 1, denominator: 2, decimal: 0.5, fractionString: '1/2', decimalString: '0.5' },
-  { numerator: 1, denominator: 3, decimal: 0.333, fractionString: '1/3', decimalString: '0.333' },
-  { numerator: 2, denominator: 3, decimal: 0.666, fractionString: '2/3', decimalString: '0.666' },
-  { numerator: 1, denominator: 4, decimal: 0.25, fractionString: '1/4', decimalString: '0.25' },
-  { numerator: 3, denominator: 4, decimal: 0.75, fractionString: '3/4', decimalString: '0.75' },
-  { numerator: 1, denominator: 5, decimal: 0.2, fractionString: '1/5', decimalString: '0.2' },
-  { numerator: 2, denominator: 5, decimal: 0.4, fractionString: '2/5', decimalString: '0.4' },
-  { numerator: 3, denominator: 5, decimal: 0.6, fractionString: '3/5', decimalString: '0.6' },
-  { numerator: 4, denominator: 5, decimal: 0.8, fractionString: '4/5', decimalString: '0.8' },
-  { numerator: 1, denominator: 6, decimal: 0.166, fractionString: '1/6', decimalString: '0.166' },
-  { numerator: 5, denominator: 6, decimal: 0.833, fractionString: '5/6', decimalString: '0.833' },
-  { numerator: 1, denominator: 8, decimal: 0.125, fractionString: '1/8', decimalString: '0.125' },
-  { numerator: 3, denominator: 8, decimal: 0.375, fractionString: '3/8', decimalString: '0.375' },
-  { numerator: 5, denominator: 8, decimal: 0.625, fractionString: '5/8', decimalString: '0.625' },
-  { numerator: 7, denominator: 8, decimal: 0.875, fractionString: '7/8', decimalString: '0.875' },
-  { numerator: 1, denominator: 9, decimal: 0.111, fractionString: '1/9', decimalString: '0.111' },
-  { numerator: 2, denominator: 9, decimal: 0.222, fractionString: '2/9', decimalString: '0.222' },
-  { numerator: 4, denominator: 9, decimal: 0.444, fractionString: '4/9', decimalString: '0.444' },
-  { numerator: 5, denominator: 9, decimal: 0.555, fractionString: '5/9', decimalString: '0.555' },
-  { numerator: 7, denominator: 9, decimal: 0.777, fractionString: '7/9', decimalString: '0.777' },
-  { numerator: 8, denominator: 9, decimal: 0.888, fractionString: '8/9', decimalString: '0.888' },
-  { numerator: 1, denominator: 10, decimal: 0.1, fractionString: '1/10', decimalString: '0.1' },
-  { numerator: 3, denominator: 10, decimal: 0.3, fractionString: '3/10', decimalString: '0.3' },
-  { numerator: 7, denominator: 10, decimal: 0.7, fractionString: '7/10', decimalString: '0.7' },
-  { numerator: 9, denominator: 10, decimal: 0.9, fractionString: '9/10', decimalString: '0.9' },
-];
-
-const formatPercentString = (decimal: number): string => {
-  const percentValue = Number((decimal * 100).toFixed(1));
-  if (Number.isInteger(percentValue)) {
-    return `${percentValue.toFixed(0)}%`;
-  }
-  return `${percentValue.toFixed(1)}%`;
-};
-
-// Question generation logic
-function generateQuestions(
-  operation: Operation,
-  selectedNumbers: number[],
-  count: number
-): Question[] {
-  const questions: Question[] = [];
-  const usedQuestions = new Set<string>();
-
-  // For conversion operations, use the pre-defined conversions data
-  if (
-    operation === "fraction-to-decimal" ||
-    operation === "decimal-to-fraction" ||
-    operation === "fraction-to-percent" ||
-    operation === "percent-to-fraction"
-  ) {
-    const shuffledConversions = [...conversions].sort(() => 0.5 - Math.random());
-    const selectedConversions = shuffledConversions.slice(0, Math.min(count, conversions.length));
-
-    for (const conv of selectedConversions) {
-      let question: Question;
-      switch (operation) {
-        case "fraction-to-decimal":
-          question = {
-            operation,
-            display: conv.fractionString,
-            answer: conv.decimalString,
-            num1: conv.numerator,
-            num2: conv.denominator,
-          };
-          break;
-        case "decimal-to-fraction":
-          question = {
-            operation,
-            display: conv.decimalString,
-            answer: conv.fractionString,
-            num1: conv.decimal,
-          };
-          break;
-        case "fraction-to-percent": {
-          const percentString = formatPercentString(conv.decimal);
-          question = {
-            operation,
-            display: conv.fractionString,
-            answer: percentString,
-            num1: conv.numerator,
-            num2: conv.denominator,
-          };
-          break;
-        }
-        case "percent-to-fraction": {
-          const percentString = formatPercentString(conv.decimal);
-          question = {
-            operation,
-            display: percentString,
-            answer: conv.fractionString,
-            num1: percentString.endsWith('%') ? parseFloat(percentString.slice(0, -1)) : conv.decimal * 100,
-          };
-          break;
-        }
-      }
-      questions.push(question);
-    }
-    return questions;
-  }
-
-  // For other operations, generate randomly
-  let attempts = 0;
-  const maxAttempts = count * 20;
-
-  while (questions.length < count && attempts < maxAttempts) {
-    attempts++;
-    let question: Question | null = null;
-
-    const num1 = selectedNumbers[Math.floor(Math.random() * selectedNumbers.length)];
-    const num2 = selectedNumbers[Math.floor(Math.random() * selectedNumbers.length)];
-
-    switch (operation) {
-      case "multiplication":
-        question = { num1, num2, operation, answer: num1 * num2 };
-        break;
-      case "division":
-        const product = num1 * num2;
-        question = { num1: product, num2, operation, answer: num1 };
-        break;
-      case "squares":
-        question = { num1, operation, answer: num1 * num1 };
-        break;
-      case "square-roots":
-        const squared = num1 * num1;
-        question = { num1: squared, operation, answer: num1 };
-        break;
-      case "negative-numbers": {
-        const ops = ["+", "-", "*"];
-        const op = ops[Math.floor(Math.random() * ops.length)];
-        const n1 = Math.random() < 0.5 ? -num1 : num1;
-        const n2 = Math.random() < 0.5 ? -num2 : num2;
-        let ans: number;
-        switch (op) {
-          case "+": ans = n1 + n2; break;
-          case "-": ans = n1 - n2; break;
-          case "*": ans = n1 * n2; break;
-          default: ans = n1 + n2;
-        }
-        const n2Display = n2 < 0 ? `(${n2})` : `${n2}`;
-        question = {
-          num1: n1,
-          num2: n2,
-          operation,
-          answer: ans,
-          display: `${n1} ${op} ${n2Display}`,
-        };
-        break;
-      }
-    }
-
-    if (question) {
-      const key = `${question.num1}-${question.num2}-${question.operation}-${question.display || ""}`;
-      if (!usedQuestions.has(key)) {
-        usedQuestions.add(key);
-        questions.push(question);
-      }
-    }
-  }
-
-  return questions;
-}
 
 async function triggerPusher(channel: string, event: string, data: unknown): Promise<void> {
   try {
@@ -209,15 +37,28 @@ async function triggerPusher(channel: string, event: string, data: unknown): Pro
   }
 }
 
+/**
+ * Typed wrapper around {@link triggerPusher} for room-channel events. The payload
+ * is checked against {@link RoomEventPayloads} for the given event name, so the
+ * server can't emit a shape that drifts from what the client handlers read.
+ */
+async function triggerRoomEvent<E extends RoomEventName>(
+  roomId: string,
+  event: E,
+  data: RoomEventPayloads[E]
+): Promise<void> {
+  await triggerPusher(`room-${roomId}`, event, data);
+}
+
 // Action handlers
 async function handleCreateRoom(body: ActionBody<"create-room">, res: VercelResponse) {
-  const { odId, odName } = body;
+  const { playerId, playerName } = body;
 
-  if (!odId || !odName) {
+  if (!playerId || !playerName) {
     return apiError(res, 400, "Player ID and name are required");
   }
 
-  const room = createRoomInStore(odId, odName.substring(0, 20), false);
+  const room = createRoomInStore(playerId, playerName.substring(0, 20), false);
 
   // Use BASE_URL if set (for custom domains), otherwise fall back to VERCEL_URL or localhost
   const baseUrl = process.env.BASE_URL 
@@ -240,29 +81,31 @@ async function handleCreateRoom(body: ActionBody<"create-room">, res: VercelResp
 }
 
 async function handleJoinRoom(body: ActionBody<"join-room">, res: VercelResponse) {
-  const { roomCode, odId, odName } = body;
+  const { roomCode, playerId, playerName } = body;
 
-  if (!roomCode || !odId || !odName) {
+  if (!roomCode || !playerId || !playerName) {
     return apiError(res, 400, "Room code, player ID, and name are required");
   }
 
-  const result = joinRoomInStore(roomCode.toUpperCase(), odId, odName.substring(0, 20));
+  const result = joinRoomInStore(roomCode.toUpperCase(), playerId, playerName.substring(0, 20));
 
   if (!result.success) {
     return apiError(res, 400, result.error ?? "Unable to join room");
   }
 
   const room = result.room!;
-  const newPlayer = room.players.find(p => p.id === odId);
+  const newPlayer = room.players.find(p => p.id === playerId);
+  if (!newPlayer) {
+    return apiError(res, 500, "Player not found after joining room");
+  }
 
   // Handle team assignment for the new player if in team mode
-  if (room.settings.gameMode === "teams" && newPlayer) {
+  if (room.settings.gameMode === "teams") {
     if (room.teams.length === 0) {
       // Teams not initialized yet (e.g., 2nd player just joined). Initialize if we have enough players.
       if (room.players.length >= 2) {
         assignRandomTeams(room);
-        await triggerPusher(`room-${room.id}`, "teams-updated", {
-          type: "teams-updated",
+        await triggerRoomEvent(room.id, "teams-updated", {
           teams: room.teams,
           players: room.players,
         });
@@ -273,20 +116,18 @@ async function handleJoinRoom(body: ActionBody<"join-room">, res: VercelResponse
       const teamBCount = room.teams[1].playerIds.length;
       const targetTeam = teamACount <= teamBCount ? room.teams[0] : room.teams[1];
       
-      targetTeam.playerIds.push(odId);
+      targetTeam.playerIds.push(playerId);
       newPlayer.teamId = targetTeam.id;
       
       // Notify about team update
-      await triggerPusher(`room-${room.id}`, "teams-updated", {
-        type: "teams-updated",
+      await triggerRoomEvent(room.id, "teams-updated", {
         teams: room.teams,
         players: room.players,
       });
     }
   }
 
-  await triggerPusher(`room-${room.id}`, "player-joined", {
-    type: "player-joined",
+  await triggerRoomEvent(room.id, "player-joined", {
     player: newPlayer,
   });
 
@@ -306,10 +147,10 @@ async function handleJoinRoom(body: ActionBody<"join-room">, res: VercelResponse
 }
 
 async function handleLeaveRoom(body: ActionBody<"leave-room">, res: VercelResponse) {
-  const { roomId, odId, odName } = body;
+  const { roomId, playerId, playerName } = body;
 
-  if (!roomId || !odId) {
-    return apiError(res, 400, "roomId and odId are required");
+  if (!roomId || !playerId) {
+    return apiError(res, 400, "roomId and playerId are required");
   }
 
   const room = getRoom(roomId);
@@ -317,16 +158,16 @@ async function handleLeaveRoom(body: ActionBody<"leave-room">, res: VercelRespon
     return apiError(res, 404, "Room not found");
   }
 
-  const leavingPlayer = room.players.find(p => p.id === odId);
+  const leavingPlayer = room.players.find(p => p.id === playerId);
   if (!leavingPlayer) {
     return apiError(res, 404, "Player not in room");
   }
 
-  room.players = room.players.filter(p => p.id !== odId);
+  room.players = room.players.filter(p => p.id !== playerId);
 
-  await triggerPusher(`room-${roomId}`, "player-left", {
-    playerId: odId,
-    playerName: odName || leavingPlayer.name,
+  await triggerRoomEvent(roomId, "player-left", {
+    playerId,
+    playerName: playerName || leavingPlayer.name,
   });
 
 
@@ -339,23 +180,23 @@ async function handleLeaveRoom(body: ActionBody<"leave-room">, res: VercelRespon
 
 async function handleQuickMatch(body: ActionBody<"quick-match">, method: string, res: VercelResponse) {
   if (method === "DELETE") {
-    const { odId } = body;
-    if (odId) {
-      removeFromQuickMatchQueue(odId);
+    const { playerId } = body;
+    if (playerId) {
+      removeFromQuickMatchQueue(playerId);
     }
     return res.status(200).json({ success: true });
   }
 
-  const { odId, odName, operation } = body;
+  const { playerId, playerName, operation } = body;
 
-  if (!odId || !odName || !operation) {
+  if (!playerId || !playerName || !operation) {
     return apiError(res, 400, "Player ID, name, and operation are required");
   }
 
-  const opponent = findQuickMatchOpponent(odId, operation);
+  const opponent = findQuickMatchOpponent(playerId, operation);
 
   if (opponent) {
-    const room = createRoomInStore(opponent.odId, opponent.odName, true);
+    const room = createRoomInStore(opponent.playerId, opponent.playerName, true);
     
     const allNumbers = operation === "squares" || operation === "square-roots"
       ? [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
@@ -372,12 +213,12 @@ async function handleQuickMatch(body: ActionBody<"quick-match">, method: string,
       gameMode: "ffa",
     };
 
-    joinRoomInStore(room.code, odId, odName.substring(0, 20));
+    joinRoomInStore(room.code, playerId, playerName.substring(0, 20));
 
-    await triggerPusher(`quickmatch-${opponent.odId}`, "match-found", {
+    await triggerPusher(`quickmatch-${opponent.playerId}`, "match-found", {
       roomId: room.id,
       roomCode: room.code,
-      opponent: { id: odId, name: odName },
+      opponent: { id: playerId, name: playerName },
       operation: operation,
     });
 
@@ -386,10 +227,10 @@ async function handleQuickMatch(body: ActionBody<"quick-match">, method: string,
       matched: true,
       roomId: room.id,
       roomCode: room.code,
-      opponent: { id: opponent.odId, name: opponent.odName },
+      opponent: { id: opponent.playerId, name: opponent.playerName },
     });
   } else {
-    addToQuickMatchQueue(odId, odName, operation);
+    addToQuickMatchQueue(playerId, playerName, operation);
 
     return res.status(200).json({
       success: true,
@@ -400,9 +241,9 @@ async function handleQuickMatch(body: ActionBody<"quick-match">, method: string,
 }
 
 async function handleSetReady(body: ActionBody<"set-ready">, res: VercelResponse) {
-  const { roomId, odId, isReady } = body;
+  const { roomId, playerId, isReady } = body;
 
-  if (!roomId || !odId || typeof isReady !== "boolean") {
+  if (!roomId || !playerId || typeof isReady !== "boolean") {
     return apiError(res, 400, "Room ID, player ID, and isReady status are required");
   }
 
@@ -411,7 +252,7 @@ async function handleSetReady(body: ActionBody<"set-ready">, res: VercelResponse
     return apiError(res, 404, "Room not found");
   }
 
-  const playerIndex = room.players.findIndex((p) => p.id === odId);
+  const playerIndex = room.players.findIndex((p) => p.id === playerId);
   if (playerIndex === -1) {
     return apiError(res, 404, "Player not in room");
   }
@@ -420,12 +261,12 @@ async function handleSetReady(body: ActionBody<"set-ready">, res: VercelResponse
   updateRoom(room);
 
 
-  await triggerPusher(`room-${roomId}`, "player-ready", {
-    odId,
+  await triggerRoomEvent(roomId, "player-ready", {
+    playerId,
     isReady,
   });
 
-  const minPlayers = room.isQuickMatch ? 2 : 2; // Min 2 players to start
+  const minPlayers = 2; // Min 2 players to start
   const allReady = room.players.length >= minPlayers && room.players.every((p) => p.isReady);
 
   if (allReady) {
@@ -444,8 +285,8 @@ async function handleSetReady(body: ActionBody<"set-ready">, res: VercelResponse
     room.questions = questions;
     room.gameStartTime = Date.now();
     room.playerStates = room.players.map(p => ({
-      odId: p.id,
-      odName: p.name,
+      playerId: p.id,
+      playerName: p.name,
       answers: [],
       currentQuestion: 0,
       finished: false,
@@ -454,7 +295,7 @@ async function handleSetReady(body: ActionBody<"set-ready">, res: VercelResponse
     }));
     updateRoom(room);
 
-    await triggerPusher(`room-${roomId}`, "game-starting", {
+    await triggerRoomEvent(roomId, "game-starting", {
       questions,
       teams: room.teams,
       players: room.players,
@@ -468,10 +309,10 @@ async function handleSetReady(body: ActionBody<"set-ready">, res: VercelResponse
 }
 
 async function handleStartReadyPhase(body: ActionBody<"start-ready-phase">, res: VercelResponse) {
-  const { roomId, odId, settings } = body;
+  const { roomId, playerId, settings } = body;
 
-  if (!roomId || !odId) {
-    return apiError(res, 400, "roomId and odId are required");
+  if (!roomId || !playerId) {
+    return apiError(res, 400, "roomId and playerId are required");
   }
 
   const room = getRoom(roomId);
@@ -479,7 +320,7 @@ async function handleStartReadyPhase(body: ActionBody<"start-ready-phase">, res:
     return apiError(res, 404, "Room not found");
   }
 
-  const player = room.players.find(p => p.id === odId);
+  const player = room.players.find(p => p.id === playerId);
   if (!player?.isHost) {
     return apiError(res, 403, "Only host can start ready phase");
   }
@@ -501,7 +342,7 @@ async function handleStartReadyPhase(body: ActionBody<"start-ready-phase">, res:
     setPlayerReady(roomId, p.id, false);
   }
 
-  await triggerPusher(`room-${roomId}`, "ready-phase", {
+  await triggerRoomEvent(roomId, "ready-phase", {
     settings: room.settings,
   });
 
@@ -510,9 +351,9 @@ async function handleStartReadyPhase(body: ActionBody<"start-ready-phase">, res:
 }
 
 async function handleUpdateRoomSettings(body: ActionBody<"update-room-settings">, res: VercelResponse) {
-  const { roomId, odId, settings } = body;
+  const { roomId, playerId, settings } = body;
 
-  if (!roomId || !odId || !settings) {
+  if (!roomId || !playerId || !settings) {
     return apiError(res, 400, "Room ID, player ID, and settings are required");
   }
 
@@ -521,7 +362,7 @@ async function handleUpdateRoomSettings(body: ActionBody<"update-room-settings">
     return apiError(res, 404, "Room not found");
   }
 
-  if (room.hostId !== odId) {
+  if (room.hostId !== playerId) {
     return apiError(res, 403, "Only the host can update settings");
   }
 
@@ -536,12 +377,10 @@ async function handleUpdateRoomSettings(body: ActionBody<"update-room-settings">
     if (settings.gameMode === "teams" && updatedRoom.players.length >= 2) {
       assignRandomTeams(updatedRoom);
       // Send both settings and teams update
-      await triggerPusher(`room-${roomId}`, "settings-updated", {
-        type: "settings-updated",
+      await triggerRoomEvent(roomId, "settings-updated", {
         settings: updatedRoom.settings,
       });
-      await triggerPusher(`room-${roomId}`, "teams-updated", {
-        type: "teams-updated",
+      await triggerRoomEvent(roomId, "teams-updated", {
         teams: updatedRoom.teams,
         players: updatedRoom.players,
       });
@@ -551,18 +390,15 @@ async function handleUpdateRoomSettings(body: ActionBody<"update-room-settings">
       for (const player of updatedRoom.players) {
         player.teamId = undefined;
       }
-      await triggerPusher(`room-${roomId}`, "settings-updated", {
-        type: "settings-updated",
+      await triggerRoomEvent(roomId, "settings-updated", {
         settings: updatedRoom.settings,
       });
-      await triggerPusher(`room-${roomId}`, "teams-updated", {
-        type: "teams-updated",
+      await triggerRoomEvent(roomId, "teams-updated", {
         teams: [],
         players: updatedRoom.players,
       });
     } else {
-      await triggerPusher(`room-${roomId}`, "settings-updated", {
-        type: "settings-updated",
+      await triggerRoomEvent(roomId, "settings-updated", {
         settings: updatedRoom.settings,
       });
     }
@@ -577,9 +413,9 @@ async function handleUpdateRoomSettings(body: ActionBody<"update-room-settings">
 }
 
 async function handleStartGame(body: ActionBody<"start-game">, res: VercelResponse) {
-  const { roomId, odId } = body;
+  const { roomId, playerId } = body;
 
-  if (!roomId || !odId) {
+  if (!roomId || !playerId) {
     return apiError(res, 400, "Room ID and player ID are required");
   }
 
@@ -588,7 +424,7 @@ async function handleStartGame(body: ActionBody<"start-game">, res: VercelRespon
     return apiError(res, 404, "Room not found");
   }
 
-  if (!room.isQuickMatch && room.hostId !== odId) {
+  if (!room.isQuickMatch && room.hostId !== playerId) {
     return apiError(res, 403, "Only the host can start the game");
   }
 
@@ -609,8 +445,7 @@ async function handleStartGame(body: ActionBody<"start-game">, res: VercelRespon
   startGameInStore(roomId, questions);
 
 
-  await triggerPusher(`room-${roomId}`, "game-starting", {
-    type: "game-starting",
+  await triggerRoomEvent(roomId, "game-starting", {
     countdown: 3,
     questions,
     teams: room.teams,
@@ -621,8 +456,7 @@ async function handleStartGame(body: ActionBody<"start-game">, res: VercelRespon
     try {
       const updatedRoom = setGamePlaying(roomId);
       if (updatedRoom) {
-        await triggerPusher(`room-${roomId}`, "game-started", {
-          type: "game-started",
+        await triggerRoomEvent(roomId, "game-started", {
           startTime: updatedRoom.gameStartTime,
         });
       }
@@ -638,9 +472,9 @@ async function handleStartGame(body: ActionBody<"start-game">, res: VercelRespon
 }
 
 async function handleUpdateProgress(body: ActionBody<"update-progress">, res: VercelResponse) {
-  const { roomId, odId, currentQuestion } = body;
+  const { roomId, playerId, currentQuestion } = body;
 
-  if (!roomId || !odId || currentQuestion === undefined) {
+  if (!roomId || !playerId || currentQuestion === undefined) {
     return apiError(res, 400, "Room ID, player ID, and current question are required");
   }
 
@@ -653,11 +487,10 @@ async function handleUpdateProgress(body: ActionBody<"update-progress">, res: Ve
     return apiError(res, 400, "Game not in progress");
   }
 
-  updatePlayerProgress(roomId, odId, currentQuestion);
+  updatePlayerProgress(roomId, playerId, currentQuestion);
 
-  await triggerPusher(`room-${roomId}`, "opponent-progress", {
-    type: "opponent-progress",
-    odId,
+  await triggerRoomEvent(roomId, "opponent-progress", {
+    playerId,
     currentQuestion,
   });
 
@@ -665,9 +498,9 @@ async function handleUpdateProgress(body: ActionBody<"update-progress">, res: Ve
 }
 
 async function handleSubmitMultiplayer(body: ActionBody<"submit-multiplayer">, res: VercelResponse) {
-  const { roomId, odId, answers, score } = body;
+  const { roomId, playerId, answers, score } = body;
 
-  if (!roomId || !odId || !answers || score === undefined) {
+  if (!roomId || !playerId || !answers || score === undefined) {
     return apiError(res, 400, "Room ID, player ID, answers, and score are required");
   }
 
@@ -676,18 +509,17 @@ async function handleSubmitMultiplayer(body: ActionBody<"submit-multiplayer">, r
     return apiError(res, 404, "Room not found");
   }
 
-  const { room: updatedRoom, allFinished } = submitPlayerAnswers(roomId, odId, answers, score);
+  const { room: updatedRoom, allFinished } = submitPlayerAnswers(roomId, playerId, answers, score);
 
   if (!updatedRoom) {
     return apiError(res, 500, "Failed to submit answers");
   }
 
-  const playerState = updatedRoom.playerStates.find(p => p.odId === odId);
+  const playerState = updatedRoom.playerStates.find(p => p.playerId === playerId);
 
-  await triggerPusher(`room-${roomId}`, "opponent-finished", {
-    type: "opponent-finished",
-    odId,
-    finishTime: playerState?.finishTime,
+  await triggerRoomEvent(roomId, "opponent-finished", {
+    playerId,
+    finishTime: playerState?.finishTime ?? null,
   });
 
   if (allFinished) {
@@ -713,14 +545,14 @@ async function handleSubmitMultiplayer(body: ActionBody<"submit-multiplayer">, r
     };
 
     const results: MultiplayerResult[] = rankedStates.map((ps, index) => ({
-      odId: ps.odId,
-      odName: ps.odName,
+      playerId: ps.playerId,
+      playerName: ps.playerName,
       score: ps.score,
       totalQuestions: updatedRoom.questions.length,
       timeTaken: ps.finishTime || 0,
       answers: ps.answers,
       questions: updatedRoom.questions,
-      teamId: getPlayerTeamId(ps.odId),
+      teamId: getPlayerTeamId(ps.playerId),
       rank: index + 1,
     }));
 
@@ -737,7 +569,7 @@ async function handleSubmitMultiplayer(body: ActionBody<"submit-multiplayer">, r
       teamResults = updatedRoom.teams.map(team => {
         // Use team.playerIds directly instead of relying on player.teamId
         const teamPlayerStates = updatedRoom.playerStates.filter(ps => 
-          team.playerIds.includes(ps.odId)
+          team.playerIds.includes(ps.playerId)
         );
         
 
@@ -777,8 +609,7 @@ async function handleSubmitMultiplayer(body: ActionBody<"submit-multiplayer">, r
       }
     }
 
-    await triggerPusher(`room-${roomId}`, "game-ended", {
-      type: "game-ended",
+    await triggerRoomEvent(roomId, "game-ended", {
       results,
       teamResults,
     });
@@ -792,9 +623,9 @@ async function handleSubmitMultiplayer(body: ActionBody<"submit-multiplayer">, r
 }
 
 async function handleRematch(body: ActionBody<"rematch">, res: VercelResponse) {
-  const { roomId, odId, odName, rematchAction, keepTeams } = body;
+  const { roomId, playerId, playerName, rematchAction, keepTeams } = body;
 
-  if (!roomId || !odId || !odName || !rematchAction) {
+  if (!roomId || !playerId || !playerName || !rematchAction) {
     return apiError(res, 400, "Room ID, player ID, name, and rematchAction are required");
   }
 
@@ -803,7 +634,7 @@ async function handleRematch(body: ActionBody<"rematch">, res: VercelResponse) {
     return apiError(res, 404, "Room not found");
   }
 
-  const player = room.players.find(p => p.id === odId);
+  const player = room.players.find(p => p.id === playerId);
 
   if (!player) {
     return apiError(res, 403, "Player not in room");
@@ -816,16 +647,15 @@ async function handleRematch(body: ActionBody<"rematch">, res: VercelResponse) {
     // For 2 players, just send request normally
     // For 3+ players, we need everyone to accept
     room.rematchState = {
-      requesterId: odId,
-      requesterName: odName,
+      requesterId: playerId,
+      requesterName: playerName,
       keepTeams: keepTeams || false,
-      acceptedPlayerIds: [odId], // Requester is automatically "accepted"
+      acceptedPlayerIds: [playerId], // Requester is automatically "accepted"
     };
     
-    await triggerPusher(`room-${roomId}`, "rematch-requested", {
-      type: "rematch-requested",
-      fromPlayerId: odId,
-      fromPlayerName: odName,
+    await triggerRoomEvent(roomId, "rematch-requested", {
+      fromPlayerId: playerId,
+      fromPlayerName: playerName,
       keepTeams: keepTeams || false,
       totalNeeded: totalPlayersNeeded,
     });
@@ -841,8 +671,8 @@ async function handleRematch(body: ActionBody<"rematch">, res: VercelResponse) {
     }
 
     // Add this player to accepted list if not already
-    if (!room.rematchState.acceptedPlayerIds.includes(odId)) {
-      room.rematchState.acceptedPlayerIds.push(odId);
+    if (!room.rematchState.acceptedPlayerIds.includes(playerId)) {
+      room.rematchState.acceptedPlayerIds.push(playerId);
     }
 
     const acceptedCount = room.rematchState.acceptedPlayerIds.length;
@@ -850,10 +680,9 @@ async function handleRematch(body: ActionBody<"rematch">, res: VercelResponse) {
 
     if (!allAccepted) {
       // Not everyone has accepted yet - notify others
-      await triggerPusher(`room-${roomId}`, "rematch-player-accepted", {
-        type: "rematch-player-accepted",
-        odId,
-        odName,
+      await triggerRoomEvent(roomId, "rematch-player-accepted", {
+        playerId,
+        playerName,
         acceptedCount,
         totalNeeded: totalPlayersNeeded,
       });
@@ -903,8 +732,7 @@ async function handleRematch(body: ActionBody<"rematch">, res: VercelResponse) {
     // Clear rematch state
     room.rematchState = undefined;
 
-    await triggerPusher(`room-${roomId}`, "rematch-accepted", {
-      type: "rematch-accepted",
+    await triggerRoomEvent(roomId, "rematch-accepted", {
       newRoomCode: newRoom.code,
       newRoomId: newRoom.id,
       isQuickMatch: room.isQuickMatch,
@@ -929,9 +757,8 @@ async function handleRematch(body: ActionBody<"rematch">, res: VercelResponse) {
     // Clear rematch state
     room.rematchState = undefined;
 
-    await triggerPusher(`room-${roomId}`, "rematch-declined", {
-      type: "rematch-declined",
-      declinedBy: odName,
+    await triggerRoomEvent(roomId, "rematch-declined", {
+      declinedBy: playerName,
     });
 
     return res.status(200).json({ success: true, message: "Rematch declined" });
@@ -941,24 +768,23 @@ async function handleRematch(body: ActionBody<"rematch">, res: VercelResponse) {
 }
 
 async function handlePlayerDisconnect(body: ActionBody<"player-disconnect">, res: VercelResponse) {
-  const { roomId, odId } = body;
+  const { roomId, playerId } = body;
 
-  if (!roomId || !odId) {
+  if (!roomId || !playerId) {
     return apiError(res, 400, "Room ID and player ID are required");
   }
 
-  const room = playerDisconnected(roomId, odId);
+  const room = playerDisconnected(roomId, playerId);
 
   if (room) {
-    await triggerPusher(`room-${roomId}`, "player-disconnected", {
-      type: "player-disconnected",
-      odId,
+    await triggerRoomEvent(roomId, "player-disconnected", {
+      playerId,
     });
 
     if (room.gameState === "finished") {
       const results = room.playerStates.map(ps => ({
-        odId: ps.odId,
-        odName: ps.odName,
+        playerId: ps.playerId,
+        playerName: ps.playerName,
         score: ps.score,
         totalQuestions: room.questions.length,
         timeTaken: ps.finishTime || 0,
@@ -966,8 +792,7 @@ async function handlePlayerDisconnect(body: ActionBody<"player-disconnect">, res
         questions: room.questions,
       }));
 
-      await triggerPusher(`room-${roomId}`, "game-ended", {
-        type: "game-ended",
+      await triggerRoomEvent(roomId, "game-ended", {
         results,
       });
     }
@@ -978,9 +803,9 @@ async function handlePlayerDisconnect(body: ActionBody<"player-disconnect">, res
 
 // Handle host assigning a player to a team
 async function handleAssignTeam(body: ActionBody<"assign-team">, res: VercelResponse) {
-  const { roomId, odId, targetPlayerId, teamId } = body;
+  const { roomId, playerId, targetPlayerId, teamId } = body;
 
-  if (!roomId || !odId || !targetPlayerId || !teamId) {
+  if (!roomId || !playerId || !targetPlayerId || !teamId) {
     return apiError(res, 400, "Room ID, host player ID, target player ID, and team ID are required");
   }
 
@@ -990,7 +815,7 @@ async function handleAssignTeam(body: ActionBody<"assign-team">, res: VercelResp
   }
 
   // Only host can assign teams
-  if (room.hostId !== odId) {
+  if (room.hostId !== playerId) {
     return apiError(res, 403, "Only the host can assign teams");
   }
 
@@ -1015,8 +840,7 @@ async function handleAssignTeam(body: ActionBody<"assign-team">, res: VercelResp
   const updatedRoom = assignPlayerToTeamInStore(roomId, targetPlayerId, teamId);
 
   if (updatedRoom) {
-      await triggerPusher(`room-${roomId}`, "teams-updated", {
-      type: "teams-updated",
+    await triggerRoomEvent(roomId, "teams-updated", {
       teams: updatedRoom.teams,
       players: updatedRoom.players,
     });
@@ -1031,9 +855,9 @@ async function handleAssignTeam(body: ActionBody<"assign-team">, res: VercelResp
 
 // Handle creating an AI game - creates room with AI player and starts immediately
 async function handleCreateAIGame(body: ActionBody<"create-ai-game">, res: VercelResponse) {
-  const { odId, odName, aiDifficulty, settings } = body;
+  const { playerId, playerName, aiDifficulty, settings } = body;
 
-  if (!odId || !odName || !aiDifficulty || !settings) {
+  if (!playerId || !playerName || !aiDifficulty || !settings) {
     return apiError(res, 400, "Player ID, name, AI difficulty, and settings are required");
   }
 
@@ -1044,7 +868,7 @@ async function handleCreateAIGame(body: ActionBody<"create-ai-game">, res: Verce
   }
 
   // Create the room
-  const room = createRoomInStore(odId, odName.substring(0, 20), false);
+  const room = createRoomInStore(playerId, playerName.substring(0, 20), false);
 
   // Configure room settings
   room.settings = {
@@ -1072,8 +896,8 @@ async function handleCreateAIGame(body: ActionBody<"create-ai-game">, res: Verce
   room.questions = questions;
   room.gameStartTime = Date.now();
   room.playerStates = room.players.map(p => ({
-    odId: p.id,
-    odName: p.name,
+    playerId: p.id,
+    playerName: p.name,
     answers: [],
     currentQuestion: 0,
     finished: false,

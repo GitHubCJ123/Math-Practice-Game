@@ -29,7 +29,7 @@
     "allowImportingTsExtensions": true,
     "noEmit": true,
     "strict": true,
-    "noUnusedLocals": false,
+    "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true
   },

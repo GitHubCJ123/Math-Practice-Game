@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import type {
-  AIDifficulty,
   GameMode,
   Operation,
   Player,
@@ -45,8 +44,8 @@ export interface MultiplayerLobbyScreenProps {
   toggleDarkMode: () => void;
   onGameStart: (
     roomId: string,
-    odId: string,
-    odName: string,
+    playerId: string,
+    playerName: string,
     questions: Question[],
     isHost: boolean,
     players: Player[],
@@ -218,11 +217,11 @@ export const MultiplayerLobbyScreen: React.FC<MultiplayerLobbyScreenProps> = ({
       }
       setPlayers(prev => prev.filter(p => p.id !== data.playerId));
     },
-    'player-ready': (data: { odId: string; isReady: boolean }) => {
+    'player-ready': (data: { playerId: string; isReady: boolean }) => {
       logger.log('[Lobby] player-ready event:', data);
-      setReadyStates(prev => ({ ...prev, [data.odId]: data.isReady }));
+      setReadyStates(prev => ({ ...prev, [data.playerId]: data.isReady }));
       setPlayers(prev =>
-        prev.map(p => (p.id === data.odId ? { ...p, isReady: data.isReady } : p))
+        prev.map(p => (p.id === data.playerId ? { ...p, isReady: data.isReady } : p))
       );
     },
     'settings-updated': (data: { settings: RoomSettings }) => {
@@ -268,10 +267,10 @@ export const MultiplayerLobbyScreen: React.FC<MultiplayerLobbyScreenProps> = ({
         timeLimitRef.current
       );
     },
-    'player-disconnected': (data: { odId: string }) => {
+    'player-disconnected': (data: { playerId: string }) => {
       logger.log('[Lobby] player-disconnected event:', data);
       setPlayers(prev =>
-        prev.map(p => (p.id === data.odId ? { ...p, connected: false } : p))
+        prev.map(p => (p.id === data.playerId ? { ...p, connected: false } : p))
       );
     },
   });

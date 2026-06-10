@@ -7,6 +7,7 @@ import type {
   MultiplayerAction,
   MultiplayerApiResponse,
 } from "@shared/types";
+import { logger } from "./logger";
 
 let pusherClient: Pusher | null = null;
 
@@ -50,15 +51,15 @@ export async function createRoom(
   gameMode: GameMode = 'ffa'
 ): Promise<MultiplayerApiResponse<"create-room">> {
   return multiplayerApi("create-room", { 
-    odId: playerId, 
-    odName: playerName,
+    playerId,
+    playerName,
     maxPlayers,
     gameMode,
   });
 }
 
 export async function joinRoom(roomCode: string, playerId: string, playerName: string): Promise<MultiplayerApiResponse<"join-room">> {
-  return multiplayerApi("join-room", { roomCode, odId: playerId, odName: playerName });
+  return multiplayerApi("join-room", { roomCode, playerId, playerName });
 }
 
 export async function updateRoomSettings(
@@ -66,11 +67,11 @@ export async function updateRoomSettings(
   playerId: string,
   settings: Partial<RoomSettings>
 ): Promise<MultiplayerApiResponse<"update-room-settings">> {
-  return multiplayerApi("update-room-settings", { roomId, odId: playerId, settings });
+  return multiplayerApi("update-room-settings", { roomId, playerId, settings });
 }
 
 export async function startGame(roomId: string, playerId: string): Promise<MultiplayerApiResponse<"start-game">> {
-  return multiplayerApi("start-game", { roomId, odId: playerId });
+  return multiplayerApi("start-game", { roomId, playerId });
 }
 
 export async function startReadyPhase(
@@ -78,11 +79,11 @@ export async function startReadyPhase(
   playerId: string,
   settings: Partial<RoomSettings>
 ): Promise<MultiplayerApiResponse<"start-ready-phase">> {
-  return multiplayerApi("start-ready-phase", { roomId, odId: playerId, settings });
+  return multiplayerApi("start-ready-phase", { roomId, playerId, settings });
 }
 
 export async function updateProgress(roomId: string, playerId: string, currentQuestion: number): Promise<void> {
-  await multiplayerApi("update-progress", { roomId, odId: playerId, currentQuestion });
+  await multiplayerApi("update-progress", { roomId, playerId, currentQuestion });
 }
 
 export async function submitMultiplayerAnswers(
@@ -91,20 +92,20 @@ export async function submitMultiplayerAnswers(
   answers: string[],
   score: number
 ): Promise<MultiplayerApiResponse<"submit-multiplayer">> {
-  return multiplayerApi("submit-multiplayer", { roomId, odId: playerId, answers, score });
+  return multiplayerApi("submit-multiplayer", { roomId, playerId, answers, score });
 }
 
 export async function quickMatch(playerId: string, playerName: string, operation: Operation): Promise<MultiplayerApiResponse<"quick-match">> {
-  console.log('[Frontend QuickMatch] Starting quick match request:', { playerId, playerName, operation });
-  return multiplayerApi("quick-match", { odId: playerId, odName: playerName, operation });
+  logger.log('[Frontend QuickMatch] Starting quick match request:', { playerId, playerName, operation });
+  return multiplayerApi("quick-match", { playerId, playerName, operation });
 }
 
 export async function cancelQuickMatch(playerId: string): Promise<void> {
-  await multiplayerApi("quick-match", { odId: playerId }, "DELETE");
+  await multiplayerApi("quick-match", { playerId }, "DELETE");
 }
 
 export async function leaveRoom(roomId: string, playerId: string, playerName: string): Promise<void> {
-  await multiplayerApi("leave-room", { roomId, odId: playerId, odName: playerName });
+  await multiplayerApi("leave-room", { roomId, playerId, playerName });
 }
 
 export async function requestRematch(
@@ -115,8 +116,8 @@ export async function requestRematch(
 ): Promise<MultiplayerApiResponse<"rematch">> {
   return multiplayerApi("rematch", { 
     roomId, 
-    odId: playerId, 
-    odName: playerName, 
+    playerId,
+    playerName,
     rematchAction: "request",
     keepTeams,
   });
@@ -130,23 +131,23 @@ export async function acceptRematch(
 ): Promise<MultiplayerApiResponse<"rematch">> {
   return multiplayerApi("rematch", { 
     roomId, 
-    odId: playerId, 
-    odName: playerName, 
+    playerId,
+    playerName,
     rematchAction: "accept",
     keepTeams,
   });
 }
 
 export async function declineRematch(roomId: string, playerId: string, playerName: string): Promise<void> {
-  await multiplayerApi("rematch", { roomId, odId: playerId, odName: playerName, rematchAction: "decline" });
+  await multiplayerApi("rematch", { roomId, playerId, playerName, rematchAction: "decline" });
 }
 
 export async function notifyDisconnect(roomId: string, playerId: string): Promise<void> {
-  await multiplayerApi("player-disconnect", { roomId, odId: playerId });
+  await multiplayerApi("player-disconnect", { roomId, playerId });
 }
 
 export async function setReady(roomId: string, playerId: string, isReady: boolean): Promise<MultiplayerApiResponse<"set-ready">> {
-  return multiplayerApi("set-ready", { roomId, odId: playerId, isReady });
+  return multiplayerApi("set-ready", { roomId, playerId, isReady });
 }
 
 export async function assignPlayerToTeam(
@@ -157,7 +158,7 @@ export async function assignPlayerToTeam(
 ): Promise<MultiplayerApiResponse<"assign-team">> {
   return multiplayerApi("assign-team", { 
     roomId, 
-    odId: hostPlayerId, 
+    playerId: hostPlayerId, 
     targetPlayerId, 
     teamId,
   });
@@ -187,8 +188,8 @@ export async function createAIGame(
   }
 ): Promise<MultiplayerApiResponse<"create-ai-game">> {
   return multiplayerApi("create-ai-game", {
-    odId: playerId,
-    odName: playerName,
+    playerId,
+    playerName,
     aiDifficulty,
     settings,
   });

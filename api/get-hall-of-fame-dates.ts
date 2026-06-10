@@ -1,16 +1,8 @@
 import { getSupabase } from "../lib/api/db-pool.js";
 import { apiError, handleApiError } from "../lib/api/errors.js";
+import { logger } from "../lib/api/logger.js";
 import { GetHallOfFameDatesQuerySchema, validate } from "../lib/api/validation.js";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-
-const CACHE_TTL_MS = 60 * 1000;
-const CACHE_CONTROL_HEADER = "public, max-age=60";
-
-let cache: { expiresAt: number; payload: Record<number, number[]> } | null = null;
-
-export function clearHallOfFameDatesCache() {
-  cache = null;
-}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
@@ -20,14 +12,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     validate(GetHallOfFameDatesQuerySchema, req.query);
 
-    const now = Date.now();
-    if (cache && cache.expiresAt > now) {
-      console.log("[api/get-hall-of-fame-dates] Serving from cache.");
-      res.setHeader("Cache-Control", CACHE_CONTROL_HEADER);
-      return res.status(200).json(cache.payload);
-    }
-
-    console.log("[api/get-hall-of-fame-dates] Fetching from database...");
+    logger.log("[api/get-hall-of-fame-dates] Fetching from database...");
     const supabase = getSupabase();
 
     const { data, error } = await supabase
@@ -55,12 +40,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return acc;
     }, {});
 
-    cache = {
-      expiresAt: now + CACHE_TTL_MS,
-      payload: grouped,
-    };
-
-    res.setHeader("Cache-Control", CACHE_CONTROL_HEADER);
     return res.status(200).json(grouped);
   } catch (error) {
     return handleApiError(res, "api/get-hall-of-fame-dates", "Validation/DB hall of fame dates retrieval failed", error);

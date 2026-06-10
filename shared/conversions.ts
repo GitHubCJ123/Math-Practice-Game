@@ -42,4 +42,3 @@ export const conversions: Conversion[] = [
   { numerator: 7, denominator: 10, decimal: 0.7, fractionString: '7/10', decimalString: '0.7' },
   { numerator: 9, denominator: 10, decimal: 0.9, fractionString: '9/10', decimalString: '0.9' },
 ];
-

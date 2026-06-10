@@ -18,7 +18,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return apiError(res, 405, "Method not allowed");
     }
 
-    const { socket_id, channel_name, odId, odName } = req.body;
+    const { socket_id, channel_name, playerId, playerName } = req.body;
 
     if (!socket_id || !channel_name) {
       return res.status(400).json({ error: "Socket ID and channel name are required" });
@@ -29,9 +29,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // For presence channels, include user data
     if (channel_name.startsWith("presence-")) {
       const presenceData = {
-        user_id: odId || `anonymous_${Date.now()}`,
+        user_id: playerId || `anonymous_${Date.now()}`,
         user_info: {
-          name: odName || "Anonymous",
+          name: playerName || "Anonymous",
         },
       };
       const auth = pusher.authorizeChannel(socket_id, channel_name, presenceData);

@@ -7,7 +7,7 @@ import { ScoreRing } from '../ui/ScoreRing';
 import { ExplanationText } from '../ui/ExplanationText';
 import { playWinSound, playCorrectSound } from '../../lib/audio';
 import { feedbackMessages } from '../../lib/feedbackMessages';
-import { formatPercentString } from '../../lib/conversions';
+import { formatPercentString } from '@shared/conversions';
 import { logger } from '../../lib/logger';
 
 const LEADERBOARD_SUPPORTED_OPERATIONS = new Set<Operation>([

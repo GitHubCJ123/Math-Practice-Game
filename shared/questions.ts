@@ -1,8 +1,12 @@
-import type { Operation, Question } from '@shared/types';
-import { DEFAULT_QUESTION_COUNT } from '@shared/types';
-import { conversions, formatPercentString } from './conversions';
+import type { Operation, Question } from './types.js';
+import { DEFAULT_QUESTION_COUNT } from './types.js';
+import { conversions, formatPercentString } from './conversions.js';
 
 /**
+ * Single source of truth for question generation, shared by the solo client
+ * (src/App.tsx) and the multiplayer server (api/multiplayer.ts), so both modes
+ * draw from the exact same logic.
+ *
  * Generates a randomized batch of math questions for the given operation
  * and selection of base numbers. Conversion modes draw from a fixed
  * conversion table; arithmetic modes use the selected numbers plus

@@ -22,7 +22,7 @@ import { FeedbackButton } from './components/ui/FeedbackButton';
 import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from '@vercel/speed-insights/react';
 import { trackPageView } from './lib/ga';
-import { generateQuestions } from './lib/questions';
+import { generateQuestions } from '@shared/questions';
 import { ThemeProvider, useThemeContext } from './contexts/ThemeContext';
 import { MultiplayerProvider, useMultiplayerContext } from './contexts/MultiplayerContext';
 
@@ -325,8 +325,8 @@ const MultiplayerQuizRoute: React.FC = () => {
   return (
     <MultiplayerQuizScreen
       roomId={mp.roomId}
-      odId={mp.playerId}
-      odName={mp.playerName}
+      playerId={mp.playerId}
+      playerName={mp.playerName}
       questions={mp.questions}
       timeLimit={mp.timeLimit}
       players={mp.players}
@@ -364,8 +364,8 @@ const MultiplayerResultsRoute: React.FC = () => {
   return (
     <MultiplayerResultsScreen
       roomId={mp.roomId ?? ''}
-      odId={mp.playerId}
-      odName={mp.playerName}
+      playerId={mp.playerId}
+      playerName={mp.playerName}
       results={mp.results}
       teams={mp.teams}
       gameMode={mp.gameMode}

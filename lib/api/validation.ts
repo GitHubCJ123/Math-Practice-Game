@@ -92,20 +92,20 @@ export const FeedbackSchema = z.object({
   message: z.string().trim().min(1).max(2000),
 });
 
-const CreateRoomActionSchema = z.object({ action: z.literal("create-room"), odId: id, odName: requiredString });
-const JoinRoomActionSchema = z.object({ action: z.literal("join-room"), roomCode: id, odId: id, odName: requiredString });
-const LeaveRoomActionSchema = z.object({ action: z.literal("leave-room"), roomId: id, odId: id, odName: requiredString.optional() });
-const QuickMatchActionSchema = z.object({ action: z.literal("quick-match"), odId: id, odName: requiredString.optional(), operation: OperationTypeSchema.optional() });
-const SetReadyActionSchema = z.object({ action: z.literal("set-ready"), roomId: id, odId: id, isReady: z.boolean() });
-const StartReadyPhaseActionSchema = z.object({ action: z.literal("start-ready-phase"), roomId: id, odId: id, settings: RoomSettingsSchema.optional() });
-const UpdateRoomSettingsActionSchema = z.object({ action: z.literal("update-room-settings"), roomId: id, odId: id, settings: RoomSettingsSchema });
-const StartGameActionSchema = z.object({ action: z.literal("start-game"), roomId: id, odId: id });
-const UpdateProgressActionSchema = z.object({ action: z.literal("update-progress"), roomId: id, odId: id, currentQuestion: coerceInt(z.number().int().min(0)) });
-const SubmitMultiplayerActionSchema = z.object({ action: z.literal("submit-multiplayer"), roomId: id, odId: id, answers: z.array(z.string()), score: coerceNumber() });
-const RematchActionSchema = z.object({ action: z.literal("rematch"), roomId: id, odId: id, odName: requiredString, rematchAction: z.enum(["request", "accept", "decline"]), keepTeams: z.boolean().optional() });
-const AssignTeamActionSchema = z.object({ action: z.literal("assign-team"), roomId: id, odId: id, targetPlayerId: id, teamId: id });
-const CreateAIGameActionSchema = z.object({ action: z.literal("create-ai-game"), odId: id, odName: requiredString, aiDifficulty: z.enum(["easy", "medium", "hard", "expert"]), settings: RoomSettingsSchema.extend({ operation: OperationTypeSchema }) });
-const PlayerDisconnectActionSchema = z.object({ action: z.literal("player-disconnect"), roomId: id, odId: id });
+const CreateRoomActionSchema = z.object({ action: z.literal("create-room"), playerId: id, playerName: requiredString });
+const JoinRoomActionSchema = z.object({ action: z.literal("join-room"), roomCode: id, playerId: id, playerName: requiredString });
+const LeaveRoomActionSchema = z.object({ action: z.literal("leave-room"), roomId: id, playerId: id, playerName: requiredString.optional() });
+const QuickMatchActionSchema = z.object({ action: z.literal("quick-match"), playerId: id, playerName: requiredString.optional(), operation: OperationTypeSchema.optional() });
+const SetReadyActionSchema = z.object({ action: z.literal("set-ready"), roomId: id, playerId: id, isReady: z.boolean() });
+const StartReadyPhaseActionSchema = z.object({ action: z.literal("start-ready-phase"), roomId: id, playerId: id, settings: RoomSettingsSchema.optional() });
+const UpdateRoomSettingsActionSchema = z.object({ action: z.literal("update-room-settings"), roomId: id, playerId: id, settings: RoomSettingsSchema });
+const StartGameActionSchema = z.object({ action: z.literal("start-game"), roomId: id, playerId: id });
+const UpdateProgressActionSchema = z.object({ action: z.literal("update-progress"), roomId: id, playerId: id, currentQuestion: coerceInt(z.number().int().min(0)) });
+const SubmitMultiplayerActionSchema = z.object({ action: z.literal("submit-multiplayer"), roomId: id, playerId: id, answers: z.array(z.string()), score: coerceNumber() });
+const RematchActionSchema = z.object({ action: z.literal("rematch"), roomId: id, playerId: id, playerName: requiredString, rematchAction: z.enum(["request", "accept", "decline"]), keepTeams: z.boolean().optional() });
+const AssignTeamActionSchema = z.object({ action: z.literal("assign-team"), roomId: id, playerId: id, targetPlayerId: id, teamId: id });
+const CreateAIGameActionSchema = z.object({ action: z.literal("create-ai-game"), playerId: id, playerName: requiredString, aiDifficulty: z.enum(["easy", "medium", "hard", "expert"]), settings: RoomSettingsSchema.extend({ operation: OperationTypeSchema }) });
+const PlayerDisconnectActionSchema = z.object({ action: z.literal("player-disconnect"), roomId: id, playerId: id });
 
 export const MultiplayerActionSchema = z.discriminatedUnion("action", [
   CreateRoomActionSchema,

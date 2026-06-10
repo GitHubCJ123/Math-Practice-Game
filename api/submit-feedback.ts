@@ -1,6 +1,7 @@
 import { getSupabase } from "../lib/api/db-pool.js";
 import { apiError, handleApiError } from "../lib/api/errors.js";
 import { FeedbackSchema, validate } from "../lib/api/validation.js";
+import { logger } from "../lib/api/logger.js";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 
 const RATE_LIMIT_WINDOW_MS = 60_000;
@@ -30,7 +31,7 @@ function getClientKey(req: VercelRequest): string {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  console.log("[api/submit-feedback] Function invoked.");
+  logger.log("[api/submit-feedback] Function invoked.");
 
   try {
     if (req.method !== "POST") {
@@ -58,7 +59,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       throw insertError;
     }
 
-    console.log(`[api/submit-feedback] Feedback submitted: type=${type}, message length=${message.length}`);
+    logger.log(`[api/submit-feedback] Feedback submitted: type=${type}, message length=${message.length}`);
     return res.status(201).json({ message: "Feedback submitted successfully!" });
   } catch (error) {
     return handleApiError(res, "api/submit-feedback", "Validation/DB feedback submission failed", error);

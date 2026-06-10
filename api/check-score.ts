@@ -3,6 +3,7 @@ import { apiError, handleApiError } from "../lib/api/errors.js";
 import { isScoreEligible } from "../lib/api/score-eligibility.js";
 import { getCurrentEasternMonthBounds } from "../lib/api/time-utils.js";
 import { CheckScoreSchema, validate } from "../lib/api/validation.js";
+import { logger } from "../lib/api/logger.js";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 
 const RATE_LIMIT_WINDOW_MS = 60_000;
@@ -32,7 +33,7 @@ function getClientKey(req: VercelRequest): string {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  console.log("[api/check-score] Function invoked.");
+  logger.log("[api/check-score] Function invoked.");
   try {
     if (req.method !== "GET") {
       return apiError(res, 405, "Method Not Allowed");

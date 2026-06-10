@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import type { Question, MultiplayerResult, Operation, Team, GameMode, TeamResult, AIDifficulty, RematchPayload } from "@shared/types";
-import { CheckCircleIcon, XCircleIcon, RocketIcon } from "../ui/icons";
+import { CheckCircleIcon, XCircleIcon } from "../ui/icons";
 import { Confetti } from "../ui/Confetti";
 import { playWinSound } from "../../lib/audio";
 import {
@@ -9,12 +9,12 @@ import {
   acceptRematch,
   declineRematch,
 } from "../../lib/multiplayer";
-import { formatPercentString } from "../../lib/conversions";
+import { formatPercentString } from "@shared/conversions";
 
 interface MultiplayerResultsScreenProps {
   roomId: string;
-  odId: string;
-  odName: string;
+  playerId: string;
+  playerName: string;
   results: MultiplayerResult[];
   teams: Team[];
   gameMode: GameMode;
@@ -27,8 +27,8 @@ interface MultiplayerResultsScreenProps {
 
 export const MultiplayerResultsScreen: React.FC<MultiplayerResultsScreenProps> = ({
   roomId,
-  odId,
-  odName,
+  playerId,
+  playerName,
   results,
   teams,
   gameMode,
@@ -50,7 +50,7 @@ export const MultiplayerResultsScreen: React.FC<MultiplayerResultsScreenProps> =
   const [celebrate, setCelebrate] = useState(false);
 
   // Find our result - results are now sorted by rank
-  const myResult = results.find((r) => r.odId === odId);
+  const myResult = results.find((r) => r.playerId === playerId);
   const sortedResults = [...results].sort((a, b) => (a.rank || 1) - (b.rank || 1));
   
   // Determine my position
@@ -58,10 +58,10 @@ export const MultiplayerResultsScreen: React.FC<MultiplayerResultsScreenProps> =
   const totalPlayers = results.length;
   
   // Team mode calculations - use team.playerIds for reliable matching
-  const myTeam = teams.find((t) => t.playerIds.includes(odId));
+  const myTeam = teams.find((t) => t.playerIds.includes(playerId));
   const myTeamResult = teamResults?.find((tr) => tr.teamId === myTeam?.id);
   // Also check playerIds array in teamResults as fallback
-  const myTeamResultFallback = teamResults?.find((tr) => tr.playerIds?.includes(odId));
+  const myTeamResultFallback = teamResults?.find((tr) => tr.playerIds?.includes(playerId));
   const finalMyTeamResult = myTeamResult || myTeamResultFallback;
   const isTeamWinner = finalMyTeamResult?.isWinner || false;
 
@@ -78,7 +78,7 @@ export const MultiplayerResultsScreen: React.FC<MultiplayerResultsScreenProps> =
       (data: { fromPlayerId: string; fromPlayerName: string; keepTeams?: boolean; totalNeeded: number }) => {
         setRematchTotalNeeded(data.totalNeeded);
         setRematchAcceptedCount(1); // Requester is already counted
-        if (data.fromPlayerId !== odId) {
+        if (data.fromPlayerId !== playerId) {
           setRematchPending(true);
           setRematchFromPlayer(data.fromPlayerName);
           setRematchKeepTeams(data.keepTeams || false);
@@ -92,7 +92,7 @@ export const MultiplayerResultsScreen: React.FC<MultiplayerResultsScreenProps> =
 
     channel.bind(
       "rematch-player-accepted",
-      (data: { odId: string; odName: string; acceptedCount: number; totalNeeded: number }) => {
+      (data: { playerId: string; playerName: string; acceptedCount: number; totalNeeded: number }) => {
         setRematchAcceptedCount(data.acceptedCount);
         setRematchTotalNeeded(data.totalNeeded);
       }
@@ -118,7 +118,7 @@ export const MultiplayerResultsScreen: React.FC<MultiplayerResultsScreenProps> =
     return () => {
       pusher.unsubscribe(`room-${roomId}`);
     };
-  }, [roomId, odId, onRematch]);
+  }, [roomId, playerId, onRematch]);
 
   // Celebrate a win with confetti + fanfare on mount.
   useEffect(() => {
@@ -143,17 +143,17 @@ export const MultiplayerResultsScreen: React.FC<MultiplayerResultsScreenProps> =
   const handleRequestRematch = async (keepTeams: boolean) => {
     setRematchRequested(true);
     setIAccepted(true);
-    await requestRematch(roomId, odId, odName, keepTeams);
+    await requestRematch(roomId, playerId, playerName, keepTeams);
   };
 
   const handleAcceptRematch = async () => {
     setIAccepted(true);
-    await acceptRematch(roomId, odId, odName, rematchKeepTeams);
+    await acceptRematch(roomId, playerId, playerName, rematchKeepTeams);
   };
 
   const handleDeclineRematch = async () => {
     setRematchPending(false);
-    await declineRematch(roomId, odId, odName);
+    await declineRematch(roomId, playerId, playerName);
   };
 
   const formatTime = (ms: number) => {
@@ -379,8 +379,8 @@ export const MultiplayerResultsScreen: React.FC<MultiplayerResultsScreenProps> =
                   </p>
                   <div className="mt-2 text-sm text-slate-600 dark:text-slate-400">
                     {teamPlayers.map(p => (
-                      <span key={p.odId} className="mr-3">
-                        {p.odName}: {p.score}/{p.totalQuestions}
+                      <span key={p.playerId} className="mr-3">
+                        {p.playerName}: {p.score}/{p.totalQuestions}
                       </span>
                     ))}
                   </div>
@@ -393,11 +393,11 @@ export const MultiplayerResultsScreen: React.FC<MultiplayerResultsScreenProps> =
         {/* All Players Results - Show everyone's answers */}
         <div className="grid md:grid-cols-2 gap-6 mb-6">
           {sortedResults.map((result, idx) => {
-            const isMe = result.odId === odId;
+            const isMe = result.playerId === playerId;
             const rank = result.rank || idx + 1;
             return (
               <div
-                key={result.odId}
+                key={result.playerId}
                 className={`game-panel p-4 ${
                   isMe
                     ? 'ring-2 ring-violet-400 dark:ring-violet-500'
@@ -410,12 +410,12 @@ export const MultiplayerResultsScreen: React.FC<MultiplayerResultsScreenProps> =
                     <span className="text-2xl">{getRankEmoji(rank)}</span>
                     <div>
                       <p className="font-display font-bold text-slate-800 dark:text-white">
-                        {result.odName}
+                        {result.playerName}
                         {isMe && <span className="text-violet-600 dark:text-violet-400 text-xs ml-1">(You)</span>}
                       </p>
                       {gameMode === 'teams' && (
                         <p className="text-xs text-slate-500">
-                          {teams.find(t => t.playerIds.includes(result.odId))?.name || 'No Team'}
+                          {teams.find(t => t.playerIds.includes(result.playerId))?.name || 'No Team'}
                         </p>
                       )}
                     </div>

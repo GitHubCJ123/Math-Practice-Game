@@ -3,8 +3,6 @@ import { apiError, handleApiError } from "../lib/api/errors.js";
 import { GetHallOfFameQuerySchema, validate } from "../lib/api/validation.js";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 
-const CACHE_CONTROL_HEADER = "public, max-age=60";
-
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     if (req.method !== "GET") {
@@ -31,7 +29,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       score: row.score,
     }));
 
-    res.setHeader("Cache-Control", CACHE_CONTROL_HEADER);
     return res.status(200).json(hallOfFame);
   } catch (error) {
     return handleApiError(res, "api/get-hall-of-fame", "Validation/DB hall of fame retrieval failed", error);

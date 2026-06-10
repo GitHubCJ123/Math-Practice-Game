@@ -84,8 +84,8 @@ export type LobbyPlayer = Player;
 export type LobbyTeams = Team[];
 
 export interface PlayerGameState {
-  odId: string;
-  odName: string;
+  playerId: string;
+  playerName: string;
   answers: string[];
   currentQuestion: number;
   finished: boolean;
@@ -138,8 +138,8 @@ export interface RematchPayload {
 }
 
 export interface MultiplayerResult {
-  odId: string;
-  odName: string;
+  playerId: string;
+  playerName: string;
   score: number;
   totalQuestions: number;
   timeTaken: number;
@@ -160,22 +160,38 @@ export interface TeamResult {
   isWinner: boolean;
 }
 
-export type RoomEvent =
-  | { type: 'player-joined'; player: Player }
-  | { type: 'player-left'; odId: string }
-  | { type: 'player-ready'; odId: string }
-  | { type: 'settings-updated'; settings: RoomSettings }
-  | { type: 'teams-updated'; teams: Team[]; players: Player[] }
-  | { type: 'game-starting'; countdown: number; questions: Question[] }
-  | { type: 'game-started'; startTime: number }
-  | { type: 'opponent-progress'; odId: string; currentQuestion: number }
-  | { type: 'opponent-finished'; odId: string; finishTime: number }
-  | { type: 'game-ended'; results: MultiplayerResult[]; teamResults?: TeamResult[] }
-  | { type: 'rematch-requested'; fromPlayerId: string; fromPlayerName: string; keepTeams?: boolean; totalNeeded: number }
-  | { type: 'rematch-player-accepted'; odId: string; odName: string; acceptedCount: number; totalNeeded: number }
-  | { type: 'rematch-accepted'; newRoomCode: string }
-  | { type: 'rematch-declined'; declinedBy?: string }
-  | { type: 'player-disconnected'; odId: string };
+/**
+ * Canonical contract for realtime room events: maps each Pusher event name to
+ * its payload shape. The server emit side (api/multiplayer.ts `triggerRoomEvent`)
+ * is typed against this so the over-the-wire format can't silently drift from
+ * what the client handlers read. The Pusher event *name* is the discriminator,
+ * so payloads intentionally carry no redundant `type` field.
+ */
+export interface RoomEventPayloads {
+  'player-joined': { player: Player };
+  'player-left': { playerId: string; playerName?: string };
+  'player-ready': { playerId: string; isReady: boolean };
+  'settings-updated': { settings: RoomSettings };
+  'teams-updated': { teams: Team[]; players: Player[] };
+  'ready-phase': { settings: RoomSettings };
+  'game-starting': { questions: Question[]; teams: Team[]; players: Player[]; countdown?: number };
+  'game-started': { startTime: number | null };
+  'opponent-progress': { playerId: string; currentQuestion: number };
+  'opponent-finished': { playerId: string; finishTime: number | null };
+  'game-ended': { results: MultiplayerResult[]; teamResults?: TeamResult[] };
+  'rematch-requested': { fromPlayerId: string; fromPlayerName: string; keepTeams?: boolean; totalNeeded: number };
+  'rematch-player-accepted': { playerId: string; playerName: string; acceptedCount: number; totalNeeded: number };
+  'rematch-accepted': RematchPayload & { keepTeams?: boolean };
+  'rematch-declined': { declinedBy?: string };
+  'player-disconnected': { playerId: string };
+}
+
+export type RoomEventName = keyof RoomEventPayloads;
+
+/** Discriminated-union view of {@link RoomEventPayloads}, tagged by a `type` field. */
+export type RoomEvent = {
+  [E in RoomEventName]: { type: E } & RoomEventPayloads[E];
+}[RoomEventName];
 
 export type MultiplayerAction =
   | 'create-room'
@@ -249,7 +265,3 @@ interface MultiplayerSuccessByAction {
 export type MultiplayerApiResponse<TAction extends MultiplayerAction> =
   | ({ success: true; action?: TAction; error?: never } & MultiplayerSuccessByAction[TAction])
   | ({ success: false; action?: TAction; error: string } & Partial<MultiplayerSuccessByAction[TAction]>);
-
-// TODO(strict): Re-enable noUnusedLocals after lobby-split updates these owned files:
-// - src/components/screens/multiplayer-lobby/index.tsx: TS6196 unused AIDifficulty.
-// - src/components/screens/multiplayer-lobby/PrivateRoomScreen.tsx: TS6196 unused RoomSettings.

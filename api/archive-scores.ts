@@ -3,8 +3,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getSupabase } from "../lib/api/db-pool.js";
 import { apiError, handleApiError } from "../lib/api/errors.js";
 import { getCurrentEasternMonthBounds, getPreviousEasternMonthBounds } from "../lib/api/time-utils.js";
-import { clearHallOfFameDatesCache } from "./get-hall-of-fame-dates.js";
-import { clearLeaderboardCache } from "./get-leaderboard.js";
+import { logger } from "../lib/api/logger.js";
 
 
 function safeCompare(value: string, expected: string): boolean {
@@ -216,10 +215,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    clearHallOfFameDatesCache();
-    clearLeaderboardCache();
-
-    console.log('Leaderboard maintenance completed successfully.');
+    logger.log('Leaderboard maintenance completed successfully.');
     return res.status(200).json({ message: 'Scores archived successfully.' });
   } catch (error: unknown) {
     return handleApiError(res, "api/archive-scores", "Auth/DB archive maintenance failed", error);

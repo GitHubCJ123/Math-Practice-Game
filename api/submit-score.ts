@@ -4,8 +4,7 @@ import { containsProfanity } from "../lib/api/profanity.js";
 import { isScoreEligible } from "../lib/api/score-eligibility.js";
 import { getCurrentEasternMonthBounds } from "../lib/api/time-utils.js";
 import { SubmitScoreSchema, validate } from "../lib/api/validation.js";
-import { clearHallOfFameDatesCache } from "./get-hall-of-fame-dates.js";
-import { clearLeaderboardCache } from "./get-leaderboard.js";
+import { logger } from "../lib/api/logger.js";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 
 const RATE_LIMIT_WINDOW_MS = 60_000;
@@ -35,7 +34,7 @@ function getClientKey(req: VercelRequest): string {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  console.log("[api/submit-score] Function invoked.");
+  logger.log("[api/submit-score] Function invoked.");
   try {
     if (req.method !== "POST") {
       return apiError(res, 405, "Method Not Allowed");
@@ -66,16 +65,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return apiError(res, 400, "Score is not eligible for the leaderboard (quiz settings do not meet requirements).");
     }
 
-    console.log(`[api/submit-score] Checking profanity for: "${playerName}"`);
+    logger.log(`[api/submit-score] Checking profanity for: "${playerName}"`);
     if (containsProfanity(playerName)) {
-      console.log(`[api/submit-score] Profanity DETECTED for: "${playerName}"`);
+      logger.log(`[api/submit-score] Profanity DETECTED for: "${playerName}"`);
       return apiError(res, 400, "Inappropriate name detected. Please choose another.");
     }
-    console.log(`[api/submit-score] Profanity check PASSED for: "${playerName}"`);
+    logger.log(`[api/submit-score] Profanity check PASSED for: "${playerName}"`);
 
     const supabase = getSupabase();
     const { startUtc, endUtc } = getCurrentEasternMonthBounds();
-    let scoreChanged = false;
 
     const { data: existingRecords, error: checkError } = await supabase
       .from("leaderboard_scores")
@@ -97,7 +95,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (existingRecords && existingRecords.length > 0) {
       const existingRecord = existingRecords[0];
-      console.log("[api/submit-score] Found current month record", existingRecord);
+      logger.log("[api/submit-score] Found current month record", existingRecord);
       if (score < existingRecord.score) {
         const { error: updateError } = await supabase
           .from("leaderboard_scores")
@@ -109,13 +107,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
         responseStatus = 200;
         responsePayload = { message: "Score updated successfully!" };
-        scoreChanged = true;
       } else {
         responseStatus = 200;
         responsePayload = { message: "Existing score is better." };
       }
     } else {
-      console.log("[api/submit-score] No current month record, inserting new score");
+      logger.log("[api/submit-score] No current month record, inserting new score");
       const { error: insertError } = await supabase
         .from("leaderboard_scores")
         .insert({
@@ -128,13 +125,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (insertError) {
         throw insertError;
       }
-      scoreChanged = true;
     }
 
-    if (scoreChanged) {
-      clearHallOfFameDatesCache();
-      clearLeaderboardCache(operationType);
-    }
     return res.status(responseStatus).json(responsePayload);
   } catch (error) {
     return handleApiError(res, "api/submit-score", "Validation/DB score submission failed", error);

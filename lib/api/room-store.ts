@@ -5,7 +5,7 @@ import { generateRoomCode, generatePlayerId } from "./pusher.js";
 // Rooms auto-expire after 1 hour of inactivity
 const rooms: Map<string, Room> = new Map();
 const roomsByCode: Map<string, string> = new Map(); // code -> roomId
-const quickMatchQueue: Map<string, { odId: string; odName: string; operation: string; timestamp: number }> = new Map();
+const quickMatchQueue: Map<string, { playerId: string; playerName: string; operation: string; timestamp: number }> = new Map();
 
 const ROOM_EXPIRY_MS = 60 * 60 * 1000; // 1 hour
 
@@ -20,9 +20,9 @@ setInterval(() => {
       }
     }
     // Cleanup old queue entries (5 minutes)
-    for (const [odId, entry] of quickMatchQueue.entries()) {
+    for (const [playerId, entry] of quickMatchQueue.entries()) {
       if (now - entry.timestamp > 5 * 60 * 1000) {
-        quickMatchQueue.delete(odId);
+        quickMatchQueue.delete(playerId);
       }
     }
   } catch (error) {
@@ -77,7 +77,7 @@ export function getRoomByCode(code: string): Room | undefined {
   return roomId ? rooms.get(roomId) : undefined;
 }
 
-export function joinRoom(code: string, odId: string, odName: string): { success: boolean; room?: Room; error?: string } {
+export function joinRoom(code: string, playerId: string, playerName: string): { success: boolean; room?: Room; error?: string } {
   const room = getRoomByCode(code);
   
   if (!room) {
@@ -94,15 +94,15 @@ export function joinRoom(code: string, odId: string, odName: string): { success:
   }
   
   // Check if player already in room
-  const existingPlayer = room.players.find(p => p.id === odId);
+  const existingPlayer = room.players.find(p => p.id === playerId);
   if (existingPlayer) {
     existingPlayer.connected = true;
     return { success: true, room };
   }
   
   room.players.push({
-    id: odId,
-    name: odName,
+    id: playerId,
+    name: playerName,
     isHost: false,
     isReady: false,
     connected: true,
@@ -119,10 +119,10 @@ export function updateRoomSettings(roomId: string, settings: Partial<RoomSetting
   return room;
 }
 
-export function setPlayerReady(roomId: string, odId: string, ready: boolean): Room | undefined {
+export function setPlayerReady(roomId: string, playerId: string, ready: boolean): Room | undefined {
   const room = rooms.get(roomId);
   if (room) {
-    const player = room.players.find(p => p.id === odId);
+    const player = room.players.find(p => p.id === playerId);
     if (player) {
       player.isReady = ready;
     }
@@ -146,8 +146,8 @@ export function startGame(roomId: string, questions: Question[]): Room | undefin
     }
     
     room.playerStates = room.players.map(p => ({
-      odId: p.id,
-      odName: p.name,
+      playerId: p.id,
+      playerName: p.name,
       answers: [],
       currentQuestion: 0,
       finished: false,
@@ -237,10 +237,10 @@ export function setGamePlaying(roomId: string): Room | undefined {
   return room;
 }
 
-export function updatePlayerProgress(roomId: string, odId: string, currentQuestion: number): Room | undefined {
+export function updatePlayerProgress(roomId: string, playerId: string, currentQuestion: number): Room | undefined {
   const room = rooms.get(roomId);
   if (room) {
-    const playerState = room.playerStates.find(p => p.odId === odId);
+    const playerState = room.playerStates.find(p => p.playerId === playerId);
     if (playerState) {
       playerState.currentQuestion = currentQuestion;
     }
@@ -250,7 +250,7 @@ export function updatePlayerProgress(roomId: string, odId: string, currentQuesti
 
 export function submitPlayerAnswers(
   roomId: string,
-  odId: string,
+  playerId: string,
   answers: string[],
   score: number
 ): { room?: Room; allFinished: boolean } {
@@ -259,7 +259,7 @@ export function submitPlayerAnswers(
     return { allFinished: false };
   }
 
-  const playerState = room.playerStates.find(p => p.odId === odId);
+  const playerState = room.playerStates.find(p => p.playerId === playerId);
   if (playerState && !playerState.finished) {
     playerState.answers = answers;
     playerState.finished = true;
@@ -275,17 +275,17 @@ export function submitPlayerAnswers(
   return { room, allFinished };
 }
 
-export function playerDisconnected(roomId: string, odId: string): Room | undefined {
+export function playerDisconnected(roomId: string, playerId: string): Room | undefined {
   const room = rooms.get(roomId);
   if (room) {
-    const player = room.players.find(p => p.id === odId);
+    const player = room.players.find(p => p.id === playerId);
     if (player) {
       player.connected = false;
     }
     
     // If game is in progress and a player disconnects, they lose
     if (room.gameState === "playing" || room.gameState === "countdown") {
-      const playerState = room.playerStates.find(p => p.odId === odId);
+      const playerState = room.playerStates.find(p => p.playerId === playerId);
       if (playerState && !playerState.finished) {
         playerState.finished = true;
         playerState.finishTime = Date.now() - (room.gameStartTime || Date.now());
@@ -311,19 +311,19 @@ export function deleteRoom(roomId: string): void {
 }
 
 // Quick Match Queue Functions
-export function addToQuickMatchQueue(odId: string, odName: string, operation: string): void {
-  quickMatchQueue.set(odId, { odId, odName, operation, timestamp: Date.now() });
+export function addToQuickMatchQueue(playerId: string, playerName: string, operation: string): void {
+  quickMatchQueue.set(playerId, { playerId, playerName, operation, timestamp: Date.now() });
 }
 
-export function removeFromQuickMatchQueue(odId: string): void {
-  quickMatchQueue.delete(odId);
+export function removeFromQuickMatchQueue(playerId: string): void {
+  quickMatchQueue.delete(playerId);
 }
 
-export function findQuickMatchOpponent(odId: string, operation: string): { odId: string; odName: string } | null {
+export function findQuickMatchOpponent(playerId: string, operation: string): { playerId: string; playerName: string } | null {
   for (const [queuedId, entry] of quickMatchQueue.entries()) {
-    if (queuedId !== odId && entry.operation === operation) {
+    if (queuedId !== playerId && entry.operation === operation) {
       quickMatchQueue.delete(queuedId);
-      return { odId: entry.odId, odName: entry.odName };
+      return { playerId: entry.playerId, playerName: entry.playerName };
     }
   }
   return null;

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import type { Question, Operation, MultiplayerResult, Team, GameMode, Player, TeamResult, AIDifficulty } from "@shared/types";
-import { ClockIcon } from "../ui/icons";
+import { ClockIcon, CheckBadgeIcon } from "../ui/icons";
 import { IntroCountdown } from "../ui/IntroCountdown";
 import {
   getPusherClient,
@@ -66,8 +66,8 @@ function simulateAIResults(
   const aiTimeTaken = Math.min(cumulativeTime, effectiveTimeLimit);
 
   return {
-    odId: aiPlayer.id,
-    odName: aiPlayer.name,
+    playerId: aiPlayer.id,
+    playerName: aiPlayer.name,
     score,
     totalQuestions: questions.length,
     timeTaken: aiTimeTaken,
@@ -79,8 +79,8 @@ function simulateAIResults(
 
 interface MultiplayerQuizScreenProps {
   roomId: string;
-  odId: string;
-  odName: string;
+  playerId: string;
+  playerName: string;
   questions: Question[];
   timeLimit: number;
   players: Player[];
@@ -92,8 +92,8 @@ interface MultiplayerQuizScreenProps {
 
 export const MultiplayerQuizScreen: React.FC<MultiplayerQuizScreenProps> = ({
   roomId,
-  odId,
-  odName,
+  playerId,
+  playerName,
   questions,
   timeLimit,
   players,
@@ -117,11 +117,11 @@ export const MultiplayerQuizScreen: React.FC<MultiplayerQuizScreenProps> = ({
   const [disconnectedPlayers, setDisconnectedPlayers] = useState<Set<string>>(new Set());
   
   // Derived values
-  const opponents = players.filter((p) => p.id !== odId);
+  const opponents = players.filter((p) => p.id !== playerId);
   const aiOpponent = opponents.find((p) => p.isAI);
   const isAIGame = !!aiOpponent;
-  const myTeam = teams.find((t) => t.playerIds.includes(odId));
-  const myTeammates = myTeam ? players.filter((p) => myTeam.playerIds.includes(p.id) && p.id !== odId) : [];
+  const myTeam = teams.find((t) => t.playerIds.includes(playerId));
+  const myTeammates = myTeam ? players.filter((p) => myTeam.playerIds.includes(p.id) && p.id !== playerId) : [];
   const myOpponents = gameMode === 'teams' 
     ? players.filter((p) => !myTeam?.playerIds.includes(p.id))
     : opponents;
@@ -195,17 +195,17 @@ export const MultiplayerQuizScreen: React.FC<MultiplayerQuizScreenProps> = ({
     const pusher = getPusherClient();
     const channel = pusher.subscribe(`room-${roomId}`);
 
-    channel.bind("opponent-progress", (data: { odId: string; currentQuestion: number }) => {
-      if (data.odId !== odId) {
-        setOpponentProgress((prev) => ({ ...prev, [data.odId]: data.currentQuestion }));
+    channel.bind("opponent-progress", (data: { playerId: string; currentQuestion: number }) => {
+      if (data.playerId !== playerId) {
+        setOpponentProgress((prev) => ({ ...prev, [data.playerId]: data.currentQuestion }));
       }
     });
 
-    channel.bind("opponent-finished", (data: { odId: string; finishTime: number }) => {
-      if (data.odId !== odId) {
-        setOpponentFinished((prev) => ({ ...prev, [data.odId]: true }));
+    channel.bind("opponent-finished", (data: { playerId: string; finishTime: number }) => {
+      if (data.playerId !== playerId) {
+        setOpponentFinished((prev) => ({ ...prev, [data.playerId]: true }));
         if (!quizFinished) {
-          const finishedPlayer = players.find((p) => p.id === data.odId);
+          const finishedPlayer = players.find((p) => p.id === data.playerId);
           setShowFinishedPopup(finishedPlayer?.name || "Someone");
           setTimeout(() => setShowFinishedPopup(null), 2000);
         }
@@ -216,16 +216,16 @@ export const MultiplayerQuizScreen: React.FC<MultiplayerQuizScreenProps> = ({
       onFinish(data.results, data.teamResults);
     });
 
-    channel.bind("player-disconnected", (data: { odId: string }) => {
-      if (data.odId !== odId) {
-        setDisconnectedPlayers((prev) => new Set([...prev, data.odId]));
-        setOpponentFinished((prev) => ({ ...prev, [data.odId]: true }));
+    channel.bind("player-disconnected", (data: { playerId: string }) => {
+      if (data.playerId !== playerId) {
+        setDisconnectedPlayers((prev) => new Set([...prev, data.playerId]));
+        setOpponentFinished((prev) => ({ ...prev, [data.playerId]: true }));
       }
     });
 
     // Notify server on page unload
     const handleBeforeUnload = () => {
-      notifyDisconnect(roomId, odId);
+      notifyDisconnect(roomId, playerId);
     };
     window.addEventListener("beforeunload", handleBeforeUnload);
 
@@ -233,7 +233,7 @@ export const MultiplayerQuizScreen: React.FC<MultiplayerQuizScreenProps> = ({
       pusher.unsubscribe(`room-${roomId}`);
       window.removeEventListener("beforeunload", handleBeforeUnload);
     };
-  }, [roomId, odId, onFinish, quizFinished, players]);
+  }, [roomId, playerId, onFinish, quizFinished, players]);
 
   // Intro animation
   useEffect(() => {
@@ -318,8 +318,8 @@ export const MultiplayerQuizScreen: React.FC<MultiplayerQuizScreenProps> = ({
       
       // Create my result
       const myResult: MultiplayerResult = {
-        odId,
-        odName,
+        playerId,
+        playerName,
         score,
         totalQuestions: questions.length,
         timeTaken: finalTime * 1000, // Convert to ms
@@ -350,7 +350,7 @@ export const MultiplayerQuizScreen: React.FC<MultiplayerQuizScreenProps> = ({
 
     // For real multiplayer games, wait for server response
     setWaitingForOpponents(true);
-    await submitMultiplayerAnswers(roomId, odId, finalAnswers, score);
+    await submitMultiplayerAnswers(roomId, playerId, finalAnswers, score);
   };
 
   const normalizeDecimalInput = (input: string) => {
@@ -395,7 +395,7 @@ export const MultiplayerQuizScreen: React.FC<MultiplayerQuizScreenProps> = ({
     const filledCount = newAnswers.filter((a) => a.trim() !== "").length;
     if (filledCount > lastProgressRef.current) {
       lastProgressRef.current = filledCount;
-      updateProgress(roomId, odId, filledCount);
+      updateProgress(roomId, playerId, filledCount);
     }
   };
 
@@ -440,6 +440,9 @@ export const MultiplayerQuizScreen: React.FC<MultiplayerQuizScreenProps> = ({
     questions[0]?.operation === "percent-to-fraction";
 
   const usesDisplayProperty = isConversionMode || questions[0]?.operation === "negative-numbers";
+
+  const answeredCount = answers.filter((a) => a.trim() !== "").length;
+  const progressPct = questions.length > 0 ? (answeredCount / questions.length) * 100 : 0;
 
   // Waiting for opponents screen
   if (waitingForOpponents && !allOpponentsFinished) {
@@ -501,7 +504,7 @@ export const MultiplayerQuizScreen: React.FC<MultiplayerQuizScreenProps> = ({
   }
 
   return (
-    <div className="game-panel max-w-4xl mx-auto p-5 sm:p-7 relative min-h-[600px] animate-fade-in">
+    <div className="game-panel w-full max-w-4xl mx-auto p-5 sm:p-7 relative min-h-[600px] animate-fade-in">
       {/* Player Finished Popup - at top to not distract */}
       {showFinishedPopup && (
         <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 pointer-events-none">
@@ -525,7 +528,7 @@ export const MultiplayerQuizScreen: React.FC<MultiplayerQuizScreenProps> = ({
       <div className={introStage === "finished" ? "animate-fade-in" : "opacity-0"}>
         {/* Header */}
         <div className="flex justify-between items-center gap-4 mb-4">
-          <h1 className="font-display text-2xl sm:text-3xl font-bold text-slate-800 dark:text-white">
+          <h1 className="font-display text-2xl sm:text-4xl font-bold text-slate-800 dark:text-white">
             Multiplayer
           </h1>
           <div
@@ -535,6 +538,17 @@ export const MultiplayerQuizScreen: React.FC<MultiplayerQuizScreenProps> = ({
           >
             <ClockIcon className="w-5 h-5" />
             <span className="tabular-nums">{timeLimit > 0 ? formatCountdownTime(remainingTime) : formatTime(elapsedTime)}</span>
+          </div>
+        </div>
+
+        {/* Progress bar (matches solo) */}
+        <div className="mb-6">
+          <div className="flex justify-between items-center mb-1.5 text-xs font-bold text-slate-500 dark:text-slate-400">
+            <span>Progress</span>
+            <span className="tabular-nums">{answeredCount} / {questions.length} answered</span>
+          </div>
+          <div className="progress-track h-3 w-full">
+            <div className="progress-fill" style={{ width: `${progressPct}%` }} />
           </div>
         </div>
 
@@ -613,68 +627,71 @@ export const MultiplayerQuizScreen: React.FC<MultiplayerQuizScreenProps> = ({
 
         {/* Instructions */}
         {questions[0]?.operation === "fraction-to-decimal" && (
-          <p className="text-center text-slate-500 dark:text-slate-400 mb-4 text-sm">
-            For repeating decimals, enter the first three decimal places (e.g., for 1/3, enter 0.333).
+          <p className="text-center text-slate-500 dark:text-slate-400 mb-6 -mt-2">
+            Note: For repeating decimals, please enter the first three decimal places (e.g., for 1/3, enter 0.333).
           </p>
         )}
         {(questions[0]?.operation === "decimal-to-fraction" ||
           questions[0]?.operation === "percent-to-fraction") && (
-          <p className="text-center text-slate-500 dark:text-slate-400 mb-4 text-sm">
-            All fractions must be in simplest form.
+          <p className="text-center text-slate-500 dark:text-slate-400 mb-6 -mt-2">
+            Note: All fractions must be in simplest form.
           </p>
         )}
         {questions[0]?.operation === "fraction-to-percent" && (
-          <p className="text-center text-slate-500 dark:text-slate-400 mb-4 text-sm">
-            Enter the percent as a number; the % will be added for you.
+          <p className="text-center text-slate-500 dark:text-slate-400 mb-6 -mt-2">
+            Note: Enter the percent as a number; the % will be added for you (e.g., type 33.3 for 33.3%).
           </p>
         )}
 
         {/* Questions */}
         <form onSubmit={handleSubmit}>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4">
-            {questions.map((q, index) => (
-              <div
-                key={index}
-                className="flex items-center gap-3 p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 focus-within:border-violet-400 dark:focus-within:border-violet-500 focus-within:ring-2 focus-within:ring-violet-500/20 transition-all"
-              >
-                <span className="text-slate-500 dark:text-slate-400 font-display font-bold w-6 text-right">
-                  {index + 1}.
-                </span>
-                <div className="flex items-center gap-2 text-2xl font-display font-bold text-slate-700 dark:text-slate-200 w-full">
-                  <span className="min-w-[3.5rem] text-right whitespace-nowrap">
-                    {usesDisplayProperty ? (
-                      q.display
-                    ) : q.operation === "square-roots" ? (
-                      <span>{getOperationSymbol(q.operation)}{q.num1}</span>
-                    ) : q.operation === "squares" ? (
-                      <span>{q.num1}<sup>2</sup></span>
-                    ) : (
-                      <span>{q.num1}<span className="mx-1.5 text-violet-500 dark:text-violet-400">{getOperationSymbol(q.operation)}</span>{q.num2}</span>
-                    )}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3.5">
+            {questions.map((q, index) => {
+              const isFilled = answers[index]?.trim() !== "";
+              return (
+                <div
+                  key={index}
+                  className={`flex items-center gap-3 p-3 sm:p-3.5 rounded-2xl border transition-all duration-200 bg-slate-50 dark:bg-slate-800/50 ${isFilled ? "border-violet-300 dark:border-violet-700/70" : "border-slate-200 dark:border-slate-700/50"} focus-within:border-violet-400 dark:focus-within:border-violet-500 focus-within:ring-2 focus-within:ring-violet-500/20`}
+                >
+                  <span className={`grid place-items-center w-7 h-7 shrink-0 rounded-lg font-display font-bold text-sm transition-colors ${isFilled ? "bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white" : "bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400"}`}>
+                    {index + 1}
                   </span>
-                  <span className="text-violet-500 dark:text-violet-400">=</span>
-                  <input
-                    ref={(el) => {
-                      inputRefs.current[index] = el;
-                    }}
-                    type="text"
-                    inputMode={
-                      q.operation === "decimal-to-fraction" ||
-                      q.operation === "fraction-to-percent" ||
-                      q.operation === "percent-to-fraction"
-                        ? "text"
-                        : "numeric"
-                    }
-                    value={answers[index]}
-                    onChange={(e) => handleAnswerChange(index, e.target.value)}
-                    onKeyDown={(e) => handleKeyDown(e, index)}
-                    className="w-24 shrink-0 p-2 text-center text-2xl font-display font-bold border-2 border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-violet-500 transition bg-white dark:bg-slate-900 text-slate-800 dark:text-white"
-                    maxLength={7}
-                    disabled={quizFinished}
-                  />
+                  <div className="flex items-center gap-2 text-2xl font-display font-bold text-slate-700 dark:text-slate-200 w-full">
+                    <span className="min-w-[3.5rem] text-right whitespace-nowrap">
+                      {usesDisplayProperty ? (
+                        q.display
+                      ) : q.operation === "square-roots" ? (
+                        <span>{getOperationSymbol(q.operation)}{q.num1}</span>
+                      ) : q.operation === "squares" ? (
+                        <span>{q.num1}<sup>2</sup></span>
+                      ) : (
+                        <span>{q.num1}<span className="mx-1.5 text-violet-500 dark:text-violet-400">{getOperationSymbol(q.operation)}</span>{q.num2}</span>
+                      )}
+                    </span>
+                    <span className="text-violet-500 dark:text-violet-400">=</span>
+                    <input
+                      ref={(el) => {
+                        inputRefs.current[index] = el;
+                      }}
+                      type="text"
+                      inputMode={
+                        q.operation === "decimal-to-fraction" ||
+                        q.operation === "fraction-to-percent" ||
+                        q.operation === "percent-to-fraction"
+                          ? "text"
+                          : "numeric"
+                      }
+                      value={answers[index]}
+                      onChange={(e) => handleAnswerChange(index, e.target.value)}
+                      onKeyDown={(e) => handleKeyDown(e, index)}
+                      className="w-24 shrink-0 p-2 text-center text-2xl font-display font-bold border-2 border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-violet-500 transition bg-white dark:bg-slate-900 text-slate-800 dark:text-white"
+                      maxLength={7}
+                      disabled={quizFinished}
+                    />
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
           <div className="mt-8 text-center">
             <button
@@ -682,6 +699,7 @@ export const MultiplayerQuizScreen: React.FC<MultiplayerQuizScreenProps> = ({
               disabled={quizFinished}
               className="btn3d btn3d--primary w-full sm:w-auto px-16 py-4 text-xl"
             >
+              <CheckBadgeIcon className="w-6 h-6" />
               {quizFinished ? "Submitted!" : "Submit Answers"}
             </button>
           </div>
