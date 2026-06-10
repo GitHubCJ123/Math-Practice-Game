@@ -341,6 +341,15 @@ const MultiplayerResultsRoute: React.FC = () => {
   const mp = useMultiplayerContext();
   const navigate = useNavigate();
 
+  // Accepting a rematch calls beginRematch, which sets rematchData and clears
+  // results. Navigate to the lobby so it can consume rematchData and drop into
+  // the ready screen; without this we'd be stuck on "Loading results...".
+  useEffect(() => {
+    if (mp.rematchData) {
+      navigate('/multiplayer', { replace: true });
+    }
+  }, [mp.rematchData, navigate]);
+
   const handleRematch = (data: RematchPayload) => {
     mp.beginRematch(data);
   };
@@ -349,6 +358,8 @@ const MultiplayerResultsRoute: React.FC = () => {
     mp.exitMultiplayer();
     navigate('/', { replace: true });
   };
+
+  if (mp.rematchData) return null;
 
   return (
     <MultiplayerResultsScreen
