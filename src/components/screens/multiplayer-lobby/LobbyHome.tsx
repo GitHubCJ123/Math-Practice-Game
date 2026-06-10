@@ -1,5 +1,6 @@
 import React from 'react';
 import { BetaFeedback } from '../../ui/BetaFeedback';
+import { BrandMark } from '../../ui/icons';
 import { LobbyHeader } from './LobbyHeader';
 import type { LobbyTab } from './types';
 
@@ -11,6 +12,8 @@ interface LobbyHomeProps {
   onPlayerNameChange: (name: string) => void;
   activeTab: LobbyTab;
   onTabChange: (tab: LobbyTab) => void;
+  /** When true, highlights the name field and shows a "please enter your name" prompt. */
+  nameError?: boolean;
   children: React.ReactNode;
 }
 
@@ -36,9 +39,10 @@ export const LobbyHome: React.FC<LobbyHomeProps> = ({
   onPlayerNameChange,
   activeTab,
   onTabChange,
+  nameError = false,
   children,
 }) => (
-  <div className='min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-8 transition-colors duration-300'>
+  <div className='w-full p-2 md:p-4 transition-colors duration-300'>
     <div className='max-w-2xl mx-auto'>
       <LobbyHeader
         isDarkMode={isDarkMode}
@@ -47,40 +51,57 @@ export const LobbyHome: React.FC<LobbyHomeProps> = ({
         onBack={onBack}
       />
 
-      <div className='bg-white dark:bg-slate-900 rounded-3xl shadow-xl border border-slate-200 dark:border-slate-800 p-6 md:p-8'>
-        <h1 className='text-3xl md:text-4xl font-bold text-center text-slate-800 dark:text-white mb-2'>
-          Multiplayer Mode
-        </h1>
-        <p className='text-center text-slate-500 dark:text-slate-400 mb-4'>
+      <div className='game-panel p-6 md:p-8 animate-fade-in'>
+        <div className='flex items-center justify-center gap-3 mb-2'>
+          <BrandMark className='w-10 h-10 sm:w-12 sm:h-12 animate-float' />
+          <h1 className='font-display text-3xl md:text-4xl font-bold text-gradient leading-none pb-1'>
+            Multiplayer
+          </h1>
+        </div>
+        <p className='text-center text-slate-500 dark:text-slate-400 mb-4 font-medium'>
           Challenge a friend or find a random opponent!
         </p>
 
         <BetaFeedback className='mb-6' />
 
         <div className='mb-6'>
-          <label className='block text-sm font-medium text-slate-600 dark:text-slate-400 mb-2'>
+          <label
+            htmlFor='mp-player-name'
+            className='block text-sm font-display font-semibold text-slate-600 dark:text-slate-400 mb-2'
+          >
             Your Name
           </label>
           <input
+            id='mp-player-name'
             type='text'
             value={playerName}
             onChange={e => onPlayerNameChange(e.target.value.substring(0, 20))}
             placeholder='Enter your name'
             maxLength={20}
-            className='w-full px-4 py-3 rounded-xl border-2 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all outline-hidden'
+            aria-invalid={nameError}
+            aria-describedby={nameError ? 'mp-player-name-error' : undefined}
+            className={`w-full px-4 py-3 rounded-2xl border-2 bg-white dark:bg-slate-800 text-slate-800 dark:text-white transition-all outline-hidden focus:ring-2 ${
+              nameError
+                ? 'border-rose-400 dark:border-rose-500 focus:border-rose-500 focus:ring-rose-200 dark:focus:ring-rose-900 animate-shake'
+                : 'border-slate-300 dark:border-slate-600 focus:border-violet-500 focus:ring-violet-200 dark:focus:ring-violet-800'
+            }`}
           />
+          {nameError && (
+            <p
+              id='mp-player-name-error'
+              className='mt-2 flex items-center gap-1.5 text-sm font-semibold text-rose-500 dark:text-rose-400 animate-fade-in'
+            >
+              <span aria-hidden='true'>👆</span> Please enter your name to start playing!
+            </p>
+          )}
         </div>
 
-        <div className='flex border-b border-slate-200 dark:border-slate-700 mb-6'>
+        <div className='grid grid-cols-2 sm:grid-cols-4 gap-2 mb-6'>
           {TAB_ORDER.map(tab => (
             <button
               key={tab}
               onClick={() => onTabChange(tab)}
-              className={`flex-1 py-3 text-sm font-semibold transition-colors ${
-                activeTab === tab
-                  ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400'
-                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
-              }`}
+              className={`seg px-2 py-2.5 text-sm ${activeTab === tab ? 'seg--active' : ''}`}
             >
               {TAB_LABEL[tab]}
             </button>

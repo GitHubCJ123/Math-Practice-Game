@@ -7,7 +7,16 @@ import {
   MAX_QUESTION_COUNT,
   MAX_CONVERSION_QUESTION_COUNT,
 } from '@shared/types';
-import { ChartBarIcon, MoonIcon, SunIcon } from '../ui/icons';
+import {
+  ChartBarIcon,
+  MoonIcon,
+  SunIcon,
+  BrandMark,
+  PlayIcon,
+  UsersIcon,
+  SparklesIcon,
+} from '../ui/icons';
+import { playClickSound } from '../../lib/audio';
 import { StatisticsDisplay } from '../leaderboard/StatisticsDisplay';
 import { GlobalLeaderboard } from '../leaderboard/GlobalLeaderboard';
 import { HallOfFameDisplay } from '../leaderboard/HallOfFameDisplay';
@@ -37,31 +46,76 @@ const timeOptions = [
 const Section: React.FC<{ title: string; step: number; children: React.ReactNode }> = ({ title, step, children }) => (
   <div className="space-y-4">
     <div className="flex items-center gap-3">
-      <div className="flex items-center justify-center w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 text-blue-600 dark:text-blue-400 font-bold">{step}</div>
-      <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100">{title}</h2>
+      <div className="flex items-center justify-center w-9 h-9 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white font-display font-bold shadow-md shadow-fuchsia-500/30">
+        {step}
+      </div>
+      <h2 className="font-display text-xl sm:text-2xl font-bold text-slate-800 dark:text-slate-100">{title}</h2>
     </div>
     {children}
   </div>
 );
 
-const operationButtons: { op: Operation; label: React.ReactNode }[] = [
-  { op: 'multiplication', label: 'Multiplication (×)' },
-  { op: 'division', label: 'Division (÷)' },
-  { op: 'squares', label: <>Squares (x<sup>2</sup>)</> },
-  { op: 'square-roots', label: 'Square Roots (√)' },
-  { op: 'fraction-to-decimal', label: 'Fraction → Decimal' },
-  { op: 'decimal-to-fraction', label: 'Decimal → Fraction' },
-  { op: 'fraction-to-percent', label: 'Fraction → Percent' },
-  { op: 'percent-to-fraction', label: 'Percent → Fraction' },
-  { op: 'negative-numbers', label: 'Negative Numbers (±)' },
+const operationCards: { op: Operation; label: string; glyph: React.ReactNode; tint: string }[] = [
+  { op: 'multiplication', label: 'Multiplication', glyph: '×', tint: 'from-violet-500 to-purple-600' },
+  { op: 'division', label: 'Division', glyph: '÷', tint: 'from-sky-500 to-blue-600' },
+  { op: 'squares', label: 'Squares', glyph: <>x<sup>2</sup></>, tint: 'from-emerald-500 to-teal-600' },
+  { op: 'square-roots', label: 'Square Roots', glyph: '√', tint: 'from-amber-500 to-orange-600' },
+  { op: 'fraction-to-decimal', label: 'Fraction → Decimal', glyph: '½', tint: 'from-fuchsia-500 to-pink-600' },
+  { op: 'decimal-to-fraction', label: 'Decimal → Fraction', glyph: '.5', tint: 'from-pink-500 to-rose-600' },
+  { op: 'fraction-to-percent', label: 'Fraction → Percent', glyph: '%', tint: 'from-cyan-500 to-sky-600' },
+  { op: 'percent-to-fraction', label: 'Percent → Fraction', glyph: '%', tint: 'from-indigo-500 to-violet-600' },
+  { op: 'negative-numbers', label: 'Negative Numbers', glyph: '±', tint: 'from-rose-500 to-red-600' },
 ];
 
+const SELECTIONS_BY_OP_KEY = 'mathSelectionsByOp';
+
+const loadSelectionsByOp = (): Partial<Record<Operation, number[]>> => {
+  try {
+    const raw = localStorage.getItem(SELECTIONS_BY_OP_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+};
+
+const saveSelectionsByOp = (map: Partial<Record<Operation, number[]>>) => {
+  try {
+    localStorage.setItem(SELECTIONS_BY_OP_KEY, JSON.stringify(map));
+  } catch {
+    /* ignore storage errors */
+  }
+};
+
 export const SelectionScreen: React.FC<SelectionScreenProps> = ({ onStartQuiz, initialSettings, isDarkMode, toggleDarkMode }) => {
-  const [operation, setOperation] = useState<Operation>(initialSettings?.operation || 'multiplication');
-  const [selectedNumbers, setSelectedNumbers] = useState<number[]>(initialSettings?.selectedNumbers || []);
+  const initialOperation: Operation = initialSettings?.operation || 'multiplication';
+  const [operation, setOperation] = useState<Operation>(initialOperation);
+  const [selectedNumbers, setSelectedNumbers] = useState<number[]>(() => {
+    if (initialSettings?.selectedNumbers && initialSettings.selectedNumbers.length > 0) {
+      return initialSettings.selectedNumbers;
+    }
+    return loadSelectionsByOp()[initialOperation] ?? [];
+  });
   const [timeLimit, setTimeLimit] = useState<number>(initialSettings?.timeLimit ?? 0);
   const [questionCount, setQuestionCount] = useState<number>(initialSettings?.questionCount ?? DEFAULT_QUESTION_COUNT);
   const [showStats, setShowStats] = useState(false);
+
+  // Remembers the numbers chosen for each operation so returning to an
+  // operation restores its selection, while a fresh operation starts empty.
+  // Persisted to localStorage so it survives navigation and reloads.
+  const selectionsByOpRef = useRef<Partial<Record<Operation, number[]>>>(null as never);
+  if (selectionsByOpRef.current === (null as never)) {
+    const stored = loadSelectionsByOp();
+    if (initialSettings?.selectedNumbers && initialSettings.selectedNumbers.length > 0) {
+      stored[initialSettings.operation] = initialSettings.selectedNumbers;
+    }
+    selectionsByOpRef.current = stored;
+  }
+
+  const rememberSelection = (op: Operation, nums: number[]) => {
+    selectionsByOpRef.current[op] = nums;
+    saveSelectionsByOp(selectionsByOpRef.current);
+  };
 
   const isConversionMode =
     operation === 'fraction-to-decimal' ||
@@ -102,7 +156,8 @@ export const SelectionScreen: React.FC<SelectionScreenProps> = ({ onStartQuiz, i
   useEffect(() => {
     if (operationRef.current === operation) return;
     operationRef.current = operation;
-    setSelectedNumbers([]);
+    // Restore this operation's remembered selection (empty for a fresh one).
+    setSelectedNumbers(selectionsByOpRef.current[operation] ?? []);
     const newMax = isConversionMode ? MAX_CONVERSION_QUESTION_COUNT : MAX_QUESTION_COUNT;
     setQuestionCount(prev => (prev > newMax ? newMax : prev));
   }, [operation, isConversionMode]);
@@ -110,13 +165,19 @@ export const SelectionScreen: React.FC<SelectionScreenProps> = ({ onStartQuiz, i
   const needsAtLeastTen = (operation === 'squares' || operation === 'square-roots') && selectedNumbers.length > 0 && selectedNumbers.length < 10;
 
   const toggleNumber = (num: number) => {
-    setSelectedNumbers(prev =>
-      prev.includes(num) ? prev.filter(n => n !== num) : [...prev, num]
-    );
+    setSelectedNumbers(prev => {
+      const next = prev.includes(num) ? prev.filter(n => n !== num) : [...prev, num];
+      rememberSelection(operation, next);
+      return next;
+    });
   };
 
   const selectAll = () => {
-    setSelectedNumbers(prev => (prev.length === numbers.length ? [] : numbers));
+    setSelectedNumbers(prev => {
+      const next = prev.length === numbers.length ? [] : numbers;
+      rememberSelection(operation, next);
+      return next;
+    });
   };
 
   const handleTimeSelection = (value: number) => {
@@ -144,44 +205,58 @@ export const SelectionScreen: React.FC<SelectionScreenProps> = ({ onStartQuiz, i
     onStartQuiz(operation, selectedNumbers, finalTimeLimit, questionCount);
   };
 
-  const opButtonClass = (active: boolean) =>
-    `px-6 py-3 text-lg font-semibold rounded-lg transition-all duration-200 border-2 ${
-      active
-        ? 'bg-blue-600 text-white border-blue-600'
-        : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700 hover:border-blue-500 dark:hover:border-blue-500'
-    }`;
+  const canStart = (selectedNumbers.length > 0 || isConversionMode) && !needsAtLeastTen;
+  const isSquareMode = operation === 'squares' || operation === 'square-roots';
 
   return (
-    <div className="max-w-4xl mx-auto p-4 sm:p-6 lg:p-8 bg-white dark:bg-slate-900 rounded-3xl shadow-xl border border-slate-200 dark:border-slate-800 relative">
+    <div className="game-panel w-full max-w-4xl mx-auto p-5 sm:p-7 lg:p-9 relative animate-fade-in">
       <button
         onClick={toggleDarkMode}
         aria-label={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
-        className="absolute top-4 right-4 p-2 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+        className="absolute top-4 right-4 z-10 grid place-items-center w-11 h-11 rounded-2xl bg-slate-100 dark:bg-slate-800 text-amber-500 dark:text-sky-300 border border-slate-200 dark:border-slate-700 hover:scale-110 active:scale-95 transition-transform shadow-sm"
       >
         {isDarkMode ? <SunIcon className="w-6 h-6" /> : <MoonIcon className="w-6 h-6" />}
       </button>
 
-      <h1 className="text-4xl sm:text-5xl font-extrabold text-center text-slate-800 dark:text-white mb-2">Math Practice</h1>
-      <p className="text-center text-slate-500 dark:text-slate-400 mb-6">Sharpen your skills. Select your challenge below.</p>
+      <div className="flex flex-col items-center text-center mb-7 pt-2">
+        <div className="flex items-center gap-3">
+          <BrandMark className="w-11 h-11 sm:w-14 sm:h-14 animate-float drop-shadow-lg" />
+          <h1 className="font-display text-4xl sm:text-6xl font-bold text-gradient leading-none pb-1">Math Practice</h1>
+        </div>
+        <p className="mt-3 text-slate-500 dark:text-slate-400 font-semibold">
+          Sharpen your skills — pick a challenge and go!
+        </p>
+      </div>
 
       <div className="flex justify-center mb-10">
-        <Link
-          to="/multiplayer"
-          className="px-8 py-3 bg-linear-to-r from-purple-600 to-indigo-600 text-white font-bold text-lg rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 flex items-center gap-2"
-        >
-          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-          </svg>
+        <Link to="/multiplayer" className="btn3d btn3d--party px-7 sm:px-8 py-3.5 text-lg">
+          <UsersIcon className="w-6 h-6" />
           Multiplayer Mode
+          <SparklesIcon className="w-5 h-5" />
         </Link>
       </div>
 
-      <div className="space-y-8">
+      <div className="space-y-9">
         <Section title="Pick Your Operation" step={1}>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {operationButtons.map(({ op, label }) => (
-              <button key={op} onClick={() => setOperation(op)} className={opButtonClass(operation === op)}>
-                {label}
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            {operationCards.map(({ op, label, glyph, tint }) => (
+              <button
+                key={op}
+                onClick={() => {
+                  setOperation(op);
+                  playClickSound();
+                }}
+                aria-pressed={operation === op}
+                className={`opcard flex flex-col items-center justify-center gap-2 p-3 text-center min-h-[104px] ${operation === op ? 'opcard--active' : ''}`}
+              >
+                <span
+                  className={`grid place-items-center w-12 h-12 shrink-0 rounded-2xl bg-gradient-to-br ${tint} text-white font-display font-bold text-2xl shadow-md`}
+                >
+                  {glyph}
+                </span>
+                <span className="font-display font-semibold text-xs sm:text-sm text-slate-700 dark:text-slate-200 leading-tight text-center">
+                  {label}
+                </span>
               </button>
             ))}
           </div>
@@ -189,33 +264,38 @@ export const SelectionScreen: React.FC<SelectionScreenProps> = ({ onStartQuiz, i
 
         {!isConversionMode && (
           <Section title="Select Numbers" step={2}>
-            <div className={`grid ${operation === 'squares' || operation === 'square-roots' ? 'grid-cols-5 sm:grid-cols-10' : 'grid-cols-4 sm:grid-cols-6'} gap-3 text-center`}>
+            <div className={`grid ${isSquareMode ? 'grid-cols-5 sm:grid-cols-10' : 'grid-cols-6 sm:grid-cols-12'} gap-2 text-center`}>
               {numbers.map(num => (
                 <button
                   key={num}
-                  onClick={() => toggleNumber(num)}
+                  onClick={() => {
+                    toggleNumber(num);
+                    playClickSound();
+                  }}
                   aria-pressed={selectedNumbers.includes(num)}
                   aria-label={`Toggle number ${num}`}
-                  className={`p-3 text-lg font-bold rounded-lg transition-transform duration-200 transform ease-bouncy border-2 ${
-                    selectedNumbers.includes(num)
-                      ? 'bg-blue-600 text-white border-blue-600 scale-105'
-                      : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-300 dark:border-slate-700 hover:border-blue-500 dark:hover:border-blue-500'
-                  }`}
+                  className="tile h-10 sm:h-11 text-sm sm:text-base"
                 >
                   {num}
                 </button>
               ))}
             </div>
             <p className="text-center text-slate-500 dark:text-slate-400 mt-4 italic text-sm">
-              Note: To be eligible for the leaderboard, you must select all numbers.
+              Tip: select <span className="font-semibold text-slate-600 dark:text-slate-300">all</span> numbers to be eligible for the leaderboard.
             </p>
             {needsAtLeastTen && (
-              <p className="text-center text-red-500 dark:text-red-400 mt-4 font-semibold animate-fade-in">
+              <p className="text-center text-rose-500 dark:text-rose-400 mt-3 font-bold animate-shake">
                 Please select at least 10 numbers for this operation.
               </p>
             )}
             <div className="mt-4 flex justify-center">
-              <button onClick={selectAll} className="px-6 py-2 font-semibold text-white bg-slate-600 dark:bg-slate-700 rounded-full hover:bg-slate-700 dark:hover:bg-slate-600 transition-colors shadow-xs">
+              <button
+                onClick={() => {
+                  selectAll();
+                  playClickSound();
+                }}
+                className="btn3d btn3d--neutral px-6 py-2.5 text-sm"
+              >
                 {selectedNumbers.length === numbers.length ? 'Deselect All' : 'Select All'}
               </button>
             </div>
@@ -227,23 +307,18 @@ export const SelectionScreen: React.FC<SelectionScreenProps> = ({ onStartQuiz, i
             {timeOptions.map(option => (
               <button
                 key={option.value}
-                onClick={() => handleTimeSelection(option.value)}
-                className={`px-4 py-2 font-semibold rounded-lg transition-all duration-200 border-2 ${
-                  timeLimit === option.value && !showCustomTimeInput
-                    ? 'bg-blue-600 text-white border-blue-600'
-                    : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700 hover:border-blue-500 dark:hover:border-blue-500'
-                }`}
+                onClick={() => {
+                  handleTimeSelection(option.value);
+                  playClickSound();
+                }}
+                className={`seg px-4 py-2.5 ${timeLimit === option.value && !showCustomTimeInput ? 'seg--active' : ''}`}
               >
                 {option.label}
               </button>
             ))}
             <button
               onClick={() => setShowCustomTimeInput(true)}
-              className={`px-4 py-2 font-semibold rounded-lg transition-all duration-200 border-2 ${
-                showCustomTimeInput
-                  ? 'bg-blue-600 text-white border-blue-600'
-                  : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700 hover:border-blue-500 dark:hover:border-blue-500'
-              }`}
+              className={`seg px-4 py-2.5 ${showCustomTimeInput ? 'seg--active' : ''}`}
             >
               Custom
             </button>
@@ -258,11 +333,11 @@ export const SelectionScreen: React.FC<SelectionScreenProps> = ({ onStartQuiz, i
                 value={customMinutes}
                 onChange={handleCustomTimeChange}
                 placeholder="MM"
-                className="w-20 p-2 text-center text-xl font-bold border-2 border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
+                className="w-20 p-2 text-center text-xl font-display font-bold border-2 border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-violet-500 transition bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
                 maxLength={2}
                 inputMode="numeric"
               />
-              <span className="text-2xl font-bold text-slate-500" aria-hidden="true">:</span>
+              <span className="text-2xl font-bold text-slate-400" aria-hidden="true">:</span>
               <label htmlFor="custom-seconds" className="sr-only">Seconds</label>
               <input
                 id="custom-seconds"
@@ -271,7 +346,7 @@ export const SelectionScreen: React.FC<SelectionScreenProps> = ({ onStartQuiz, i
                 value={customSeconds}
                 onChange={handleCustomTimeChange}
                 placeholder="SS"
-                className="w-20 p-2 text-center text-xl font-bold border-2 border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
+                className="w-20 p-2 text-center text-xl font-display font-bold border-2 border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-violet-500 transition bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
                 maxLength={2}
                 inputMode="numeric"
               />
@@ -280,13 +355,13 @@ export const SelectionScreen: React.FC<SelectionScreenProps> = ({ onStartQuiz, i
         </Section>
 
         <Section title="Number of Questions" step={isConversionMode ? 3 : 4}>
-          <div className="flex flex-col items-center gap-4">
+          <div className="flex flex-col items-center gap-5">
             <div className="flex items-center gap-4">
               <button
                 onClick={() => setQuestionCount(prev => Math.max(MIN_QUESTION_COUNT, prev - 5))}
                 disabled={questionCount <= MIN_QUESTION_COUNT}
                 aria-label="Decrease question count"
-                className="w-12 h-12 text-2xl font-bold rounded-full bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="tile w-12 h-12 text-2xl disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 −
               </button>
@@ -300,15 +375,15 @@ export const SelectionScreen: React.FC<SelectionScreenProps> = ({ onStartQuiz, i
                   step={1}
                   value={questionCount}
                   onChange={e => setQuestionCount(parseInt(e.target.value, 10))}
-                  className="w-48 sm:w-64 h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                  className="range-fun w-52 sm:w-72 cursor-pointer"
                 />
-                <span className="text-3xl font-bold text-slate-800 dark:text-slate-100 mt-2">{questionCount}</span>
+                <span className="font-display text-4xl font-bold text-slate-800 dark:text-slate-100 mt-3">{questionCount}</span>
               </div>
               <button
                 onClick={() => setQuestionCount(prev => Math.min(maxQuestions, prev + 5))}
                 disabled={questionCount >= maxQuestions}
                 aria-label="Increase question count"
-                className="w-12 h-12 text-2xl font-bold rounded-full bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="tile w-12 h-12 text-2xl disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 +
               </button>
@@ -318,11 +393,7 @@ export const SelectionScreen: React.FC<SelectionScreenProps> = ({ onStartQuiz, i
                 <button
                   key={num}
                   onClick={() => setQuestionCount(num)}
-                  className={`px-4 py-2 font-semibold rounded-lg transition-all duration-200 border-2 ${
-                    questionCount === num
-                      ? 'bg-blue-600 text-white border-blue-600'
-                      : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700 hover:border-blue-500 dark:hover:border-blue-500'
-                  }`}
+                  className={`seg px-4 py-2 ${questionCount === num ? 'seg--active' : ''}`}
                 >
                   {num}
                 </button>
@@ -331,11 +402,7 @@ export const SelectionScreen: React.FC<SelectionScreenProps> = ({ onStartQuiz, i
                 <button
                   key={num}
                   onClick={() => setQuestionCount(num)}
-                  className={`px-4 py-2 font-semibold rounded-lg transition-all duration-200 border-2 ${
-                    questionCount === num
-                      ? 'bg-blue-600 text-white border-blue-600'
-                      : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700 hover:border-blue-500 dark:hover:border-blue-500'
-                  }`}
+                  className={`seg px-4 py-2 ${questionCount === num ? 'seg--active' : ''}`}
                 >
                   {num}
                 </button>
@@ -353,14 +420,15 @@ export const SelectionScreen: React.FC<SelectionScreenProps> = ({ onStartQuiz, i
       <div className="mt-12 text-center">
         <button
           onClick={handleStart}
-          disabled={(selectedNumbers.length === 0 && !isConversionMode) || needsAtLeastTen}
-          className="w-full sm:w-auto px-16 py-4 text-xl font-bold text-white bg-blue-600 rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100 disabled:bg-slate-400 dark:disabled:bg-slate-600"
+          disabled={!canStart}
+          className="btn3d btn3d--success w-full sm:w-auto px-16 py-4 text-xl"
         >
+          <PlayIcon className="w-6 h-6" />
           Start Quiz
         </button>
       </div>
       <div className="mt-10 border-t border-slate-200 dark:border-slate-800 pt-6 flex justify-center">
-        <button onClick={() => setShowStats(prev => !prev)} className="px-6 py-2 font-semibold text-white bg-slate-600 dark:bg-slate-700 rounded-full hover:bg-slate-700 dark:hover:bg-slate-600 transition-colors shadow-xs flex items-center gap-2">
+        <button onClick={() => setShowStats(prev => !prev)} className="btn3d btn3d--neutral px-6 py-2.5 text-sm">
           <ChartBarIcon className="w-5 h-5" />
           {showStats ? 'Hide Progress' : 'View Progress'}
         </button>

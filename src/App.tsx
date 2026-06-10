@@ -90,7 +90,8 @@ const AppShell: React.FC = () => {
   }, [handleShowResults]);
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col items-center justify-center p-4 transition-colors duration-300 relative">
+    <div className="arcade-bg min-h-screen flex flex-col items-center justify-center p-4 transition-colors duration-300 relative overflow-x-hidden">
+      <BackdropDecor />
       <main className="w-full flex justify-center">
         <Routes>
           <Route
@@ -143,6 +144,35 @@ const RouteChangeTracker: React.FC = () => {
     trackPageView(location.pathname + location.search);
   }, [location.pathname, location.search]);
   return null;
+};
+
+/**
+ * Purely decorative floating math glyphs rendered behind all content. Fixed,
+ * pointer-events-none, and aria-hidden so they never interfere with the UI.
+ */
+const BackdropDecor: React.FC = () => {
+  const glyphs = [
+    { ch: '+', top: '12%', left: '8%', size: '3.5rem', delay: '0s' },
+    { ch: '×', top: '22%', left: '86%', size: '4rem', delay: '1.2s' },
+    { ch: '÷', top: '70%', left: '6%', size: '3rem', delay: '0.6s' },
+    { ch: '√', top: '80%', left: '90%', size: '3.6rem', delay: '1.8s' },
+    { ch: '=', top: '46%', left: '94%', size: '2.6rem', delay: '2.4s' },
+    { ch: '−', top: '60%', left: '14%', size: '3rem', delay: '3s' },
+    { ch: '%', top: '8%', left: '54%', size: '2.4rem', delay: '0.9s' },
+  ];
+  return (
+    <div aria-hidden="true">
+      {glyphs.map((g, i) => (
+        <span
+          key={i}
+          className="floaty"
+          style={{ top: g.top, left: g.left, fontSize: g.size, animationDelay: g.delay }}
+        >
+          {g.ch}
+        </span>
+      ))}
+    </div>
+  );
 };
 
 const FeedbackButtonConditional: React.FC = () => {

@@ -81,7 +81,7 @@ export const PrivateRoomScreen: React.FC<PrivateRoomScreenProps> = ({
   };
 
   return (
-    <div className='min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-8 transition-colors duration-300'>
+    <div className='w-full p-2 md:p-4 transition-colors duration-300'>
       <div className='max-w-4xl mx-auto'>
         <LobbyHeader
           isDarkMode={isDarkMode}
@@ -90,30 +90,30 @@ export const PrivateRoomScreen: React.FC<PrivateRoomScreenProps> = ({
           onBack={onLeave}
         />
 
-        <div className='bg-white dark:bg-slate-900 rounded-3xl shadow-xl border border-slate-200 dark:border-slate-800 p-6 md:p-8 mb-6'>
-          <h1 className='text-2xl md:text-3xl font-bold text-slate-800 dark:text-white mb-4'>
+        <div className='game-panel p-6 md:p-8 mb-6 animate-fade-in'>
+          <h1 className='font-display text-2xl md:text-3xl font-bold text-slate-800 dark:text-white mb-4'>
             {isHost ? 'Your Room' : 'Joined Room'}
           </h1>
 
-          <div className='bg-slate-100 dark:bg-slate-800 rounded-xl p-4 mb-6'>
+          <div className='rounded-2xl p-5 mb-6 bg-gradient-to-br from-violet-50 to-fuchsia-50 dark:from-violet-900/20 dark:to-fuchsia-900/20 border border-violet-200 dark:border-violet-500/30'>
             <div className='flex flex-col md:flex-row md:items-center gap-4'>
               <div className='flex-1'>
                 <p className='text-sm text-slate-500 dark:text-slate-400 mb-1'>Room Code</p>
-                <p className='text-3xl font-mono font-bold text-blue-600 dark:text-blue-400 tracking-widest'>
+                <p className='font-display text-3xl font-bold text-violet-600 dark:text-violet-300 tracking-[0.3em]'>
                   {roomCode}
                 </p>
               </div>
               <div className='flex gap-2'>
                 <button
                   onClick={() => onCopy(roomCode)}
-                  className='px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors'
+                  className='btn3d btn3d--primary px-4 py-2 text-sm'
                 >
                   Copy Code
                 </button>
                 {joinUrl && (
                   <button
                     onClick={() => onCopy(joinUrl)}
-                    className='px-4 py-2 bg-slate-600 text-white rounded-lg font-semibold hover:bg-slate-700 transition-colors'
+                    className='btn3d btn3d--neutral px-4 py-2 text-sm'
                   >
                     Copy Link
                   </button>
@@ -123,7 +123,7 @@ export const PrivateRoomScreen: React.FC<PrivateRoomScreenProps> = ({
           </div>
 
           <div className='mb-6'>
-            <h2 className='text-lg font-semibold text-slate-700 dark:text-slate-200 mb-3'>
+            <h2 className='font-display text-lg font-bold text-slate-700 dark:text-slate-200 mb-3'>
               Players ({players.length}/{maxPlayers})
             </h2>
 
@@ -176,12 +176,12 @@ export const PrivateRoomScreen: React.FC<PrivateRoomScreenProps> = ({
           </div>
 
           <div className='border-t border-slate-200 dark:border-slate-700 pt-6'>
-            <h2 className='text-lg font-semibold text-slate-700 dark:text-slate-200 mb-4'>
+            <h2 className='font-display text-lg font-bold text-slate-700 dark:text-slate-200 mb-4'>
               Game Settings
             </h2>
 
             <div className='mb-4'>
-              <label className='block text-sm font-medium text-slate-600 dark:text-slate-400 mb-2'>
+              <label className='block text-sm font-display font-semibold text-slate-600 dark:text-slate-400 mb-2'>
                 Max Players
               </label>
               <div className='flex gap-2'>
@@ -197,13 +197,7 @@ export const PrivateRoomScreen: React.FC<PrivateRoomScreenProps> = ({
                         onSettingsChange({ maxPlayers: num, gameMode: newGameMode });
                       }}
                       disabled={isDisabled}
-                      className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                        maxPlayers === num
-                          ? 'bg-blue-600 text-white'
-                          : isDisabled
-                          ? 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 cursor-not-allowed'
-                          : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
-                      }`}
+                      className={`seg px-4 py-2 ${maxPlayers === num ? 'seg--active' : ''} ${isDisabled ? 'opacity-60 cursor-not-allowed' : ''}`}
                     >
                       {num} Players
                     </button>
@@ -221,14 +215,14 @@ export const PrivateRoomScreen: React.FC<PrivateRoomScreenProps> = ({
                   active={gameMode === 'ffa'}
                   disabled={!isHost}
                   onClick={() => onSettingsChange({ gameMode: 'ffa' })}
-                  activeClass='bg-blue-600 text-white'
+                  activeClass='bg-gradient-to-br from-violet-500 to-indigo-600 text-white'
                   label='Free For All'
                 />
                 <ModeButton
                   active={gameMode === 'teams'}
                   disabled={!isHost || maxPlayers < 3}
                   onClick={() => onSettingsChange({ gameMode: 'teams' })}
-                  activeClass='bg-purple-600 text-white'
+                  activeClass='bg-gradient-to-br from-fuchsia-500 to-purple-600 text-white'
                   label='Teams (2v2 / 1v3 / 2v1)'
                   title={maxPlayers < 3 ? 'Teams require 3 players' : ''}
                 />
@@ -239,7 +233,7 @@ export const PrivateRoomScreen: React.FC<PrivateRoomScreenProps> = ({
             </div>
 
             <div className='mb-4'>
-              <label className='block text-sm font-medium text-slate-600 dark:text-slate-400 mb-2'>
+              <label className='block text-sm font-display font-semibold text-slate-600 dark:text-slate-400 mb-2'>
                 Operation
               </label>
               <div className='grid grid-cols-2 md:grid-cols-3 gap-2'>
@@ -252,13 +246,7 @@ export const PrivateRoomScreen: React.FC<PrivateRoomScreenProps> = ({
                       onSettingsChange({ operation: op, selectedNumbers: newNums });
                     }}
                     disabled={!isHost}
-                    className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                      operation === op
-                        ? 'bg-blue-600 text-white'
-                        : isHost
-                        ? 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
-                        : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-500 cursor-not-allowed'
-                    }`}
+                    className={`seg px-3 py-2 text-sm ${operation === op ? 'seg--active' : ''} ${!isHost ? 'opacity-60 cursor-not-allowed' : ''}`}
                   >
                     {operationLabels[op]}
                   </button>
@@ -268,7 +256,7 @@ export const PrivateRoomScreen: React.FC<PrivateRoomScreenProps> = ({
 
             <div className='mb-4'>
               <div className='flex items-center justify-between mb-2'>
-                <label className='text-sm font-medium text-slate-600 dark:text-slate-400'>
+                <label className='text-sm font-display font-semibold text-slate-600 dark:text-slate-400'>
                   Numbers
                 </label>
                 {isHost && (
@@ -277,7 +265,7 @@ export const PrivateRoomScreen: React.FC<PrivateRoomScreenProps> = ({
                       onClick={() =>
                         onSettingsChange({ selectedNumbers: availableNumbers })
                       }
-                      className='text-xs text-blue-600 dark:text-blue-400 hover:underline'
+                      className='text-xs font-semibold text-violet-600 dark:text-violet-400 hover:underline'
                     >
                       Select All
                     </button>
@@ -296,13 +284,7 @@ export const PrivateRoomScreen: React.FC<PrivateRoomScreenProps> = ({
                     key={num}
                     onClick={() => isHost && toggleNumber(num)}
                     disabled={!isHost}
-                    className={`w-10 h-10 rounded-lg font-semibold transition-colors ${
-                      selectedNumbers.includes(num)
-                        ? 'bg-blue-600 text-white'
-                        : isHost
-                        ? 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
-                        : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-500 cursor-not-allowed'
-                    }`}
+                    className={`tile w-10 h-10 ${selectedNumbers.includes(num) ? 'tile--active' : ''} ${!isHost ? 'opacity-60 cursor-not-allowed' : ''}`}
                   >
                     {num}
                   </button>
@@ -311,7 +293,7 @@ export const PrivateRoomScreen: React.FC<PrivateRoomScreenProps> = ({
             </div>
 
             <div className='mb-4'>
-              <label className='block text-sm font-medium text-slate-600 dark:text-slate-400 mb-2'>
+              <label className='block text-sm font-display font-semibold text-slate-600 dark:text-slate-400 mb-2'>
                 Number of Questions: {questionCount}
               </label>
               <input
@@ -324,12 +306,12 @@ export const PrivateRoomScreen: React.FC<PrivateRoomScreenProps> = ({
                   onSettingsChange({ questionCount: parseInt(e.target.value, 10) });
                 }}
                 disabled={!isHost}
-                className='w-full'
+                className='range-fun w-full'
               />
             </div>
 
             <div className='mb-6'>
-              <label className='block text-sm font-medium text-slate-600 dark:text-slate-400 mb-2'>
+              <label className='block text-sm font-display font-semibold text-slate-600 dark:text-slate-400 mb-2'>
                 Time Limit
               </label>
               <div className='flex flex-wrap gap-2'>
@@ -341,13 +323,7 @@ export const PrivateRoomScreen: React.FC<PrivateRoomScreenProps> = ({
                       onSettingsChange({ timeLimit: opt.value });
                     }}
                     disabled={!isHost}
-                    className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                      timeLimit === opt.value
-                        ? 'bg-blue-600 text-white'
-                        : isHost
-                        ? 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
-                        : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-500 cursor-not-allowed'
-                    }`}
+                    className={`seg px-4 py-2 ${timeLimit === opt.value ? 'seg--active' : ''} ${!isHost ? 'opacity-60 cursor-not-allowed' : ''}`}
                   >
                     {opt.label}
                   </button>
@@ -360,11 +336,7 @@ export const PrivateRoomScreen: React.FC<PrivateRoomScreenProps> = ({
                 <button
                   onClick={onStartGame}
                   disabled={!hasEnoughPlayers || isStarting}
-                  className={`w-full py-4 rounded-xl text-xl font-bold transition-colors ${
-                    !hasEnoughPlayers || isStarting
-                      ? 'bg-slate-300 dark:bg-slate-700 text-slate-500 dark:text-slate-400 cursor-not-allowed'
-                      : 'bg-green-600 text-white hover:bg-green-700'
-                  }`}
+                  className='btn3d btn3d--success w-full py-4 text-xl'
                 >
                   {isStarting
                     ? 'Starting...'

@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import type { Question, MultiplayerResult, Operation, Team, GameMode, TeamResult, AIDifficulty, RematchPayload } from "@shared/types";
-import { CheckCircleIcon, XCircleIcon } from "../ui/icons";
+import { CheckCircleIcon, XCircleIcon, RocketIcon } from "../ui/icons";
+import { Confetti } from "../ui/Confetti";
+import { playWinSound } from "../../lib/audio";
 import {
   getPusherClient,
   requestRematch,
@@ -45,6 +47,7 @@ export const MultiplayerResultsScreen: React.FC<MultiplayerResultsScreenProps> =
   const [rematchAcceptedCount, setRematchAcceptedCount] = useState(0);
   const [rematchTotalNeeded, setRematchTotalNeeded] = useState(0);
   const [iAccepted, setIAccepted] = useState(false);
+  const [celebrate, setCelebrate] = useState(false);
 
   // Find our result - results are now sorted by rank
   const myResult = results.find((r) => r.odId === odId);
@@ -117,10 +120,22 @@ export const MultiplayerResultsScreen: React.FC<MultiplayerResultsScreenProps> =
     };
   }, [roomId, odId, onRematch]);
 
+  // Celebrate a win with confetti + fanfare on mount.
+  useEffect(() => {
+    const won = gameMode === 'teams' ? isTeamWinner : myRank === 1;
+    if (won) {
+      playWinSound();
+      setCelebrate(true);
+      const t = window.setTimeout(() => setCelebrate(false), 6500);
+      return () => window.clearTimeout(t);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   if (!myResult) {
     return (
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center">
-        <p className="text-slate-500">Loading results...</p>
+      <div className="w-full flex items-center justify-center py-20">
+        <p className="text-slate-500 font-display font-semibold">Loading results...</p>
       </div>
     );
   }
@@ -243,27 +258,28 @@ export const MultiplayerResultsScreen: React.FC<MultiplayerResultsScreenProps> =
   const questions = myResult.questions;
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 transition-colors duration-300">
+    <div className="w-full p-2 sm:p-4 transition-colors duration-300">
+      {celebrate && <Confetti />}
       <div className="w-full max-w-6xl mx-auto">
         {/* Result Banner */}
-        <div className={`text-center py-4 px-6 rounded-2xl mb-6 ${getResultBannerStyle()}`}>
-          <h1 className="text-3xl md:text-4xl font-extrabold text-white">
+        <div className={`text-center py-5 px-6 rounded-3xl mb-6 shadow-xl animate-fade-in ${getResultBannerStyle()}`}>
+          <h1 className="font-display text-3xl md:text-5xl font-bold text-white drop-shadow-sm">
             {getResultMessage()}
           </h1>
           {gameMode !== 'teams' && totalPlayers > 2 && (
-            <p className="text-white/80 mt-1">{getRankEmoji(myRank)} {getRankLabel(myRank)} of {totalPlayers}</p>
+            <p className="text-white/90 mt-1 font-semibold">{getRankEmoji(myRank)} {getRankLabel(myRank)} of {totalPlayers}</p>
           )}
         </div>
 
         {/* Rematch Request Popup */}
         {rematchPending && !iAccepted && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div className="bg-white dark:bg-slate-900 rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl">
-              <h2 className="text-2xl font-bold text-slate-800 dark:text-white mb-4 text-center">
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="game-panel p-8 max-w-md w-full animate-bounce-in">
+              <h2 className="font-display text-2xl font-bold text-slate-800 dark:text-white mb-4 text-center">
                 Rematch Challenge!
               </h2>
               <p className="text-slate-600 dark:text-slate-400 text-center mb-2">
-                <span className="font-semibold text-blue-600 dark:text-blue-400">
+                <span className="font-bold text-violet-600 dark:text-violet-400">
                   {rematchFromPlayer}
                 </span>{" "}
                 wants a rematch.
@@ -278,16 +294,16 @@ export const MultiplayerResultsScreen: React.FC<MultiplayerResultsScreenProps> =
                   All players must accept ({rematchAcceptedCount}/{rematchTotalNeeded})
                 </p>
               )}
-              <div className="flex gap-4">
+              <div className="flex gap-4 mt-4">
                 <button
                   onClick={handleDeclineRematch}
-                  className="flex-1 py-3 px-6 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl font-semibold hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors"
+                  className="btn3d btn3d--neutral flex-1 py-3 px-6 text-base"
                 >
                   Decline
                 </button>
                 <button
                   onClick={handleAcceptRematch}
-                  className="flex-1 py-3 px-6 bg-green-600 text-white rounded-xl font-semibold hover:bg-green-700 transition-colors"
+                  className="btn3d btn3d--success flex-1 py-3 px-6 text-base"
                 >
                   Accept
                 </button>
@@ -298,24 +314,24 @@ export const MultiplayerResultsScreen: React.FC<MultiplayerResultsScreenProps> =
 
         {/* Waiting for others after accepting (3+ players) */}
         {iAccepted && rematchTotalNeeded > 2 && rematchAcceptedCount < rematchTotalNeeded && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div className="bg-white dark:bg-slate-900 rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl text-center">
-              <div className="text-4xl mb-4">⏳</div>
-              <h2 className="text-2xl font-bold text-slate-800 dark:text-white mb-4">
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="game-panel p-8 max-w-md w-full text-center animate-bounce-in">
+              <div className="text-4xl mb-4 animate-float">⏳</div>
+              <h2 className="font-display text-2xl font-bold text-slate-800 dark:text-white mb-4">
                 Waiting for all players...
               </h2>
               <p className="text-slate-600 dark:text-slate-400 mb-4">
                 {rematchAcceptedCount}/{rematchTotalNeeded} players have accepted
               </p>
-              <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-3 mb-4">
-                <div 
-                  className="bg-green-500 h-3 rounded-full transition-all duration-300"
+              <div className="progress-track h-3 mb-4">
+                <div
+                  className="progress-fill"
                   style={{ width: `${(rematchAcceptedCount / rematchTotalNeeded) * 100}%` }}
                 />
               </div>
               <button
                 onClick={handleDeclineRematch}
-                className="py-3 px-6 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl font-semibold hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors"
+                className="btn3d btn3d--neutral py-3 px-6 text-base"
               >
                 Cancel
               </button>
@@ -325,7 +341,7 @@ export const MultiplayerResultsScreen: React.FC<MultiplayerResultsScreenProps> =
 
         {/* Declined notification */}
         {rematchDeclined && (
-          <div className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-red-500 text-white px-6 py-3 rounded-xl shadow-lg z-50">
+          <div className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-gradient-to-r from-rose-500 to-red-600 text-white px-6 py-3 rounded-2xl shadow-lg z-50 font-semibold">
             {declinedByPlayer ? `${declinedByPlayer} declined the rematch` : "Rematch declined"}
           </div>
         )}
@@ -382,10 +398,10 @@ export const MultiplayerResultsScreen: React.FC<MultiplayerResultsScreenProps> =
             return (
               <div
                 key={result.odId}
-                className={`bg-white dark:bg-slate-900 rounded-2xl shadow-lg border-2 p-4 ${
+                className={`game-panel p-4 ${
                   isMe
-                    ? 'border-blue-400 dark:border-blue-500'
-                    : 'border-slate-200 dark:border-slate-700'
+                    ? 'ring-2 ring-violet-400 dark:ring-violet-500'
+                    : ''
                 }`}
               >
                 {/* Player Header */}
@@ -393,9 +409,9 @@ export const MultiplayerResultsScreen: React.FC<MultiplayerResultsScreenProps> =
                   <div className="flex items-center gap-2">
                     <span className="text-2xl">{getRankEmoji(rank)}</span>
                     <div>
-                      <p className="font-bold text-slate-800 dark:text-white">
+                      <p className="font-display font-bold text-slate-800 dark:text-white">
                         {result.odName}
-                        {isMe && <span className="text-blue-600 dark:text-blue-400 text-xs ml-1">(You)</span>}
+                        {isMe && <span className="text-violet-600 dark:text-violet-400 text-xs ml-1">(You)</span>}
                       </p>
                       {gameMode === 'teams' && (
                         <p className="text-xs text-slate-500">
@@ -405,7 +421,7 @@ export const MultiplayerResultsScreen: React.FC<MultiplayerResultsScreenProps> =
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="text-xl font-extrabold text-slate-700 dark:text-slate-200">
+                    <p className="font-display text-xl font-bold text-slate-700 dark:text-slate-200">
                       {result.score}/{result.totalQuestions}
                     </p>
                     <p className="text-xs text-slate-500">{formatTime(result.timeTaken)}</p>
@@ -421,15 +437,15 @@ export const MultiplayerResultsScreen: React.FC<MultiplayerResultsScreenProps> =
                         key={i}
                         className={`flex items-center justify-between py-2 px-3 rounded-lg text-sm ${
                           isCorrect
-                            ? "bg-green-50 dark:bg-green-900/20"
-                            : "bg-red-50 dark:bg-red-900/20"
+                            ? "bg-emerald-50 dark:bg-emerald-900/20"
+                            : "bg-rose-50 dark:bg-rose-900/20"
                         }`}
                       >
                         <div className="flex items-center gap-1">
                           {isCorrect ? (
-                            <CheckCircleIcon className="w-4 h-4 text-green-500 shrink-0" />
+                            <CheckCircleIcon className="w-4 h-4 text-emerald-500 shrink-0" />
                           ) : (
-                            <XCircleIcon className="w-4 h-4 text-red-500 shrink-0" />
+                            <XCircleIcon className="w-4 h-4 text-rose-500 shrink-0" />
                           )}
                           <span className="font-medium text-slate-700 dark:text-slate-200">
                             {formatQuestion(q)} = {q.answer}
@@ -437,7 +453,7 @@ export const MultiplayerResultsScreen: React.FC<MultiplayerResultsScreenProps> =
                         </div>
                         <span
                           className={`font-mono font-bold ${
-                            isCorrect ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"
+                            isCorrect ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"
                           }`}
                         >
                           {result.answers[i] || "—"}
@@ -458,7 +474,7 @@ export const MultiplayerResultsScreen: React.FC<MultiplayerResultsScreenProps> =
             <>
               <button
                 onClick={onPlayAgainAI}
-                className="px-10 py-4 rounded-xl text-lg font-bold transition-all transform hover:scale-105 bg-green-600 text-white hover:bg-green-700 shadow-lg"
+                className="btn3d btn3d--success px-10 py-4 text-lg"
               >
                 🤖 Play Again vs AI
               </button>
@@ -468,24 +484,16 @@ export const MultiplayerResultsScreen: React.FC<MultiplayerResultsScreenProps> =
               <button
                 onClick={() => handleRequestRematch(true)}
                 disabled={rematchRequested || iAccepted}
-                className={`px-8 py-4 rounded-xl text-lg font-bold transition-all transform hover:scale-105 ${
-                  rematchRequested || iAccepted
-                    ? "bg-slate-300 dark:bg-slate-700 text-slate-500 cursor-not-allowed"
-                    : "bg-blue-600 text-white hover:bg-blue-700 shadow-lg"
-                }`}
+                className="btn3d btn3d--primary px-8 py-4 text-lg"
               >
-                {rematchRequested || iAccepted 
+                {rematchRequested || iAccepted
                   ? (totalPlayers > 2 ? `Waiting (${rematchAcceptedCount}/${rematchTotalNeeded})...` : "Waiting...")
                   : "Rematch (Same Teams)"}
               </button>
               <button
                 onClick={() => handleRequestRematch(false)}
                 disabled={rematchRequested || iAccepted}
-                className={`px-8 py-4 rounded-xl text-lg font-bold transition-all transform hover:scale-105 ${
-                  rematchRequested || iAccepted
-                    ? "bg-slate-300 dark:bg-slate-700 text-slate-500 cursor-not-allowed"
-                    : "bg-purple-600 text-white hover:bg-purple-700 shadow-lg"
-                }`}
+                className="btn3d btn3d--fuchsia px-8 py-4 text-lg"
               >
                 {rematchRequested || iAccepted
                   ? (totalPlayers > 2 ? `Waiting (${rematchAcceptedCount}/${rematchTotalNeeded})...` : "Waiting...")
@@ -496,11 +504,7 @@ export const MultiplayerResultsScreen: React.FC<MultiplayerResultsScreenProps> =
             <button
               onClick={() => handleRequestRematch(false)}
               disabled={rematchRequested || iAccepted}
-              className={`px-10 py-4 rounded-xl text-lg font-bold transition-all transform hover:scale-105 ${
-                rematchRequested || iAccepted
-                  ? "bg-slate-300 dark:bg-slate-700 text-slate-500 cursor-not-allowed"
-                  : "bg-purple-600 text-white hover:bg-purple-700 shadow-lg"
-              }`}
+              className="btn3d btn3d--fuchsia px-10 py-4 text-lg"
             >
               {rematchRequested || iAccepted
                 ? (totalPlayers > 2 ? `Waiting (${rematchAcceptedCount}/${rematchTotalNeeded})...` : "Waiting...")
@@ -509,7 +513,7 @@ export const MultiplayerResultsScreen: React.FC<MultiplayerResultsScreenProps> =
           )}
           <button
             onClick={onExit}
-            className="px-10 py-4 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-lg font-bold hover:bg-slate-300 dark:hover:bg-slate-600 transition-all transform hover:scale-105 shadow-lg"
+            className="btn3d btn3d--neutral px-10 py-4 text-lg"
           >
             Back to Menu
           </button>

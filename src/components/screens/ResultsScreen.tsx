@@ -1,7 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import type { Operation, Question, HighScores, AllQuizStats } from '@shared/types';
 import { DEFAULT_QUESTION_COUNT } from '@shared/types';
-import { CheckCircleIcon, XCircleIcon, StarIcon, TrophyIcon } from '../ui/icons';
+import { CheckCircleIcon, XCircleIcon, StarIcon, TrophyIcon, SparklesIcon, RocketIcon } from '../ui/icons';
+import { Confetti } from '../ui/Confetti';
+import { ScoreRing } from '../ui/ScoreRing';
+import { ExplanationText } from '../ui/ExplanationText';
+import { playWinSound, playCorrectSound } from '../../lib/audio';
 import { feedbackMessages } from '../../lib/feedbackMessages';
 import { formatPercentString } from '../../lib/conversions';
 import { logger } from '../../lib/logger';
@@ -98,6 +102,7 @@ interface ResultsScreenProps {
 export const ResultsScreen: React.FC<ResultsScreenProps> = ({ questions, userAnswers, timeTaken, onRestart, quizSettings }) => {
   const [feedback, setFeedback] = useState('');
   const [isNewHighScore, setIsNewHighScore] = useState(false);
+  const [celebrate, setCelebrate] = useState(false);
 
   const [isTopScore, setIsTopScore] = useState<boolean | null>(null);
   const [playerName, setPlayerName] = useState('');
@@ -276,6 +281,30 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({ questions, userAns
 
   }, [correctCount, timeTaken, operation, selectedNumbers]);
 
+  // Celebrate the result on mount: confetti + a happy sound for a perfect run,
+  // a friendly ding for a solid score. Never plays a discouraging sound.
+  useEffect(() => {
+    const perfect = questions.length > 0 && correctCount === questions.length;
+    if (perfect) {
+      playWinSound();
+      setCelebrate(true);
+      const t = window.setTimeout(() => setCelebrate(false), 6500);
+      return () => window.clearTimeout(t);
+    }
+    if (questions.length > 0 && correctCount / questions.length >= 0.5) {
+      playCorrectSound();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // A fresh personal best also earns a confetti burst.
+  useEffect(() => {
+    if (!isNewHighScore) return;
+    setCelebrate(true);
+    const t = window.setTimeout(() => setCelebrate(false), 6500);
+    return () => window.clearTimeout(t);
+  }, [isNewHighScore]);
+
   const handleSubmitScore = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!playerName.trim() || submissionStatus === 'submitting') return;
@@ -322,7 +351,7 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({ questions, userAns
   
   const formatTime = (seconds: number) => {
     const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
+    const remainingSeconds = Math.round((seconds % 60) * 10) / 10;
     const timeParts = [];
     if (minutes > 0) timeParts.push(`${minutes} minute${minutes > 1 ? 's' : ''}`);
     if (remainingSeconds > 0) timeParts.push(`${remainingSeconds} second${remainingSeconds > 1 ? 's' : ''}`);
@@ -340,74 +369,93 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({ questions, userAns
     }
   };
 
+  const ratio = questions.length > 0 ? correctCount / questions.length : 0;
+  const headline =
+    ratio === 1 ? 'Perfect Score!' : ratio >= 0.8 ? 'Awesome!' : ratio >= 0.5 ? 'Nice Work!' : 'Keep Practicing!';
+
   return (
-    <div className="max-w-4xl mx-auto p-6 bg-white dark:bg-slate-900 rounded-3xl shadow-xl border border-slate-200 dark:border-slate-800">
+    <div className="game-panel w-full max-w-4xl mx-auto p-5 sm:p-7 relative animate-fade-in">
+        {celebrate && <Confetti />}
         <div className="text-center mb-8">
-            <h1 className="text-4xl sm:text-5xl font-extrabold text-slate-800 dark:text-white mb-2">Results</h1>
+            <div className="flex justify-center mb-4">
+              <ScoreRing correct={correctCount} total={questions.length} />
+            </div>
+            <h1 className="font-display text-3xl sm:text-5xl font-bold text-gradient leading-tight pb-1 flex flex-wrap items-center justify-center gap-2">
+              {ratio >= 0.8 && <SparklesIcon className="w-7 h-7 text-amber-400 shrink-0" />}
+              <span>{headline}</span>
+              {ratio >= 0.8 && <SparklesIcon className="w-7 h-7 text-amber-400 shrink-0" />}
+            </h1>
             {isNewHighScore && (
-                <div className="mt-4 p-3 bg-yellow-100 dark:bg-yellow-500/10 border-2 border-yellow-300 dark:border-yellow-500/30 rounded-lg flex items-center justify-center gap-3 animate-fade-in max-w-sm mx-auto">
-                    <StarIcon className="w-8 h-8 text-yellow-500" />
-                    <span className="text-xl font-bold text-yellow-700 dark:text-yellow-400">New High Score!</span>
+                <div className="mt-4 flex justify-center">
+                    <div className="px-4 py-2.5 bg-gradient-to-r from-amber-400 to-yellow-500 rounded-2xl inline-flex items-center justify-center gap-2 animate-tada shadow-lg shadow-amber-500/40">
+                        <StarIcon className="w-6 h-6 text-white" />
+                        <span className="text-lg font-display font-bold text-white">New High Score!</span>
+                    </div>
                 </div>
             )}
-            <p className="text-lg text-slate-600 dark:text-slate-300 my-4 p-3 bg-slate-100 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 italic">"{feedback}"</p>
-            <p className="text-2xl font-bold text-slate-700 dark:text-slate-200">You scored <span className="text-green-600 dark:text-green-400">{correctCount} / {questions.length}</span></p>
-            <p className="text-lg text-slate-500 dark:text-slate-400 mt-1">Total time taken: <span className="font-semibold">{formatTime(timeTaken)}</span></p>
+            <p className="text-base sm:text-lg text-slate-600 dark:text-slate-300 mt-5 mb-2 px-4 py-3 glass rounded-2xl italic max-w-lg mx-auto">"{feedback}"</p>
+            <p className="text-lg text-slate-500 dark:text-slate-400 mt-3">
+              Total time: <span className="font-display font-bold text-slate-700 dark:text-slate-200">{formatTime(timeTaken)}</span>
+            </p>
         </div>
 
         {isTopScore && submissionStatus !== 'submitted' && (
-          <div className="my-6 p-6 bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-500 rounded-2xl animate-fade-in text-center relative">
-            <button 
+          <div className="my-6 p-6 bg-gradient-to-br from-violet-50 to-fuchsia-50 dark:from-violet-900/20 dark:to-fuchsia-900/20 border-2 border-violet-300 dark:border-violet-500/40 rounded-3xl animate-bounce-in text-center relative">
+            <button
               onClick={() => setIsTopScore(false)}
-              className="absolute top-3 right-3 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
+              className="absolute top-3 right-3 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
               aria-label="Close submission form"
             >
               <XCircleIcon className="w-6 h-6" />
             </button>
             <div className="flex items-center justify-center gap-3 mb-3">
-              <TrophyIcon className="w-8 h-8 text-blue-500" />
-              <h2 className="text-2xl font-bold text-blue-800 dark:text-blue-300">You're in the Top 5!</h2>
+              <TrophyIcon className="w-9 h-9 text-amber-500 animate-float" />
+              <h2 className="font-display text-2xl font-bold text-violet-700 dark:text-violet-300">You're in the Top 5!</h2>
             </div>
-            <p className="text-blue-700 dark:text-blue-400 mb-1">Enter your name to be added to the global leaderboard.</p>
-            <p className="text-sm text-blue-600 dark:text-blue-500 mb-4">(First name or nickname recommended)</p>
+            <p className="text-violet-700 dark:text-violet-300/90 mb-1 font-medium">Enter your name to join the global leaderboard.</p>
+            <p className="text-sm text-violet-500 dark:text-violet-400 mb-4">(First name or nickname recommended)</p>
             <form onSubmit={handleSubmitScore} className="flex flex-col sm:flex-row items-center justify-center gap-3">
-              <input 
+              <input
                 type="text"
                 value={playerName}
                 onChange={(e) => setPlayerName(e.target.value)}
                 placeholder="Enter your name"
                 maxLength={50}
                 required
-                className="w-full sm:w-64 px-4 py-2 text-lg border-2 border-slate-300 dark:border-slate-600 rounded-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
+                className="w-full sm:w-64 px-4 py-3 text-lg border-2 border-violet-200 dark:border-violet-500/40 rounded-2xl focus:ring-2 focus:ring-violet-500 focus:border-violet-500 transition bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
               />
-              <button 
+              <button
                 type="submit"
                 disabled={submissionStatus === 'submitting'}
-                className="w-full sm:w-auto px-8 py-2 text-lg font-bold text-white bg-blue-600 rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="btn3d btn3d--gold w-full sm:w-auto px-8 py-3 text-lg"
               >
                 {submissionStatus === 'submitting' ? 'Submitting...' : 'Submit Score'}
               </button>
             </form>
-            {submissionStatus === 'error' && <p className="text-red-500 mt-3">{errorMessage}</p>}
+            {submissionStatus === 'error' && <p className="text-rose-500 mt-3 font-semibold">{errorMessage}</p>}
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-4 italic">
-              If you're already on the leaderboard, use the same name to replace your old score (only if this one is better).
+              Already on the leaderboard? Use the same name to replace your old score (only if this one is better).
             </p>
           </div>
         )}
-        
+
         {submissionStatus === 'submitted' && (
-          <div className="my-6 p-4 bg-green-100 dark:bg-green-500/10 border-2 border-green-500 rounded-lg text-center animate-fade-in">
-            <p className="font-bold text-green-700 dark:text-green-300">Your score has been submitted to the leaderboard!</p>
+          <div className="my-6 p-4 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-2xl text-center animate-bounce-in shadow-lg shadow-emerald-500/30">
+            <p className="font-display font-bold text-white text-lg">🎉 Your score is on the leaderboard!</p>
           </div>
         )}
 
-        <div className="space-y-3">
+        <div className="space-y-2.5">
             {results.map((result, index) => (
-                <div key={index} className={`p-4 rounded-lg border-l-4 ${result.isCorrect ? 'bg-green-50 dark:bg-green-500/10 border-green-500' : 'bg-red-50 dark:bg-red-500/10 border-red-500'}`}>
-                    <div className="flex items-center justify-between">
+                <div
+                  key={index}
+                  className={`p-4 rounded-2xl border-l-4 animate-slide-up ${result.isCorrect ? 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-500' : 'bg-rose-50 dark:bg-rose-500/10 border-rose-500'}`}
+                  style={{ animationDelay: `${Math.min(index * 60, 600)}ms` }}
+                >
+                    <div className="flex items-center justify-between gap-3">
                       <div className="flex items-center gap-3">
-                          <span className="text-slate-600 dark:text-slate-400 font-bold">{index + 1}.</span>
-                          <p className="text-xl font-bold text-slate-800 dark:text-slate-200">
+                          <span className={`grid place-items-center w-7 h-7 shrink-0 rounded-lg font-display font-bold text-sm text-white ${result.isCorrect ? 'bg-emerald-500' : 'bg-rose-500'}`}>{index + 1}</span>
+                          <p className="text-xl font-display font-bold text-slate-800 dark:text-slate-200">
                               {result.question.display ? (
                                 <span>{result.question.display}</span>
                               ) : (
@@ -418,36 +466,46 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({ questions, userAns
                                   {result.question.num2 && ` ${result.question.num2}`}
                                 </>
                               )}
-                               = <span className="text-blue-600 dark:text-blue-400">{String(result.question.answer)}</span>
+                               = <span className="text-violet-600 dark:text-violet-400">{String(result.question.answer)}</span>
                           </p>
                       </div>
                       <div className="flex items-center gap-3">
                           {result.isCorrect ? (
-                              <div className="flex items-center gap-2 text-green-600">
-                                  <span className="font-bold text-lg">{result.userAnswer || 'N/A'}</span>
+                              <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
+                                  <span className="font-display font-bold text-lg">{result.userAnswer || 'N/A'}</span>
                                   <CheckCircleIcon className="w-7 h-7 animate-pop-in" style={{ animationDelay: `${index * 100}ms` }} />
                               </div>
                           ) : (
-                              <div className="flex items-center gap-3 text-red-600">
-                                  <span className="font-bold text-lg line-through">{result.userAnswer || 'N/A'}</span>
+                              <div className="flex items-center gap-3 text-rose-500 dark:text-rose-400">
+                                  <span className="font-display font-bold text-lg line-through opacity-80">{result.userAnswer || 'N/A'}</span>
                                   <XCircleIcon className="w-7 h-7 animate-pop-in" style={{ animationDelay: `${index * 100}ms` }} />
                               </div>
                           )}
                       </div>
                     </div>
                     {!result.isCorrect && (
-                      <div className="mt-3 border-t pt-3 border-red-200 dark:border-red-500/20">
+                      <div className="mt-3 border-t pt-3 border-rose-200 dark:border-rose-500/20">
                           {explanations[index]?.text ? (
-                              <div className="p-3 bg-white dark:bg-slate-800 rounded-md text-slate-800 dark:text-slate-300 animate-fade-in">
-                                  <div className="whitespace-pre-wrap text-sm sm:text-base">{explanations[index].text}</div>
+                              <div className="p-3 glass rounded-xl animate-fade-in">
+                                  <ExplanationText text={explanations[index].text!} />
                               </div>
                           ) : (
                               <button
                                   onClick={() => handleExplain(index)}
                                   disabled={explanations[index]?.isLoading}
-                                  className="px-4 py-1.5 text-sm font-semibold text-white bg-blue-600 rounded-full hover:bg-blue-700 transition-transform hover:scale-105 disabled:bg-slate-400 dark:disabled:bg-slate-600 disabled:scale-100 disabled:cursor-not-allowed"
+                                  className="btn3d btn3d--secondary px-4 py-1.5 text-sm"
                               >
-                                  {explanations[index]?.isLoading ? 'Thinking...' : 'Explain Answer'}
+                                  {explanations[index]?.isLoading ? (
+                                    <span className="inline-flex items-center gap-2">
+                                      <span className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                                      Thinking...
+                                    </span>
+                                  ) : (
+                                    <>
+                                      <SparklesIcon className="w-4 h-4" />
+                                      Explain Answer
+                                    </>
+                                  )}
                               </button>
                           )}
                       </div>
@@ -455,12 +513,13 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({ questions, userAns
                 </div>
             ))}
         </div>
-        
+
         <div className="mt-10 text-center">
             <button
                 onClick={onRestart}
-                className="w-full sm:w-auto px-16 py-4 text-xl font-bold text-white bg-slate-700 hover:bg-slate-800 dark:bg-slate-600 dark:hover:bg-slate-500 rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300"
+                className="btn3d btn3d--party w-full sm:w-auto px-16 py-4 text-xl"
             >
+                <RocketIcon className="w-6 h-6" />
                 Play Again
             </button>
         </div>

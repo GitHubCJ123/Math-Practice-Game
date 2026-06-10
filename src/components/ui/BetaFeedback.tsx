@@ -71,7 +71,7 @@ export const BetaFeedback: React.FC<BetaFeedbackProps> = ({ className = '' }) =>
         </span>
         <button
           onClick={() => setIsOpen(true)}
-          className="inline-flex items-center gap-1 px-3 py-1 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 rounded-full transition-colors"
+          className="btn3d btn3d--primary inline-flex items-center gap-1 px-3 py-1.5 text-sm"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
@@ -88,12 +88,12 @@ export const BetaFeedback: React.FC<BetaFeedbackProps> = ({ className = '' }) =>
         >
           {/* Modal content */}
           <div 
-            className="w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 overflow-hidden"
+            className="w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden animate-bounce-in"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700">
-              <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">
+              <h2 className="font-display text-lg font-bold text-slate-800 dark:text-slate-100">
                 Send Feedback
               </h2>
               <button
@@ -133,10 +133,10 @@ export const BetaFeedback: React.FC<BetaFeedbackProps> = ({ className = '' }) =>
                       <button
                         type="button"
                         onClick={() => setFeedbackType('feature')}
-                        className={`flex-1 px-4 py-2 text-sm font-semibold rounded-lg transition-all duration-200 border-2 ${
+                        className={`flex-1 px-4 py-2 text-sm font-semibold rounded-xl transition-all duration-200 border-2 ${
                           feedbackType === 'feature'
-                            ? 'bg-blue-600 text-white border-blue-600'
-                            : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700 hover:border-blue-500 dark:hover:border-blue-500'
+                            ? 'bg-violet-600 text-white border-violet-600'
+                            : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700 hover:border-violet-500 dark:hover:border-violet-500'
                         }`}
                       >
                         💡 Feature Request
@@ -171,7 +171,7 @@ export const BetaFeedback: React.FC<BetaFeedbackProps> = ({ className = '' }) =>
                       }
                       rows={4}
                       maxLength={2000}
-                      className="w-full px-4 py-3 text-sm border-2 border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 resize-none"
+                      className="w-full px-4 py-3 text-sm border-2 border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-violet-500 transition bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 resize-none"
                     />
                     <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 text-right">
                       {message.length}/2000
@@ -189,7 +189,7 @@ export const BetaFeedback: React.FC<BetaFeedbackProps> = ({ className = '' }) =>
                   <button
                     type="submit"
                     disabled={isSubmitting || !message.trim()}
-                    className="w-full px-6 py-3 text-sm font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="btn3d btn3d--primary w-full px-6 py-3 text-sm"
                   >
                     {isSubmitting ? (
                       <span className="flex items-center justify-center gap-2">

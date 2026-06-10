@@ -2,7 +2,6 @@ import React from 'react';
 
 interface CreateRoomFlowProps {
   isCreating: boolean;
-  playerName: string;
   onCreate: () => void;
 }
 
@@ -12,10 +11,8 @@ interface CreateRoomFlowProps {
  */
 export const CreateRoomFlow: React.FC<CreateRoomFlowProps> = ({
   isCreating,
-  playerName,
   onCreate,
 }) => {
-  const disabled = isCreating || !playerName.trim();
   return (
     <div className='text-center'>
       <p className='text-slate-600 dark:text-slate-400 mb-6'>
@@ -23,12 +20,8 @@ export const CreateRoomFlow: React.FC<CreateRoomFlowProps> = ({
       </p>
       <button
         onClick={onCreate}
-        disabled={disabled}
-        className={`w-full py-4 rounded-xl text-lg font-bold transition-colors ${
-          disabled
-            ? 'bg-slate-300 dark:bg-slate-700 text-slate-500 cursor-not-allowed'
-            : 'bg-blue-600 text-white hover:bg-blue-700'
-        }`}
+        disabled={isCreating}
+        className='btn3d btn3d--primary w-full py-4 text-lg'
       >
         {isCreating ? 'Creating...' : 'Create Room'}
       </button>

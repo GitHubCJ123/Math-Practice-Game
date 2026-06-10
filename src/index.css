@@ -2,14 +2,57 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/*
-  The default border color has changed to `currentcolor` in Tailwind CSS v4,
-  so we've added these compatibility styles to make sure everything still
-  looks the same as it did with Tailwind CSS v3.
+/* ===========================================================================
+   DESIGN TOKENS
+   Modern arcade-learning theme: rounded display type, vibrant brand palette,
+   playful but clean. Most theming still uses Tailwind dark: utilities in the
+   components; this file owns fonts, the animated backdrop, the signature
+   tactile buttons, game panels, tiles, and the celebration system.
+   =========================================================================== */
+@theme {
+  --font-display: 'Fredoka', 'Nunito', ui-rounded, system-ui, sans-serif;
+  --font-sans: 'Nunito', ui-sans-serif, system-ui, sans-serif;
 
-  If we ever want to remove these styles, we need to add an explicit border
-  color utility to any element that depends on these defaults.
-*/
+  --color-brand-50: #f5f3ff;
+  --color-brand-100: #ede9fe;
+  --color-brand-200: #ddd6fe;
+  --color-brand-300: #c4b5fd;
+  --color-brand-400: #a78bfa;
+  --color-brand-500: #8b5cf6;
+  --color-brand-600: #7c3aed;
+  --color-brand-700: #6d28d9;
+  --color-brand-800: #5b21b6;
+  --color-brand-900: #4c1d95;
+}
+
+:root {
+  --brand: #7c3aed;
+  --brand-2: #6366f1;
+  --brand-3: #d946ef;
+  --accent-sky: #0ea5e9;
+  --accent-emerald: #10b981;
+  --accent-amber: #f59e0b;
+  --accent-rose: #f43f5e;
+
+  /* Surface + glow used by .game-panel and the backdrop. */
+  --panel: #ffffff;
+  --panel-border: rgba(124, 58, 237, 0.14);
+  --panel-glow: rgba(124, 58, 237, 0.28);
+  --page-text: #1e293b;
+  color-scheme: light;
+}
+
+.dark {
+  --panel: #131a2e;
+  --panel-border: rgba(148, 163, 184, 0.16);
+  --panel-glow: rgba(99, 102, 241, 0.4);
+  --page-text: #e2e8f0;
+  color-scheme: dark;
+}
+
+/* ---------------------------------------------------------------------------
+   Tailwind v4 border-color compatibility (kept from the original setup).
+   --------------------------------------------------------------------------- */
 @layer base {
   *,
   ::after,
@@ -18,24 +61,566 @@
   ::file-selector-button {
     border-color: var(--color-gray-200, currentcolor);
   }
+
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    color: var(--page-text);
+    font-synthesis-weight: none;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background: color-mix(in srgb, var(--brand) 28%, transparent);
+  }
+
+  /* Friendlier focus ring across the app. */
+  :focus-visible {
+    outline: 3px solid color-mix(in srgb, var(--brand-2) 60%, transparent);
+    outline-offset: 2px;
+  }
+
+  /* Custom scrollbar for a more polished feel. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--brand) 45%, transparent) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--brand) 40%, transparent);
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in srgb, var(--brand) 65%, transparent);
+    background-clip: padding-box;
+  }
 }
 
-body {
-  font-family: 'Inter', sans-serif;
+/* ===========================================================================
+   ANIMATED ARCADE BACKDROP
+   =========================================================================== */
+.arcade-bg {
+  position: relative;
+  isolation: isolate;
+  background:
+    radial-gradient(120% 120% at 12% -10%, #ede9fe 0%, transparent 45%),
+    radial-gradient(120% 120% at 100% 0%, #cffafe 0%, transparent 42%),
+    radial-gradient(130% 130% at 50% 120%, #fae8ff 0%, transparent 48%),
+    linear-gradient(180deg, #f8fafc 0%, #f1f5ff 100%);
+}
+.dark .arcade-bg {
+  background:
+    radial-gradient(120% 120% at 12% -10%, #2e1065 0%, transparent 48%),
+    radial-gradient(120% 120% at 100% 0%, #0c4a6e 0%, transparent 45%),
+    radial-gradient(130% 130% at 50% 120%, #4a044e 0%, transparent 50%),
+    linear-gradient(180deg, #0a0f1f 0%, #0b1120 100%);
 }
 
+/* Soft drifting colour blobs behind everything. */
+.arcade-bg::before,
+.arcade-bg::after {
+  content: '';
+  position: fixed;
+  z-index: -1;
+  width: 46vmax;
+  height: 46vmax;
+  border-radius: 50%;
+  filter: blur(60px);
+  opacity: 0.5;
+  pointer-events: none;
+}
+.arcade-bg::before {
+  top: -14vmax;
+  left: -10vmax;
+  background: radial-gradient(circle at 30% 30%, #a78bfa, transparent 65%);
+  animation: blobDrift 22s ease-in-out infinite;
+}
+.arcade-bg::after {
+  bottom: -16vmax;
+  right: -12vmax;
+  background: radial-gradient(circle at 70% 70%, #22d3ee, transparent 65%);
+  animation: blobDrift 26s ease-in-out infinite reverse;
+}
+.dark .arcade-bg::before {
+  opacity: 0.35;
+}
+.dark .arcade-bg::after {
+  opacity: 0.3;
+}
+
+/* Floating decorative math glyphs scattered behind the cards. */
+.floaty {
+  position: fixed;
+  z-index: -1;
+  pointer-events: none;
+  user-select: none;
+  font-family: var(--font-display);
+  font-weight: 700;
+  color: color-mix(in srgb, var(--brand) 24%, transparent);
+  opacity: 0.5;
+  animation: floatY 9s ease-in-out infinite;
+}
+.dark .floaty {
+  color: color-mix(in srgb, #a5b4fc 30%, transparent);
+  opacity: 0.32;
+}
+
+/* ===========================================================================
+   GAME PANEL (the primary card surface)
+   =========================================================================== */
+.game-panel {
+  position: relative;
+  border-radius: 30px;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  box-shadow:
+    0 1px 0 0 rgba(255, 255, 255, 0.7) inset,
+    0 26px 60px -28px var(--panel-glow),
+    0 12px 26px -18px rgba(15, 23, 42, 0.22);
+}
+.dark .game-panel {
+  background: linear-gradient(180deg, #141c30 0%, #0f1626 100%);
+  box-shadow:
+    0 1px 0 0 rgba(255, 255, 255, 0.05) inset,
+    0 30px 70px -30px rgba(0, 0, 0, 0.75),
+    0 0 0 1px rgba(99, 102, 241, 0.06);
+}
+
+/* Subtle glass variant for nested sections. */
+.glass {
+  background: color-mix(in srgb, var(--panel) 70%, transparent);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--panel-border);
+}
+
+/* ===========================================================================
+   TACTILE 3D BUTTONS ("squishy" arcade buttons)
+   Variants set --btn-face (gradient) and --btn-edge (the pressed bottom edge).
+   =========================================================================== */
+.btn3d {
+  --btn-face: linear-gradient(180deg, #8b5cf6, #7c3aed);
+  --btn-edge: #5b21b6;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: #fff;
+  background: var(--btn-face);
+  border-radius: 999px;
+  border: none;
+  cursor: pointer;
+  overflow: hidden;
+  box-shadow:
+    0 6px 0 0 var(--btn-edge),
+    0 7px 12px -8px rgba(15, 23, 42, 0.28);
+  transition:
+    transform 0.12s cubic-bezier(0.2, 0.8, 0.3, 1.2),
+    box-shadow 0.12s ease,
+    filter 0.12s ease;
+  -webkit-user-select: none;
+  user-select: none;
+}
+/* Glossy top highlight. */
+.btn3d::before {
+  content: '';
+  position: absolute;
+  inset: 2px 2px auto 2px;
+  height: 42%;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.35), transparent);
+  pointer-events: none;
+}
+.btn3d:hover {
+  filter: brightness(1.06) saturate(1.05);
+  transform: translateY(-1px);
+  box-shadow:
+    0 7px 0 0 var(--btn-edge),
+    0 10px 16px -8px rgba(15, 23, 42, 0.32);
+}
+.btn3d:active {
+  transform: translateY(5px);
+  box-shadow:
+    0 1px 0 0 var(--btn-edge),
+    0 3px 8px -6px rgba(15, 23, 42, 0.3);
+}
+.btn3d:disabled,
+.btn3d[aria-disabled='true'] {
+  cursor: not-allowed;
+  filter: grayscale(0.55) brightness(0.92);
+  opacity: 0.65;
+  transform: none;
+  box-shadow: 0 4px 0 0 var(--btn-edge);
+}
+
+.btn3d--primary {
+  --btn-face: linear-gradient(180deg, #8b5cf6, #7c3aed);
+  --btn-edge: #5b21b6;
+}
+.btn3d--secondary {
+  --btn-face: linear-gradient(180deg, #38bdf8, #0ea5e9);
+  --btn-edge: #0369a1;
+}
+.btn3d--success {
+  --btn-face: linear-gradient(180deg, #34d399, #10b981);
+  --btn-edge: #047857;
+}
+.btn3d--gold {
+  --btn-face: linear-gradient(180deg, #fbbf24, #f59e0b);
+  --btn-edge: #b45309;
+  color: #422006;
+}
+.btn3d--gold::before {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.55), transparent);
+}
+.btn3d--danger {
+  --btn-face: linear-gradient(180deg, #fb7185, #f43f5e);
+  --btn-edge: #be123c;
+}
+.btn3d--fuchsia {
+  --btn-face: linear-gradient(180deg, #e879f9, #d946ef);
+  --btn-edge: #a21caf;
+}
+.btn3d--party {
+  --btn-face: linear-gradient(110deg, #8b5cf6, #d946ef 45%, #0ea5e9);
+  --btn-edge: #6d28d9;
+  background-size: 180% 180%;
+  animation: gradientPan 6s ease infinite;
+}
+.btn3d--neutral {
+  --btn-face: linear-gradient(180deg, #f1f5f9, #e2e8f0);
+  --btn-edge: #94a3b8;
+  color: #334155;
+}
+.btn3d--neutral::before {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.8), transparent);
+}
+.dark .btn3d--neutral {
+  --btn-face: linear-gradient(180deg, #334155, #1e293b);
+  --btn-edge: #0f172a;
+  color: #e2e8f0;
+}
+.dark .btn3d--neutral::before {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.12), transparent);
+}
+
+/* ===========================================================================
+   SELECTABLE TILES & SEGMENTS
+   =========================================================================== */
+.tile {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-weight: 600;
+  border-radius: 16px;
+  overflow: hidden;
+  background: #fff;
+  color: #475569;
+  border: 2px solid #e2e8f0;
+  box-shadow: 0 3px 0 0 #e2e8f0;
+  cursor: pointer;
+  transition:
+    transform 0.14s cubic-bezier(0.34, 1.56, 0.64, 1),
+    box-shadow 0.14s ease,
+    border-color 0.14s ease,
+    background 0.14s ease,
+    color 0.14s ease;
+}
+.dark .tile {
+  background: #1e293b;
+  color: #cbd5e1;
+  border-color: #334155;
+  box-shadow: 0 3px 0 0 #0f172a;
+}
+.tile:hover {
+  transform: translateY(-2px);
+  border-color: #c4b5fd;
+  box-shadow: 0 5px 0 0 color-mix(in srgb, var(--brand) 22%, #e2e8f0);
+}
+.dark .tile:hover {
+  border-color: #7c3aed;
+  box-shadow: 0 5px 0 0 #4c1d95;
+}
+.tile:active {
+  transform: translateY(1px);
+  box-shadow: 0 1px 0 0 #cbd5e1;
+}
+.tile--active,
+.tile[aria-pressed='true'] {
+  background: linear-gradient(180deg, #8b5cf6, #7c3aed);
+  color: #fff;
+  border-color: #6d28d9;
+  box-shadow: 0 4px 0 0 #5b21b6;
+  transform: translateY(-1px);
+}
+.dark .tile--active,
+.dark .tile[aria-pressed='true'] {
+  border-color: #6d28d9;
+  box-shadow: 0 4px 0 0 #4c1d95;
+}
+.tile--active::after {
+  content: '';
+  position: absolute;
+  inset: 2px;
+  border-radius: 13px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.28), transparent 55%);
+  pointer-events: none;
+}
+
+/* Pill segment (time limit / quick options). */
+.seg {
+  font-family: var(--font-display);
+  font-weight: 600;
+  border-radius: 999px;
+  background: #fff;
+  color: #475569;
+  border: 2px solid #e2e8f0;
+  transition:
+    transform 0.14s ease,
+    border-color 0.14s ease,
+    background 0.14s ease,
+    color 0.14s ease,
+    box-shadow 0.14s ease;
+}
+.dark .seg {
+  background: #1e293b;
+  color: #cbd5e1;
+  border-color: #334155;
+}
+.seg:hover {
+  border-color: #c4b5fd;
+  transform: translateY(-1px);
+}
+.dark .seg:hover {
+  border-color: #7c3aed;
+}
+.seg--active {
+  background: linear-gradient(180deg, #8b5cf6, #7c3aed);
+  color: #fff;
+  border-color: #6d28d9;
+  box-shadow: 0 6px 16px -6px rgba(124, 58, 237, 0.6);
+}
+
+/* Operation cards on the selection screen. */
+.opcard {
+  position: relative;
+  overflow: hidden;
+  border-radius: 20px;
+  background: #fff;
+  border: 2px solid #e9e8f5;
+  box-shadow: 0 4px 0 0 #e9e8f5;
+  transition:
+    transform 0.16s cubic-bezier(0.34, 1.56, 0.64, 1),
+    box-shadow 0.16s ease,
+    border-color 0.16s ease;
+  cursor: pointer;
+}
+.dark .opcard {
+  background: #161f33;
+  border-color: #29324a;
+  box-shadow: 0 4px 0 0 #0d1322;
+}
+.opcard:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 0 0 color-mix(in srgb, var(--brand) 24%, #e9e8f5);
+}
+.dark .opcard:hover {
+  box-shadow: 0 8px 0 0 #4c1d95;
+}
+.opcard--active {
+  border-color: transparent;
+  box-shadow:
+    0 0 0 3px #7c3aed,
+    0 10px 24px -10px rgba(124, 58, 237, 0.6);
+  transform: translateY(-2px);
+}
+.opcard--active::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(124, 58, 237, 0.1), rgba(217, 70, 239, 0.08));
+  pointer-events: none;
+}
+
+/* Small status chips. */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-family: var(--font-display);
+  font-weight: 600;
+  border-radius: 999px;
+  padding: 0.25rem 0.7rem;
+  font-size: 0.8rem;
+}
+
+/* ===========================================================================
+   GRADIENT TEXT / DECOR
+   =========================================================================== */
+.text-gradient {
+  background: linear-gradient(100deg, #7c3aed, #d946ef 40%, #0ea5e9);
+  background-size: 200% 200%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: gradientPan 7s ease infinite;
+}
+.dark .text-gradient {
+  background: linear-gradient(100deg, #a78bfa, #e879f9 40%, #38bdf8);
+  background-size: 200% 200%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: gradientPan 7s ease infinite;
+}
+
+/* Animated progress fill used in quizzes. */
+.progress-track {
+  background: color-mix(in srgb, var(--brand) 12%, #e2e8f0);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.dark .progress-track {
+  background: #1e293b;
+}
+.progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #8b5cf6, #d946ef, #0ea5e9);
+  background-size: 200% 100%;
+  animation: gradientPan 3s linear infinite;
+  transition: width 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Big friendly range slider. */
+.range-fun {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 12px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #8b5cf6, #d946ef);
+  outline: none;
+}
+.dark .range-fun {
+  background: linear-gradient(90deg, #7c3aed, #a21caf);
+}
+.range-fun::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #fff;
+  border: 4px solid #7c3aed;
+  box-shadow: 0 3px 8px -2px rgba(124, 58, 237, 0.7);
+  cursor: pointer;
+  transition: transform 0.12s ease;
+}
+.range-fun::-webkit-slider-thumb:hover {
+  transform: scale(1.12);
+}
+.range-fun::-moz-range-thumb {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #fff;
+  border: 4px solid #7c3aed;
+  box-shadow: 0 3px 8px -2px rgba(124, 58, 237, 0.7);
+  cursor: pointer;
+}
+
+/* ===========================================================================
+   CELEBRATION SYSTEM
+   =========================================================================== */
+.confetti-layer {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 60;
+}
+.confetti-piece {
+  position: absolute;
+  top: -5vh;
+  width: 10px;
+  height: 14px;
+  border-radius: 2px;
+  will-change: transform, opacity;
+  animation-name: confettiFall;
+  animation-timing-function: cubic-bezier(0.3, 0.4, 0.6, 1);
+  animation-fill-mode: forwards;
+}
+
+/* Circular score ring on the results screen. */
+.score-ring__value {
+  animation: ringFill 1.1s cubic-bezier(0.34, 1.4, 0.5, 1) forwards;
+}
+
+/* ===========================================================================
+   READY / SET / GO INTRO
+   =========================================================================== */
+.intro-pop {
+  animation: introPop 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+.intro-glow {
+  animation: introGlow 1s ease-out both;
+}
+.intro-ring {
+  position: absolute;
+  width: 220px;
+  height: 220px;
+  border-radius: 9999px;
+  border: 6px solid currentColor;
+  opacity: 0;
+  animation: introRing 1s ease-out both;
+}
+.intro-ring--late {
+  animation-delay: 0.18s;
+}
+
+/* ===========================================================================
+   KEYFRAMES
+   (existing ones preserved; new ones added below)
+   =========================================================================== */
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(-10px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 .animate-fade-in {
   animation: fadeIn 0.5s ease-out forwards;
 }
 
 @keyframes popIn {
-  0% { transform: scale(0.5); opacity: 0; }
-  60% { transform: scale(1.15); opacity: 1; }
-  100% { transform: scale(1); }
+  0% {
+    transform: scale(0.5);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.15);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+  }
 }
 .animate-pop-in {
   animation: popIn 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
@@ -46,19 +631,393 @@ body {
 }
 
 @keyframes wordPulse {
-  0% { transform: scale(0.8); opacity: 0; }
-  20% { transform: scale(1); opacity: 1; }
-  80% { transform: scale(1); opacity: 1; }
-  100% { transform: scale(0.8); opacity: 0; }
+  0% {
+    transform: scale(0.8);
+    opacity: 0;
+  }
+  20% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  80% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0.8);
+    opacity: 0;
+  }
 }
 .animate-word-pulse {
   animation: wordPulse 1s ease-in-out forwards;
 }
 
 @keyframes fadeInAfter3s {
-  0%, 90% { opacity: 0; transform: translateY(10px); }
-  100% { opacity: 1; transform: translateY(0); }
+  0%,
+  90% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 .animate-fade-in-after-3s {
   animation: fadeInAfter3s 3.3s ease-out forwards;
+}
+
+/* ---- New arcade animations ---- */
+@keyframes floatY {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-4deg);
+  }
+  50% {
+    transform: translateY(-22px) rotate(4deg);
+  }
+}
+
+@keyframes blobDrift {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  33% {
+    transform: translate(6vmax, 4vmax) scale(1.12);
+  }
+  66% {
+    transform: translate(-4vmax, 2vmax) scale(0.94);
+  }
+}
+
+@keyframes gradientPan {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@keyframes bounceIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.3) translateY(40px);
+  }
+  55% {
+    opacity: 1;
+    transform: scale(1.06) translateY(0);
+  }
+  75% {
+    transform: scale(0.97);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+.animate-bounce-in {
+  animation: bounceIn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-slide-up {
+  opacity: 0;
+  animation: slideUp 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-7px) rotate(-1.5deg);
+  }
+  40% {
+    transform: translateX(7px) rotate(1.5deg);
+  }
+  60% {
+    transform: translateX(-5px);
+  }
+  80% {
+    transform: translateX(5px);
+  }
+}
+.animate-shake {
+  animation: shake 0.5s ease-in-out;
+}
+
+@keyframes wiggle {
+  0%,
+  100% {
+    transform: rotate(-6deg);
+  }
+  50% {
+    transform: rotate(6deg);
+  }
+}
+.animate-wiggle {
+  animation: wiggle 0.4s ease-in-out;
+}
+
+@keyframes glowPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent-amber) 55%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 14px color-mix(in srgb, var(--accent-amber) 0%, transparent);
+  }
+}
+.animate-glow {
+  animation: glowPulse 1.6s ease-out infinite;
+}
+
+@keyframes floatBob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+.animate-float {
+  animation: floatBob 3s ease-in-out infinite;
+}
+
+@keyframes tada {
+  0% {
+    transform: scale(1) rotate(0);
+  }
+  10%,
+  20% {
+    transform: scale(0.9) rotate(-4deg);
+  }
+  30%,
+  50%,
+  70%,
+  90% {
+    transform: scale(1.12) rotate(4deg);
+  }
+  40%,
+  60%,
+  80% {
+    transform: scale(1.12) rotate(-4deg);
+  }
+  100% {
+    transform: scale(1) rotate(0);
+  }
+}
+.animate-tada {
+  animation: tada 1s ease-in-out;
+}
+
+@keyframes confettiFall {
+  0% {
+    transform: translate3d(0, -10vh, 0) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(var(--cx, 0), 110vh, 0) rotate(var(--cr, 720deg));
+    opacity: 0.9;
+  }
+}
+
+@keyframes ringFill {
+  from {
+    stroke-dashoffset: var(--ring-start);
+  }
+  to {
+    stroke-dashoffset: var(--ring-end);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+.animate-shimmer {
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--brand) 16%, transparent),
+    transparent
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes countPop {
+  0% {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.18);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+.animate-count-pop {
+  animation: countPop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+@keyframes introPop {
+  0% {
+    transform: scale(0.2) rotate(-14deg);
+    opacity: 0;
+  }
+  45% {
+    transform: scale(1.14) rotate(4deg);
+    opacity: 1;
+  }
+  70% {
+    transform: scale(0.95) rotate(-2deg);
+  }
+  100% {
+    transform: scale(1) rotate(0);
+    opacity: 1;
+  }
+}
+
+@keyframes introRing {
+  0% {
+    transform: scale(0.35);
+    opacity: 0.85;
+  }
+  100% {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+}
+
+@keyframes introGlow {
+  0% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  40% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.7;
+    transform: scale(1);
+  }
+}
+
+/* ===========================================================================
+   MATH DASH PROMO CARD
+   =========================================================================== */
+.mathdash-frame {
+  position: relative;
+  border-radius: 24px;
+  padding: 2px;
+  background: linear-gradient(120deg, #ec4899, #a855f7, #6366f1, #22d3ee, #ec4899);
+  background-size: 300% 300%;
+  animation: gradientPan 6s ease infinite;
+}
+.mathdash-frame::before {
+  content: '';
+  position: absolute;
+  inset: -7px;
+  z-index: -1;
+  border-radius: 30px;
+  background: linear-gradient(120deg, #ec4899, #a855f7, #6366f1, #22d3ee, #ec4899);
+  background-size: 300% 300%;
+  filter: blur(18px);
+  opacity: 0.55;
+  animation: gradientPan 6s ease infinite;
+  transition: opacity 0.3s ease;
+}
+.mathdash-frame:hover::before {
+  opacity: 0.9;
+}
+.mathdash-title {
+  background: linear-gradient(90deg, #f9a8d4, #f0abfc 50%, #a5b4fc);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 0 14px rgba(236, 72, 153, 0.45));
+}
+.mathdash-rocket {
+  display: inline-block;
+  animation: rocketBob 3s ease-in-out infinite;
+}
+.mathdash-stars {
+  background-image:
+    radial-gradient(1.5px 1.5px at 15% 25%, rgba(255, 255, 255, 0.5), transparent),
+    radial-gradient(1.5px 1.5px at 75% 15%, rgba(255, 255, 255, 0.4), transparent),
+    radial-gradient(1.5px 1.5px at 60% 70%, rgba(255, 255, 255, 0.35), transparent),
+    radial-gradient(1.5px 1.5px at 30% 82%, rgba(255, 255, 255, 0.4), transparent),
+    radial-gradient(1.5px 1.5px at 88% 60%, rgba(255, 255, 255, 0.3), transparent);
+  opacity: 0.6;
+}
+.mathdash-cta::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -160%;
+  width: 55%;
+  height: 100%;
+  background: linear-gradient(115deg, transparent, rgba(255, 255, 255, 0.55), transparent);
+  transform: skewX(-20deg);
+  animation: ctaShine 3.4s ease-in-out infinite;
+}
+
+@keyframes rocketBob {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-6deg);
+  }
+  50% {
+    transform: translateY(-10px) rotate(6deg);
+  }
+}
+@keyframes ctaShine {
+  0%,
+  55% {
+    left: -160%;
+  }
+  100% {
+    left: 160%;
+  }
+}
+
+/* ===========================================================================
+   REDUCED MOTION
+   =========================================================================== */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+  .arcade-bg::before,
+  .arcade-bg::after,
+  .floaty {
+    animation: none !important;
+  }
 }

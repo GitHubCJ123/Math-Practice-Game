@@ -55,10 +55,10 @@ export const GlobalLeaderboard: React.FC = () => {
   }, [fetchScores]);
 
   return (
-    <div className="mt-10 p-6 bg-slate-100 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700 animate-fade-in">
+    <div className="mt-10 p-6 bg-slate-50 dark:bg-slate-800/40 rounded-3xl border border-slate-200 dark:border-slate-700/60 animate-fade-in">
       <div className="flex flex-col items-center text-center mb-4">
         <div>
-          <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 inline-flex items-center gap-2">
+          <h2 className="font-display text-xl font-bold text-slate-800 dark:text-slate-100 inline-flex items-center gap-2">
             🏆 Global Leaderboards
           </h2>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-xs">
@@ -67,7 +67,7 @@ export const GlobalLeaderboard: React.FC = () => {
         </div>
         <div className="mt-4">
           <div className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-1">Resets In</div>
-          <div className="flex gap-2 justify-center text-blue-600 dark:text-blue-400">
+          <div className="flex gap-2 justify-center text-violet-600 dark:text-violet-400">
             <div>
               <div className="font-bold text-lg tabular-nums">{String(timeLeft.days).padStart(2, '0')}</div>
               <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">Days</div>
@@ -96,9 +96,9 @@ export const GlobalLeaderboard: React.FC = () => {
               onClick={() => setActiveTab(op)}
               className={`${
                 activeTab === op
-                  ? 'border-blue-500 text-blue-600'
+                  ? 'border-violet-500 text-violet-600 dark:text-violet-400'
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
-              } whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm transition-colors`}
+              } whitespace-nowrap py-2 px-1 border-b-2 font-display font-semibold text-sm transition-colors`}
             >
               {getOperationDisplayName(op)}
             </button>

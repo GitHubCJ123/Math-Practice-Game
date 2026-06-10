@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import type { Question, Operation, MultiplayerResult, Team, GameMode, Player, TeamResult, AIDifficulty } from "@shared/types";
 import { ClockIcon } from "../ui/icons";
+import { IntroCountdown } from "../ui/IntroCountdown";
 import {
   getPusherClient,
   updateProgress,
@@ -445,11 +446,11 @@ export const MultiplayerQuizScreen: React.FC<MultiplayerQuizScreenProps> = ({
     const stillPlaying = opponents.filter((p) => !opponentFinished[p.id] && !disconnectedPlayers.has(p.id));
     
     return (
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-8 flex items-center justify-center transition-colors duration-300">
-        <div className="max-w-2xl w-full bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 p-8 md:p-12">
+      <div className="w-full flex items-center justify-center p-2 transition-colors duration-300">
+        <div className="game-panel max-w-2xl w-full p-8 md:p-12 animate-fade-in">
           <div className="text-center">
-            <div className="animate-spin w-20 h-20 border-4 border-blue-200 dark:border-blue-800 border-t-blue-600 rounded-full mx-auto mb-6"></div>
-            <h2 className="text-3xl md:text-4xl font-extrabold text-slate-800 dark:text-white mb-4">Great job!</h2>
+            <div className="animate-spin w-20 h-20 border-4 border-violet-200 dark:border-violet-900 border-t-violet-600 rounded-full mx-auto mb-6"></div>
+            <h2 className="font-display text-3xl md:text-4xl font-bold text-slate-800 dark:text-white mb-4">Great job!</h2>
             <p className="text-lg md:text-xl text-slate-500 dark:text-slate-400 mb-6">
               Waiting for {stillPlaying.length === 1 ? stillPlaying[0].name : 'others'} to finish...
             </p>
@@ -500,50 +501,40 @@ export const MultiplayerQuizScreen: React.FC<MultiplayerQuizScreenProps> = ({
   }
 
   return (
-    <div className="max-w-4xl mx-auto p-6 bg-white dark:bg-slate-900 rounded-3xl shadow-xl border border-slate-200 dark:border-slate-800 relative min-h-[600px]">
+    <div className="game-panel max-w-4xl mx-auto p-5 sm:p-7 relative min-h-[600px] animate-fade-in">
       {/* Player Finished Popup - at top to not distract */}
       {showFinishedPopup && (
         <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 pointer-events-none">
-          <div className="bg-yellow-500 text-white px-6 py-3 rounded-xl shadow-2xl animate-pop-in">
-            <p className="text-lg font-bold">🏁 {showFinishedPopup} finished!</p>
+          <div className="bg-gradient-to-r from-amber-400 to-orange-500 text-white px-6 py-3 rounded-2xl shadow-2xl shadow-amber-500/40 animate-pop-in">
+            <p className="text-lg font-display font-bold">🏁 {showFinishedPopup} finished!</p>
           </div>
         </div>
       )}
 
       {/* Disconnected Players Banner */}
       {disconnectedPlayers.size > 0 && (
-        <div className="absolute top-4 left-4 right-4 bg-red-500 text-white px-4 py-2 rounded-lg text-center font-semibold z-40">
+        <div className="absolute top-4 left-4 right-4 bg-gradient-to-r from-rose-500 to-red-600 text-white px-4 py-2 rounded-xl text-center font-semibold z-40 shadow-lg">
           {Array.from(disconnectedPlayers).map(id => players.find(p => p.id === id)?.name).filter(Boolean).join(', ')} disconnected
         </div>
       )}
 
-      {/* Intro animation */}
-      <div
-        className="absolute inset-0 flex items-center justify-center pointer-events-none"
-        style={{ visibility: introStage !== "finished" ? "visible" : "hidden" }}
-      >
-        <p
-          key={introStage}
-          className="text-8xl font-extrabold text-slate-800 dark:text-white animate-word-pulse capitalize"
-        >
-          {introStage}...
-        </p>
-      </div>
+      {/* Ready / Set / Go intro overlay */}
+      <IntroCountdown stage={introStage} />
 
       {/* Quiz Content */}
       <div className={introStage === "finished" ? "animate-fade-in" : "opacity-0"}>
         {/* Header */}
-        <div className="flex justify-between items-center mb-4">
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-800 dark:text-white">
-            Multiplayer Quiz
+        <div className="flex justify-between items-center gap-4 mb-4">
+          <h1 className="font-display text-2xl sm:text-3xl font-bold text-slate-800 dark:text-white">
+            Multiplayer
           </h1>
           <div
-            className={`flex items-center gap-2 text-lg font-bold p-3 rounded-full bg-slate-100 dark:bg-slate-800 transition-colors duration-300 ${
-              isTimeLow ? "text-red-600 dark:text-red-500 animate-pulse" : "text-slate-800 dark:text-slate-200"
+            className={`flex items-center gap-2 text-lg font-display font-bold px-4 py-2.5 rounded-2xl border transition-colors duration-300 ${
+              isTimeLow ? "text-white bg-gradient-to-br from-rose-500 to-red-600 border-rose-600 animate-pulse shadow-lg shadow-rose-500/30" : "text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700"
             }`}
           >
-            <ClockIcon className="w-6 h-6" />
-            <span>{timeLimit > 0 ? formatCountdownTime(remainingTime) : formatTime(elapsedTime)}</span>
+            <ClockIcon className="w-5 h-5" />
+            <span className="tabular-nums">{timeLimit > 0 ? formatCountdownTime(remainingTime) : formatTime(elapsedTime)}</span>
           </div>
         </div>
 
@@ -644,27 +635,24 @@ export const MultiplayerQuizScreen: React.FC<MultiplayerQuizScreenProps> = ({
             {questions.map((q, index) => (
               <div
                 key={index}
-                className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg"
+                className="flex items-center gap-3 p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 focus-within:border-violet-400 dark:focus-within:border-violet-500 focus-within:ring-2 focus-within:ring-violet-500/20 transition-all"
               >
-                <span className="text-slate-500 dark:text-slate-400 font-bold w-6 text-right">
+                <span className="text-slate-500 dark:text-slate-400 font-display font-bold w-6 text-right">
                   {index + 1}.
                 </span>
-                <div className="flex items-center gap-2 text-2xl font-bold text-slate-700 dark:text-slate-200 w-full">
-                  {usesDisplayProperty ? (
-                    <span className="w-32 text-center">{q.display}</span>
-                  ) : (
-                    <>
-                      {q.operation === "square-roots" && <span>{getOperationSymbol(q.operation)}</span>}
-                      <span className="w-10 text-right">{q.num1}</span>
-                      {q.operation === "squares" ? (
-                        <sup>2</sup>
-                      ) : (
-                        q.operation !== "square-roots" && <span>{getOperationSymbol(q.operation)}</span>
-                      )}
-                      {q.num2 && <span className="w-10 text-left">{q.num2}</span>}
-                    </>
-                  )}
-                  <span>=</span>
+                <div className="flex items-center gap-2 text-2xl font-display font-bold text-slate-700 dark:text-slate-200 w-full">
+                  <span className="min-w-[3.5rem] text-right whitespace-nowrap">
+                    {usesDisplayProperty ? (
+                      q.display
+                    ) : q.operation === "square-roots" ? (
+                      <span>{getOperationSymbol(q.operation)}{q.num1}</span>
+                    ) : q.operation === "squares" ? (
+                      <span>{q.num1}<sup>2</sup></span>
+                    ) : (
+                      <span>{q.num1}<span className="mx-1.5 text-violet-500 dark:text-violet-400">{getOperationSymbol(q.operation)}</span>{q.num2}</span>
+                    )}
+                  </span>
+                  <span className="text-violet-500 dark:text-violet-400">=</span>
                   <input
                     ref={(el) => {
                       inputRefs.current[index] = el;
@@ -680,7 +668,7 @@ export const MultiplayerQuizScreen: React.FC<MultiplayerQuizScreenProps> = ({
                     value={answers[index]}
                     onChange={(e) => handleAnswerChange(index, e.target.value)}
                     onKeyDown={(e) => handleKeyDown(e, index)}
-                    className="w-24 p-2 text-center text-2xl font-bold border-2 border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-white dark:bg-slate-900"
+                    className="w-24 shrink-0 p-2 text-center text-2xl font-display font-bold border-2 border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-violet-500 transition bg-white dark:bg-slate-900 text-slate-800 dark:text-white"
                     maxLength={7}
                     disabled={quizFinished}
                   />
@@ -692,11 +680,7 @@ export const MultiplayerQuizScreen: React.FC<MultiplayerQuizScreenProps> = ({
             <button
               type="submit"
               disabled={quizFinished}
-              className={`w-full sm:w-auto px-16 py-4 text-xl font-bold rounded-full shadow-lg transition-all duration-300 ${
-                quizFinished
-                  ? "bg-slate-400 text-white cursor-not-allowed"
-                  : "text-white bg-blue-600 hover:shadow-xl transform hover:scale-105"
-              }`}
+              className="btn3d btn3d--primary w-full sm:w-auto px-16 py-4 text-xl"
             >
               {quizFinished ? "Submitted!" : "Submit Answers"}
             </button>

@@ -111,6 +111,7 @@ export const MultiplayerLobbyScreen: React.FC<MultiplayerLobbyScreenProps> = ({
   const [playerName, setPlayerName] = useState<string>(
     () => localStorage.getItem('mathWhizPlayerName') || ''
   );
+  const [nameError, setNameError] = useState(false);
   const [playerId] = useState<string>(() => getOrCreatePlayerId());
 
   // Room state.
@@ -305,11 +306,27 @@ export const MultiplayerLobbyScreen: React.FC<MultiplayerLobbyScreenProps> = ({
 
   // ---- Handlers ----
 
-  const handleCreateRoom = async () => {
-    if (!playerName.trim()) {
-      alert('Please enter your name');
-      return;
+  // Validates that a name has been entered before starting any game flow.
+  // On failure it flags the name field, scrolls it into view and focuses it
+  // so the user is told to enter their name at the top.
+  const requireName = (): boolean => {
+    if (playerName.trim()) return true;
+    setNameError(true);
+    const el = document.getElementById('mp-player-name');
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      window.setTimeout(() => (el as HTMLInputElement).focus(), 150);
     }
+    return false;
+  };
+
+  const handlePlayerNameChange = (name: string) => {
+    setPlayerName(name);
+    if (name.trim()) setNameError(false);
+  };
+
+  const handleCreateRoom = async () => {
+    if (!requireName()) return;
     setIsCreating(true);
     try {
       const result = await createRoom(playerId, playerName);
@@ -334,10 +351,7 @@ export const MultiplayerLobbyScreen: React.FC<MultiplayerLobbyScreenProps> = ({
   };
 
   const handleJoinRoom = async () => {
-    if (!playerName.trim()) {
-      alert('Please enter your name');
-      return;
-    }
+    if (!requireName()) return;
     if (!joinCodeInput.trim()) {
       setJoinError('Please enter a room code');
       return;
@@ -397,10 +411,7 @@ export const MultiplayerLobbyScreen: React.FC<MultiplayerLobbyScreenProps> = ({
 
   const handleQuickMatch = async () => {
     logger.log('[Lobby] handleQuickMatch called');
-    if (!playerName.trim()) {
-      alert('Please enter your name');
-      return;
-    }
+    if (!requireName()) return;
     dispatch({ type: 'START_SEARCH', operation: quickMatchOperation });
     try {
       const result = await quickMatch(playerId, playerName, quickMatchOperation);
@@ -497,10 +508,7 @@ export const MultiplayerLobbyScreen: React.FC<MultiplayerLobbyScreenProps> = ({
   };
 
   const handleStartAIGame = async () => {
-    if (!playerName.trim()) {
-      alert('Please enter your name');
-      return;
-    }
+    if (!requireName()) return;
     setIsStartingAIGame(true);
     try {
       const settings = aiState.advancedMode
@@ -632,14 +640,14 @@ export const MultiplayerLobbyScreen: React.FC<MultiplayerLobbyScreenProps> = ({
       toggleDarkMode={toggleDarkMode}
       onBack={() => navigate('/')}
       playerName={playerName}
-      onPlayerNameChange={setPlayerName}
+      onPlayerNameChange={handlePlayerNameChange}
+      nameError={nameError}
       activeTab={activeTab}
       onTabChange={setActiveTab}
     >
       {activeTab === 'create' && (
         <CreateRoomFlow
           isCreating={isCreating}
-          playerName={playerName}
           onCreate={handleCreateRoom}
         />
       )}
@@ -649,7 +657,6 @@ export const MultiplayerLobbyScreen: React.FC<MultiplayerLobbyScreenProps> = ({
           onJoinCodeChange={setJoinCodeInput}
           joinError={joinError}
           isJoining={isJoining}
-          playerName={playerName}
           onJoin={handleJoinRoom}
         />
       )}
@@ -657,7 +664,6 @@ export const MultiplayerLobbyScreen: React.FC<MultiplayerLobbyScreenProps> = ({
         <QuickMatchFlow
           operation={quickMatchOperation}
           onOperationChange={setQuickMatchOperation}
-          playerName={playerName}
           onSearch={handleQuickMatch}
         />
       )}
@@ -665,7 +671,6 @@ export const MultiplayerLobbyScreen: React.FC<MultiplayerLobbyScreenProps> = ({
         <AIModeFlow
           state={aiState}
           setState={setAiState}
-          playerName={playerName}
           isStartingAIGame={isStartingAIGame}
           onStart={handleStartAIGame}
         />

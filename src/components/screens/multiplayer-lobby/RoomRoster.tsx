@@ -23,7 +23,7 @@ export const ModeButton: React.FC<ModeButtonProps> = ({
     onClick={onClick}
     disabled={disabled}
     title={title}
-    className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+    className={`px-4 py-2 rounded-full font-display font-semibold transition-all ${
       active
         ? activeClass
         : disabled
@@ -43,25 +43,25 @@ interface RoomPlayerCardProps {
 /** Compact player tile used in the FFA roster. */
 export const RoomPlayerCard: React.FC<RoomPlayerCardProps> = ({ player, isMe }) => (
   <div
-    className={`p-4 rounded-xl border-2 ${
+    className={`p-4 rounded-2xl border-2 ${
       isMe
-        ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700'
+        ? 'bg-violet-50 dark:bg-violet-900/20 border-violet-300 dark:border-violet-600'
         : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700'
     }`}
   >
     <div className='flex items-center gap-2'>
       <div
         className={`w-3 h-3 rounded-full ${
-          player.connected ? 'bg-green-500' : 'bg-red-500'
+          player.connected ? 'bg-emerald-500' : 'bg-rose-500'
         }`}
       />
-      <span className='font-semibold text-slate-800 dark:text-white'>
+      <span className='font-display font-semibold text-slate-800 dark:text-white'>
         {player.name}
         {isMe && ' (You)'}
       </span>
     </div>
     {player.isHost && (
-      <span className='text-xs text-blue-600 dark:text-blue-400 font-medium'>Host</span>
+      <span className='text-xs text-violet-600 dark:text-violet-400 font-semibold'>Host</span>
     )}
   </div>
 );
@@ -102,8 +102,8 @@ export const TeamSection: React.FC<TeamSectionProps> = ({
       : 'bg-red-100 dark:bg-red-800/30 border-red-400 dark:border-red-600';
 
   return (
-    <div className={`rounded-xl p-4 border-2 ${bg}`}>
-      <h3 className={`text-md font-bold mb-3 flex items-center gap-2 ${headerColor}`}>
+    <div className={`rounded-2xl p-4 border-2 ${bg}`}>
+      <h3 className={`font-display text-md font-bold mb-3 flex items-center gap-2 ${headerColor}`}>
         {label}
       </h3>
       <div className='grid grid-cols-2 gap-3'>
@@ -119,17 +119,17 @@ export const TeamSection: React.FC<TeamSectionProps> = ({
             <div className='flex items-center gap-2'>
               <div
                 className={`w-3 h-3 rounded-full ${
-                  player.connected ? 'bg-green-500' : 'bg-red-500'
+                  player.connected ? 'bg-emerald-500' : 'bg-rose-500'
                 }`}
               />
-              <span className='font-semibold text-slate-800 dark:text-white text-sm truncate'>
+              <span className='font-display font-semibold text-slate-800 dark:text-white text-sm truncate'>
                 {player.name}
                 {player.id === playerId && ' (You)'}
               </span>
             </div>
             <div className='flex justify-between items-center mt-1'>
               {player.isHost && (
-                <span className='text-xs text-blue-600 dark:text-blue-400 font-medium'>
+                <span className='text-xs text-violet-600 dark:text-violet-400 font-semibold'>
                   Host
                 </span>
               )}

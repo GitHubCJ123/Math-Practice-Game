@@ -9,13 +9,13 @@ const StatCard: React.FC<{
   value: string | React.ReactNode;
   footer: string;
 }> = ({ icon, title, value, footer }) => (
-  <div className="flex flex-col justify-between p-4 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700">
+  <div className="flex flex-col justify-between p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700">
     <div>
       <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400">
         {icon}
-        <h4 className="font-semibold">{title}</h4>
+        <h4 className="font-display font-semibold">{title}</h4>
       </div>
-      <p className="text-3xl font-bold text-slate-800 dark:text-slate-100 my-2">{value}</p>
+      <p className="font-display text-3xl font-bold text-slate-800 dark:text-slate-100 my-2">{value}</p>
     </div>
     <p className="text-sm text-slate-500 dark:text-slate-400">{footer}</p>
   </div>
@@ -82,7 +82,7 @@ export const StatisticsDisplay: React.FC = () => {
     return (
       <div key={operation}>
         <div className="flex justify-between items-center mb-3">
-          <h3 className="text-lg font-bold text-slate-700 dark:text-slate-200 capitalize">{operation}</h3>
+          <h3 className="font-display text-lg font-bold text-slate-700 dark:text-slate-200 capitalize">{operation}</h3>
           <button
             onClick={handleClearClick}
             aria-label={isConfirming ? `Confirm clearing ${operation} progress` : `Clear ${operation} progress`}
@@ -116,7 +116,7 @@ export const StatisticsDisplay: React.FC = () => {
               topNumbers.length > 0 ? (
                 <div className="flex gap-2">
                   {topNumbers.map(num => (
-                    <span key={num} className="flex items-center justify-center h-10 w-10 bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300 rounded-full font-bold text-xl">
+                    <span key={num} className="flex items-center justify-center h-10 w-10 bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300 rounded-full font-display font-bold text-xl">
                       {num}
                     </span>
                   ))}
@@ -135,8 +135,8 @@ export const StatisticsDisplay: React.FC = () => {
   if (!stats || Object.keys(stats).length === 0) return null;
 
   return (
-    <div className="mt-6 p-6 bg-slate-100 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700 animate-fade-in">
-      <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-4 text-center">📊 Your Progress</h2>
+    <div className="mt-6 p-6 bg-slate-50 dark:bg-slate-800/40 rounded-3xl border border-slate-200 dark:border-slate-700/60 animate-fade-in">
+      <h2 className="font-display text-xl font-bold text-slate-800 dark:text-slate-100 mb-4 text-center">📊 Your Progress</h2>
       <div className="space-y-6">
         {Object.entries(stats).map(([op, data]) => renderStatSection(op as Operation, data as QuizStats))}
       </div>

@@ -139,11 +139,11 @@ export const HallOfFameDisplay: React.FC = () => {
           {ALL_OPERATIONS.map(op => {
             const champion = monthlyChampions[op];
             return (
-              <div key={op} className="p-4 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700 text-center">
-                <h4 className="font-bold text-blue-600 dark:text-blue-400 capitalize">{getOperationDisplayName(op)}</h4>
+              <div key={op} className="p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 text-center">
+                <h4 className="font-display font-bold text-violet-600 dark:text-violet-400 capitalize">{getOperationDisplayName(op)}</h4>
                 {champion ? (
                   <>
-                    <p className="text-lg font-semibold text-slate-800 dark:text-slate-100">{champion.playerName}</p>
+                    <p className="font-display text-lg font-semibold text-slate-800 dark:text-slate-100">{champion.playerName}</p>
                     <p className="text-sm text-slate-500 dark:text-slate-400">{(champion.score / 1000).toFixed(3)}s</p>
                   </>
                 ) : (

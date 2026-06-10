@@ -7,9 +7,9 @@ interface ToastProps {
 }
 
 const toneClasses: Record<ToastMessage['tone'], string> = {
-  error: 'bg-red-600 text-white',
-  info: 'bg-blue-600 text-white',
-  success: 'bg-green-600 text-white',
+  error: 'from-rose-500 to-red-600',
+  info: 'from-violet-500 to-indigo-600',
+  success: 'from-emerald-500 to-teal-600',
 };
 
 export const Toast: React.FC<ToastProps> = ({ toast, onDismiss }) => {
@@ -18,10 +18,10 @@ export const Toast: React.FC<ToastProps> = ({ toast, onDismiss }) => {
     <div
       role="alert"
       aria-live="assertive"
-      className={`fixed top-4 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-xl shadow-lg ${toneClasses[toast.tone]}`}
+      className={`fixed top-4 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-2xl shadow-xl text-white bg-gradient-to-r ${toneClasses[toast.tone]} animate-bounce-in`}
     >
       <div className="flex items-center gap-3">
-        <span className="font-semibold">{toast.message}</span>
+        <span className="font-display font-semibold">{toast.message}</span>
         {onDismiss && (
           <button
             onClick={onDismiss}

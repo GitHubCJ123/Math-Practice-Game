@@ -63,7 +63,7 @@ export const ReadyScreen: React.FC<ReadyScreenProps> = ({
       >
         <div className='text-center mb-6'>
           <div className='text-6xl mb-4'>😔</div>
-          <h1 className='text-2xl md:text-3xl font-bold text-slate-800 dark:text-white mb-2'>
+          <h1 className='font-display text-2xl md:text-3xl font-bold text-slate-800 dark:text-white mb-2'>
             Opponent Left
           </h1>
           <p className='text-slate-500 dark:text-slate-400'>
@@ -73,13 +73,13 @@ export const ReadyScreen: React.FC<ReadyScreenProps> = ({
         <div className='flex flex-col gap-4'>
           <button
             onClick={onContinueMatchmaking}
-            className='w-full py-4 rounded-xl text-xl font-bold bg-purple-600 text-white hover:bg-purple-700 transition-all transform hover:scale-[1.02]'
+            className='btn3d btn3d--fuchsia w-full py-4 text-xl'
           >
             Continue Matchmaking
           </button>
           <button
             onClick={onLeave}
-            className='w-full py-3 rounded-xl text-lg font-semibold bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors'
+            className='btn3d btn3d--neutral w-full py-3 text-lg'
           >
             Back to Menu
           </button>
@@ -98,12 +98,12 @@ export const ReadyScreen: React.FC<ReadyScreenProps> = ({
       onLeave={onLeave}
       backLabel={backLabel}
     >
-      <h1 className='text-2xl md:text-3xl font-bold text-center text-slate-800 dark:text-white mb-2'>
+      <h1 className='font-display text-2xl md:text-3xl font-bold text-center text-slate-800 dark:text-white mb-2'>
         {heading}
       </h1>
       <p className='text-center text-slate-500 dark:text-slate-400 mb-2'>{summary}</p>
       {isTeams && (
-        <p className='text-center text-purple-600 dark:text-purple-400 text-sm font-semibold mb-4'>
+        <p className='text-center text-violet-600 dark:text-violet-400 text-sm font-semibold mb-4'>
           🏆 Team Mode
         </p>
       )}
@@ -167,10 +167,8 @@ export const ReadyScreen: React.FC<ReadyScreenProps> = ({
 
       <button
         onClick={onToggleReady}
-        className={`w-full py-4 rounded-xl text-xl font-bold transition-all transform hover:scale-[1.02] ${
-          myReady
-            ? 'bg-yellow-500 text-white hover:bg-yellow-600'
-            : 'bg-green-600 text-white hover:bg-green-700'
+        className={`btn3d w-full py-4 text-xl ${
+          myReady ? 'btn3d--gold' : 'btn3d--success'
         }`}
       >
         {myReady ? 'Cancel Ready' : "I'm Ready!"}
@@ -182,7 +180,7 @@ export const ReadyScreen: React.FC<ReadyScreenProps> = ({
         </p>
       )}
       {myReady && allOthersReady && (
-        <p className='text-center text-green-600 dark:text-green-400 mt-4 font-semibold animate-pulse'>
+        <p className='text-center text-emerald-600 dark:text-emerald-400 mt-4 font-semibold animate-pulse'>
           Starting game...
         </p>
       )}
@@ -206,7 +204,7 @@ const Shell: React.FC<ShellProps> = ({
   children,
 }) => {
   return (
-    <div className='min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-8 transition-colors duration-300'>
+    <div className='w-full p-2 md:p-4 transition-colors duration-300'>
       <div className='max-w-2xl mx-auto'>
         <LobbyHeader
           isDarkMode={isDarkMode}
@@ -214,7 +212,7 @@ const Shell: React.FC<ShellProps> = ({
           backLabel={backLabel}
           onBack={onLeave}
         />
-        <div className='bg-white dark:bg-slate-900 rounded-3xl shadow-xl border border-slate-200 dark:border-slate-800 p-6 md:p-8'>
+        <div className='game-panel p-6 md:p-8 animate-fade-in'>
           {children}
         </div>
       </div>
@@ -235,7 +233,7 @@ const PlayerCard: React.FC<PlayerCardProps> = ({ name, label, ready, large }) =>
       large ? 'p-4 rounded-2xl' : 'p-3 rounded-xl'
     } border-2 text-center transition-all ${
       ready
-        ? 'bg-green-50 dark:bg-green-900/20 border-green-400 dark:border-green-600'
+        ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-400 dark:border-emerald-600'
         : 'bg-slate-50 dark:bg-slate-800 border-slate-300 dark:border-slate-600'
     }`}
   >
@@ -243,7 +241,7 @@ const PlayerCard: React.FC<PlayerCardProps> = ({ name, label, ready, large }) =>
       {ready ? '✅' : '⏳'}
     </div>
     <h3
-      className={`font-bold text-slate-800 dark:text-white ${
+      className={`font-display font-bold text-slate-800 dark:text-white ${
         large ? 'mb-1' : 'text-sm'
       } truncate`}
     >
@@ -252,7 +250,7 @@ const PlayerCard: React.FC<PlayerCardProps> = ({ name, label, ready, large }) =>
     <p className='text-xs text-slate-500 dark:text-slate-400'>{label}</p>
     <p
       className={`text-xs font-semibold mt-1 ${
-        ready ? 'text-green-600 dark:text-green-400' : 'text-slate-400'
+        ready ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'
       }`}
     >
       {ready ? 'READY' : 'Not Ready'}

@@ -14,7 +14,6 @@ export interface AIModeFlowState {
 interface AIModeFlowProps {
   state: AIModeFlowState;
   setState: React.Dispatch<React.SetStateAction<AIModeFlowState>>;
-  playerName: string;
   isStartingAIGame: boolean;
   onStart: () => void;
 }
@@ -35,7 +34,6 @@ const TIME_LIMIT_OPTIONS: Array<{ label: string; value: number }> = [
 export const AIModeFlow: React.FC<AIModeFlowProps> = ({
   state,
   setState,
-  playerName,
   isStartingAIGame,
   onStart,
 }) => {
@@ -52,7 +50,7 @@ export const AIModeFlow: React.FC<AIModeFlowProps> = ({
     setState(prev => ({ ...prev, ...patch }));
 
   const availableNumbers = getNumbersForOperation(operation);
-  const disabled = !playerName.trim() || isStartingAIGame;
+  const disabled = isStartingAIGame;
 
   return (
     <div>
@@ -61,7 +59,7 @@ export const AIModeFlow: React.FC<AIModeFlowProps> = ({
       </p>
 
       <div className='mb-6'>
-        <label className='block text-sm font-medium text-slate-600 dark:text-slate-400 mb-3'>
+        <label className='block text-sm font-display font-semibold text-slate-600 dark:text-slate-400 mb-3'>
           AI Difficulty
         </label>
         <div className='grid grid-cols-2 gap-3'>
@@ -69,15 +67,15 @@ export const AIModeFlow: React.FC<AIModeFlowProps> = ({
             <button
               key={diff}
               onClick={() => update({ difficulty: diff })}
-              className={`p-4 rounded-xl border-2 text-left transition-all ${
+              className={`p-4 rounded-2xl border-2 text-left transition-all ${
                 difficulty === diff
-                  ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
-                  : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:border-slate-300 dark:hover:border-slate-600'
+                  ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20 shadow-md shadow-emerald-500/10'
+                  : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:border-violet-300 dark:hover:border-violet-600'
               }`}
             >
               <div className='flex items-center gap-2 mb-1'>
                 <span className='text-xl'>{aiDifficultyLabels[diff].emoji}</span>
-                <span className='font-bold text-slate-800 dark:text-white'>
+                <span className='font-display font-bold text-slate-800 dark:text-white'>
                   {aiDifficultyLabels[diff].name}
                 </span>
               </div>
@@ -90,7 +88,7 @@ export const AIModeFlow: React.FC<AIModeFlowProps> = ({
       </div>
 
       <div className='mb-6'>
-        <label className='block text-sm font-medium text-slate-600 dark:text-slate-400 mb-2'>
+        <label className='block text-sm font-display font-semibold text-slate-600 dark:text-slate-400 mb-2'>
           Operation
         </label>
         <div className='grid grid-cols-2 md:grid-cols-3 gap-2'>
@@ -100,11 +98,7 @@ export const AIModeFlow: React.FC<AIModeFlowProps> = ({
               onClick={() =>
                 update({ operation: op, selectedNumbers: getNumbersForOperation(op) })
               }
-              className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                operation === op
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
-              }`}
+              className={`seg px-3 py-2 text-sm ${operation === op ? 'seg--active' : ''}`}
             >
               {operationLabels[op]}
             </button>
@@ -115,16 +109,16 @@ export const AIModeFlow: React.FC<AIModeFlowProps> = ({
       <div className='mb-4'>
         <button
           onClick={() => update({ advancedMode: !advancedMode })}
-          className='text-sm text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1'
+          className='text-sm font-semibold text-violet-600 dark:text-violet-400 hover:underline flex items-center gap-1'
         >
           {advancedMode ? '▼ Hide Advanced Settings' : '▶ Show Advanced Settings'}
         </button>
       </div>
 
       {advancedMode && (
-        <div className='bg-slate-50 dark:bg-slate-800 rounded-xl p-4 mb-6 space-y-4'>
+        <div className='bg-slate-50 dark:bg-slate-800 rounded-2xl p-4 mb-6 space-y-4 border border-slate-200 dark:border-slate-700'>
           <div>
-            <label className='block text-sm font-medium text-slate-600 dark:text-slate-400 mb-2'>
+            <label className='block text-sm font-display font-semibold text-slate-600 dark:text-slate-400 mb-2'>
               Number of Questions: {questionCount}
             </label>
             <input
@@ -133,12 +127,12 @@ export const AIModeFlow: React.FC<AIModeFlowProps> = ({
               max='30'
               value={questionCount}
               onChange={e => update({ questionCount: parseInt(e.target.value, 10) })}
-              className='w-full'
+              className='range-fun w-full'
             />
           </div>
 
           <div>
-            <label className='block text-sm font-medium text-slate-600 dark:text-slate-400 mb-2'>
+            <label className='block text-sm font-display font-semibold text-slate-600 dark:text-slate-400 mb-2'>
               Time Limit
             </label>
             <div className='flex flex-wrap gap-2'>
@@ -146,11 +140,7 @@ export const AIModeFlow: React.FC<AIModeFlowProps> = ({
                 <button
                   key={opt.value}
                   onClick={() => update({ timeLimit: opt.value })}
-                  className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                    timeLimit === opt.value
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-600'
-                  }`}
+                  className={`seg px-4 py-2 ${timeLimit === opt.value ? 'seg--active' : ''}`}
                 >
                   {opt.label}
                 </button>
@@ -160,13 +150,13 @@ export const AIModeFlow: React.FC<AIModeFlowProps> = ({
 
           <div>
             <div className='flex items-center justify-between mb-2'>
-              <label className='text-sm font-medium text-slate-600 dark:text-slate-400'>
+              <label className='text-sm font-display font-semibold text-slate-600 dark:text-slate-400'>
                 Numbers
               </label>
               <div className='flex gap-2'>
                 <button
                   onClick={() => update({ selectedNumbers: availableNumbers })}
-                  className='text-xs text-blue-600 dark:text-blue-400 hover:underline'
+                  className='text-xs font-semibold text-violet-600 dark:text-violet-400 hover:underline'
                 >
                   Select All
                 </button>
@@ -188,11 +178,7 @@ export const AIModeFlow: React.FC<AIModeFlowProps> = ({
                       : [...selectedNumbers, num];
                     if (next.length > 0) update({ selectedNumbers: next });
                   }}
-                  className={`w-10 h-10 rounded-lg font-semibold transition-colors ${
-                    selectedNumbers.includes(num)
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-600'
-                  }`}
+                  className={`tile w-10 h-10 ${selectedNumbers.includes(num) ? 'tile--active' : ''}`}
                 >
                   {num}
                 </button>
@@ -211,11 +197,7 @@ export const AIModeFlow: React.FC<AIModeFlowProps> = ({
       <button
         onClick={onStart}
         disabled={disabled}
-        className={`w-full py-4 rounded-xl text-lg font-bold transition-colors ${
-          disabled
-            ? 'bg-slate-300 dark:bg-slate-700 text-slate-500 cursor-not-allowed'
-            : 'bg-green-600 text-white hover:bg-green-700'
-        }`}
+        className='btn3d btn3d--success w-full py-4 text-lg'
       >
         {isStartingAIGame
           ? 'Starting...'
