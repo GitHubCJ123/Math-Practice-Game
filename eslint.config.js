@@ -58,11 +58,20 @@ export default [
       ...toWarnings(tseslint.configs.recommended.at(-1)?.rules),
       ...toWarnings(reactPlugin.configs.recommended.rules),
       ...toWarnings(reactHooks.configs.recommended.rules),
-      'no-console': ['warn', { allow: ['warn', 'error'] }],
+      'no-console': ['error', { allow: ['warn', 'error'] }],
       'no-unused-vars': 'off',
       '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
       'react/react-in-jsx-scope': 'off',
       'react/jsx-uses-react': 'off',
+    },
+  },
+  {
+    // Designated logging boundaries: the client/server logger wrappers and the
+    // dev-only API entrypoint are allowed to call console directly. Everywhere
+    // else `no-console` is an error, so stray debug logs fail the lint step.
+    files: ['src/lib/logger.ts', 'lib/api/logger.ts', 'server-dev.ts'],
+    rules: {
+      'no-console': 'off',
     },
   },
   {

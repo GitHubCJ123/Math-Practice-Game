@@ -9,7 +9,7 @@
     "start": "concurrently --kill-others --raw --names \"web,api\" -c \"cyan,magenta\" \"vite\" \"tsx watch server-dev.ts\"",
     "dev:test": "cross-env VITE_NODE_ENV=test vite",
     "build": "vite build",
-    "lint": "eslint api lib shared src server-dev.ts vite.config.ts eslint.config.js --quiet",
+    "lint": "eslint api lib shared src server-dev.ts vite.config.ts eslint.config.js",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
