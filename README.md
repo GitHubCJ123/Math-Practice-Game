@@ -70,7 +70,7 @@ Pick exactly what you want to drill — the question engine handles the rest.
 - **Optional time limit** — 30s / 1m / 2m / 5m / a custom `MM:SS` / or no limit.
 - **A genuinely fair timer** — wall-clock based (`performance.now()`), unit-tested against timer drift.
 - **AI-generated explanations** — get a friendly, worked walkthrough of any answer you missed.
-- **Local stats & high scores** — per-operation accuracy, average time, and most-practiced numbers, saved in your browser.
+- **Local progress & personal bests** — an expandable per-operation panel of accuracy, average time, most-practiced numbers, and your best score, saved in your browser.
 - **Anti-cheat** — switching or hiding the tab mid-quiz auto-submits your run.
 
 ### 🌐 Multiplayer (2–4 players)
@@ -168,7 +168,7 @@ flowchart TD
 │  ├─ components/
 │  │  ├─ screens/              # Selection, Quiz, Results (solo + multiplayer)
 │  │  │  └─ multiplayer-lobby/ # Lobby home, create/join/quick-match/AI flows
-│  │  ├─ leaderboard/          # Global leaderboard, Hall of Fame, stats, high scores
+│  │  ├─ leaderboard/          # Global leaderboard, Hall of Fame, progress & personal bests
 │  │  └─ ui/                   # Buttons, icons, toast, feedback, ad card
 │  ├─ contexts/                # ThemeContext, MultiplayerContext
 │  ├─ hooks/                   # useQuizTimer, usePusherChannel, useTheme, …

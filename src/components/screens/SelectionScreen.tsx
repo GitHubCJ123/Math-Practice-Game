@@ -20,7 +20,6 @@ import { playClickSound } from '../../lib/audio';
 import { StatisticsDisplay } from '../leaderboard/StatisticsDisplay';
 import { GlobalLeaderboard } from '../leaderboard/GlobalLeaderboard';
 import { HallOfFameDisplay } from '../leaderboard/HallOfFameDisplay';
-import { HighScoresDisplay } from '../leaderboard/HighScoresDisplay';
 import { ALL_OPERATIONS } from '../../lib/operations';
 
 interface SelectionScreenProps {
@@ -55,16 +54,24 @@ const Section: React.FC<{ title: string; step: number; children: React.ReactNode
   </div>
 );
 
+const ConversionGlyph: React.FC<{ from: string; to: string }> = ({ from, to }) => (
+  <span className="flex items-center gap-0.5 text-xs font-bold leading-none">
+    <span>{from}</span>
+    <span className="opacity-80">→</span>
+    <span>{to}</span>
+  </span>
+);
+
 const operationCards: { op: Operation; label: string; glyph: React.ReactNode; tint: string }[] = [
   { op: 'multiplication', label: 'Multiplication', glyph: '×', tint: 'from-violet-500 to-purple-600' },
   { op: 'division', label: 'Division', glyph: '÷', tint: 'from-sky-500 to-blue-600' },
-  { op: 'squares', label: 'Squares', glyph: <>x<sup>2</sup></>, tint: 'from-emerald-500 to-teal-600' },
+  { op: 'squares', label: 'Squares', glyph: <span className="leading-none">x<sup className="text-[0.6em]">2</sup></span>, tint: 'from-emerald-500 to-teal-600' },
   { op: 'square-roots', label: 'Square Roots', glyph: '√', tint: 'from-amber-500 to-orange-600' },
-  { op: 'fraction-to-decimal', label: 'Fraction → Decimal', glyph: '½', tint: 'from-fuchsia-500 to-pink-600' },
-  { op: 'decimal-to-fraction', label: 'Decimal → Fraction', glyph: '.5', tint: 'from-pink-500 to-rose-600' },
-  { op: 'fraction-to-percent', label: 'Fraction → Percent', glyph: '%', tint: 'from-cyan-500 to-sky-600' },
-  { op: 'percent-to-fraction', label: 'Percent → Fraction', glyph: '%', tint: 'from-indigo-500 to-violet-600' },
-  { op: 'negative-numbers', label: 'Negative Numbers', glyph: '±', tint: 'from-rose-500 to-red-600' },
+  { op: 'fraction-to-decimal', label: 'Fraction → Decimal', glyph: <ConversionGlyph from="½" to=".5" />, tint: 'from-fuchsia-500 to-pink-600' },
+  { op: 'decimal-to-fraction', label: 'Decimal → Fraction', glyph: <ConversionGlyph from=".5" to="½" />, tint: 'from-pink-500 to-rose-600' },
+  { op: 'fraction-to-percent', label: 'Fraction → Percent', glyph: <ConversionGlyph from="½" to="%" />, tint: 'from-cyan-500 to-sky-600' },
+  { op: 'percent-to-fraction', label: 'Percent → Fraction', glyph: <ConversionGlyph from="%" to="½" />, tint: 'from-indigo-500 to-violet-600' },
+  { op: 'negative-numbers', label: 'Negative Numbers', glyph: <span className="text-xl font-bold leading-none">+/−</span>, tint: 'from-rose-500 to-red-600' },
 ];
 
 const SELECTIONS_BY_OP_KEY = 'mathSelectionsByOp';
@@ -427,8 +434,8 @@ export const SelectionScreen: React.FC<SelectionScreenProps> = ({ onStartQuiz, i
           Start Quiz
         </button>
       </div>
-      <div className="mt-10 border-t border-slate-200 dark:border-slate-800 pt-6 flex justify-center">
-        <button onClick={() => setShowStats(prev => !prev)} className="btn3d btn3d--neutral px-6 py-2.5 text-sm">
+      <div className="mt-6 flex justify-center">
+        <button onClick={() => setShowStats(prev => !prev)} aria-expanded={showStats} className="btn3d btn3d--neutral px-5 py-2 text-sm">
           <ChartBarIcon className="w-5 h-5" />
           {showStats ? 'Hide Progress' : 'View Progress'}
         </button>
@@ -437,7 +444,6 @@ export const SelectionScreen: React.FC<SelectionScreenProps> = ({ onStartQuiz, i
       {showStats && <StatisticsDisplay />}
       <GlobalLeaderboard />
       <HallOfFameDisplay />
-      <HighScoresDisplay />
     </div>
   );
 };
