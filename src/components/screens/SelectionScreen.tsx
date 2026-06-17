@@ -55,7 +55,7 @@ const Section: React.FC<{ title: string; step: number; children: React.ReactNode
 );
 
 const ConversionGlyph: React.FC<{ from: string; to: string }> = ({ from, to }) => (
-  <span className="flex items-center gap-0.5 text-xs font-bold leading-none">
+  <span className="flex items-center gap-0.5 text-sm font-bold leading-none">
     <span>{from}</span>
     <span className="opacity-80">→</span>
     <span>{to}</span>
@@ -257,7 +257,7 @@ export const SelectionScreen: React.FC<SelectionScreenProps> = ({ onStartQuiz, i
                 className={`opcard flex flex-col items-center justify-center gap-2 p-3 text-center min-h-[104px] ${operation === op ? 'opcard--active' : ''}`}
               >
                 <span
-                  className={`grid place-items-center w-12 h-12 shrink-0 rounded-2xl bg-gradient-to-br ${tint} text-white font-display font-bold text-2xl shadow-md`}
+                  className={`grid place-items-center w-14 h-14 shrink-0 rounded-2xl bg-gradient-to-br ${tint} text-white font-display font-bold text-3xl shadow-md`}
                 >
                   {glyph}
                 </span>
