@@ -14,6 +14,7 @@ import { DEFAULT_QUESTION_COUNT } from '@shared/types';
 import { SelectionScreen } from './components/screens/SelectionScreen';
 import { QuizScreen } from './components/screens/QuizScreen';
 import { ResultsScreen } from './components/screens/ResultsScreen';
+import { AdminScreen } from './components/screens/AdminScreen';
 import { MultiplayerLobbyScreen } from './components/screens/multiplayer-lobby';
 import { MultiplayerQuizScreen } from './components/screens/MultiplayerQuizScreen';
 import { MultiplayerResultsScreen } from './components/screens/MultiplayerResultsScreen';
@@ -25,6 +26,9 @@ import { trackPageView } from './lib/ga';
 import { generateQuestions } from '@shared/questions';
 import { ThemeProvider, useThemeContext } from './contexts/ThemeContext';
 import { MultiplayerProvider, useMultiplayerContext } from './contexts/MultiplayerContext';
+import { AdminProvider } from './contexts/AdminContext';
+import { AdminPanel } from './components/ui/AdminPanel';
+import { GlobalBroadcastBanner } from './components/ui/GlobalBroadcastBanner';
 
 interface QuizSettings {
   operation: Operation;
@@ -37,10 +41,12 @@ const App: React.FC = () => {
   return (
     <ThemeProvider>
       <MultiplayerProvider>
-        <BrowserRouter>
-          <RouteChangeTracker />
-          <AppShell />
-        </BrowserRouter>
+        <AdminProvider>
+          <BrowserRouter>
+            <RouteChangeTracker />
+            <AppShell />
+          </BrowserRouter>
+        </AdminProvider>
       </MultiplayerProvider>
     </ThemeProvider>
   );
@@ -128,12 +134,14 @@ const AppShell: React.FC = () => {
           <Route path="/join/:roomCode" element={<MultiplayerLobbyRoute />} />
           <Route path="/multiplayer/quiz" element={<MultiplayerQuizRoute />} />
           <Route path="/multiplayer/results" element={<MultiplayerResultsRoute />} />
+          <Route path="/admin" element={<AdminRoute />} />
         </Routes>
       </main>
 
       <Analytics />
       <SpeedInsights />
       <FeedbackButtonConditional />
+      <GlobalBroadcastBanner />
     </div>
   );
 };
@@ -204,11 +212,13 @@ const SelectionScreenWrapper: React.FC<{
         isDarkMode={isDarkMode}
         toggleDarkMode={toggleDarkMode}
       />
-      <div className="absolute right-0 top-8 hidden 2xl:flex 2xl:items-center 2xl:justify-center" style={{ width: 'calc((100vw - 896px) / 2)' }}>
+      <div className="absolute right-0 top-8 hidden 2xl:flex 2xl:flex-col 2xl:items-center 2xl:gap-6" style={{ width: 'calc((100vw - 896px) / 2)' }}>
         <MathDashAd />
+        <AdminPanel />
       </div>
-      <div className="block 2xl:hidden mt-12 mb-8 w-full flex justify-center px-4">
+      <div className="block 2xl:hidden mt-12 mb-8 w-full flex flex-col items-center gap-8 px-4">
         <MathDashAd />
+        <AdminPanel />
       </div>
     </div>
   );
@@ -262,6 +272,11 @@ const ResultsScreenWrapper: React.FC<{
       quizSettings={quizSettings}
     />
   );
+};
+
+const AdminRoute: React.FC = () => {
+  const { isDarkMode, toggleDarkMode } = useThemeContext();
+  return <AdminScreen isDarkMode={isDarkMode} toggleDarkMode={toggleDarkMode} />;
 };
 
 const MultiplayerLobbyRoute: React.FC = () => {

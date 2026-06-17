@@ -92,6 +92,11 @@ export const FeedbackSchema = z.object({
   message: z.string().trim().min(1).max(2000),
 });
 
+export const BroadcastSchema = z.object({
+  code: z.string().min(1),
+  message: z.string().trim().min(1).max(280),
+});
+
 const CreateRoomActionSchema = z.object({ action: z.literal("create-room"), playerId: id, playerName: requiredString });
 const JoinRoomActionSchema = z.object({ action: z.literal("join-room"), roomCode: id, playerId: id, playerName: requiredString });
 const LeaveRoomActionSchema = z.object({ action: z.literal("leave-room"), roomId: id, playerId: id, playerName: requiredString.optional() });

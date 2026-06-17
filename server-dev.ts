@@ -7,6 +7,7 @@ import dotenv from 'dotenv';
 
 import submitScore from './api/submit-score.js';
 import submitFeedback from './api/submit-feedback.js';
+import broadcast from './api/broadcast.js';
 import pusherAuth from './api/pusher-auth.js';
 import multiplayer from './api/multiplayer.js';
 import getLeaderboard from './api/get-leaderboard.js';
@@ -50,6 +51,7 @@ app.get('/health', (_req, res) => {
 const routes: Array<[string, Handler]> = [
     ['submit-score', submitScore as unknown as Handler],
     ['submit-feedback', submitFeedback as unknown as Handler],
+    ['broadcast', broadcast as unknown as Handler],
     ['pusher-auth', pusherAuth as unknown as Handler],
     ['multiplayer', multiplayer as unknown as Handler],
     ['get-leaderboard', getLeaderboard as unknown as Handler],

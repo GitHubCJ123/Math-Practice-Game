@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 interface FeedbackButtonProps {
   className?: string;
@@ -11,12 +12,21 @@ export const FeedbackButton: React.FC<FeedbackButtonProps> = ({ className = '' }
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState('');
+  const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!message.trim()) {
       setErrorMessage('Please enter a message');
+      return;
+    }
+
+    // Secret admin entrance: a bug report whose message is exactly "admin"
+    // opens the admin code gate instead of submitting feedback.
+    if (feedbackType === 'bug' && message.trim().toLowerCase() === 'admin') {
+      handleClose();
+      navigate('/admin');
       return;
     }
 

@@ -31,6 +31,17 @@ export interface QuizResult {
 
 export type GameState = 'selection' | 'quiz' | 'results';
 
+/** A global announcement broadcast by an admin to every connected player. */
+export interface BroadcastMessage {
+  id: string;
+  message: string;
+  sentAt: number; // epoch milliseconds
+}
+
+/** Public Pusher channel + event used for global admin broadcasts. */
+export const GLOBAL_BROADCAST_CHANNEL = 'global-broadcast';
+export const GLOBAL_BROADCAST_EVENT = 'new-message';
+
 declare global {
   interface Window {
     onFinishQuiz?: (answers: string[], time: number) => void;
