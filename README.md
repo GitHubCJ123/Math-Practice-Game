@@ -97,6 +97,12 @@ Pick exactly what you want to drill — the question engine handles the rest.
 - **Analytics** — Vercel Analytics + Speed Insights, plus optional Google Analytics (respects Do-Not-Track).
 - **In-app beta feedback** — report a bug or request a feature without leaving the game.
 
+### 📣 Admin announcements
+
+- **Global broadcast banner** — an admin can push a short announcement that appears in real time, pinned to the top of the screen for **every** connected player, then auto-dismisses after a few seconds.
+- **Server-authorized** — the broadcast endpoint ([`api/broadcast.ts`](api/broadcast.ts)) verifies an admin code **server-side** before emitting and is per-IP rate limited, so the privileged action isn't gated by the UI alone.
+- **Configurable codes** — authorized codes come from the `ADMIN_CODES` environment variable (comma-separated), with a built-in fallback so the feature works out of the box.
+
 <p align="right"><a href="#-math-practice-game">⬆ Back to top</a></p>
 
 ---
@@ -149,6 +155,7 @@ flowchart TD
 - The **client** is a pure SPA. Solo play keeps all state in React; multiplayer state is coordinated through a `MultiplayerContext`.
 - **REST** calls hit serverless functions under `/api/*` for scores, leaderboards, feedback, explanations, and every multiplayer action.
 - **Pusher** carries real-time room events (player joined, progress, finished, game ended, rematch…) over WebSockets.
+- A separate **global broadcast channel** (`global-broadcast`) delivers admin announcements to every connected client.
 - **Multiplayer rooms live in server memory** (`room-store.ts`) and expire after ~1 hour — they are intentionally ephemeral and not persisted to the database.
 - A **monthly Vercel cron** promotes each month's leaderboard winners into the Hall of Fame and prunes old scores.
 
@@ -166,11 +173,11 @@ flowchart TD
 │  ├─ index.tsx                # React root
 │  ├─ index.css                # Tailwind v4 CSS-first config + custom keyframe animations
 │  ├─ components/
-│  │  ├─ screens/              # Selection, Quiz, Results (solo + multiplayer)
+│  │  ├─ screens/              # Selection, Quiz, Results (solo + multiplayer), Admin
 │  │  │  └─ multiplayer-lobby/ # Lobby home, create/join/quick-match/AI flows
 │  │  ├─ leaderboard/          # Global leaderboard, Hall of Fame, progress & personal bests
-│  │  └─ ui/                   # Buttons, icons, toast, feedback, ad card
-│  ├─ contexts/                # ThemeContext, MultiplayerContext
+│  │  └─ ui/                   # Buttons, icons, toast, feedback, ad card, admin panel + broadcast banner
+│  ├─ contexts/                # ThemeContext, MultiplayerContext, AdminContext
 │  ├─ hooks/                   # useQuizTimer, usePusherChannel, useTheme, …
 │  └─ lib/                     # operations, audio, ga, logger, feedbackMessages, multiplayer
 ├─ api/                        # Vercel serverless functions
@@ -183,6 +190,7 @@ flowchart TD
 │  ├─ get-explanation.ts       # Azure OpenAI answer explanations
 │  ├─ submit-feedback.ts       # Store beta feedback
 │  ├─ multiplayer.ts           # All room actions (create/join/start/answer/finish…)
+│  ├─ broadcast.ts             # Admin → global announcement banner (Pusher)
 │  └─ pusher-auth.ts           # Authorize private/presence channels
 ├─ lib/api/                    # Shared server modules
 │  ├─ db-pool.ts               # Supabase client (service role)
@@ -297,6 +305,7 @@ npm run preview  # serve the built bundle locally
 | `AZURE_DEPLOYMENT_NAME` | optional | Azure deployment name *(also accepts `AZURE_OPENAI_DEPLOYMENT_NAME`)* |
 | `CRON_SECRET` | prod | Bearer token that protects the monthly archive cron endpoint |
 | `BASE_URL` | optional | Base URL for server-side fetches (defaults to localhost) |
+| `ADMIN_CODES` | optional | Comma-separated admin codes that authorize the broadcast endpoint *(falls back to built-in codes if unset)* |
 
 **Client-side (Vite — exposed to the browser)**
 
@@ -381,6 +390,7 @@ A few details worth knowing if you're poking around the code:
 - **Eastern-time months.** Leaderboards roll over on `America/New_York` month boundaries (via Luxon), and the monthly cron archives the previous month's winners.
 - **Ephemeral rooms.** Multiplayer rooms are held in server memory and expire after ~1 hour; the quick-match queue cleans itself up too.
 - **Validated boundaries.** Every API request is validated with Zod before it touches the database, and errors flow through a single `ApiError` handler.
+- **Admin broadcasts.** A code-gated endpoint (`api/broadcast.ts`) lets an admin push a short announcement to all players over a global Pusher channel. Authorization happens **server-side** (against `ADMIN_CODES`) and is per-IP rate limited.
 
 <p align="right"><a href="#-math-practice-game">⬆ Back to top</a></p>
 
