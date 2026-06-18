@@ -3,8 +3,12 @@ import { Link } from 'react-router-dom';
 import { useAdminContext } from '../../contexts/AdminContext';
 
 const MAX_BROADCAST_LENGTH = 280;
+const MAX_POLL_QUESTION_LENGTH = 200;
+const MAX_POLL_OPTION_LENGTH = 80;
+const MAX_POLL_OPTIONS = 6;
 
 type SendStatus = 'idle' | 'sending' | 'sent' | 'error';
+type PollStatus = 'idle' | 'starting' | 'live' | 'closing' | 'error';
 
 /**
  * Admin-only control surface rendered inline in the page, directly below the
@@ -21,6 +25,11 @@ export const AdminPanel: React.FC = () => {
   const [status, setStatus] = useState<SendStatus>('idle');
   const [errorMessage, setErrorMessage] = useState('');
   const [recent, setRecent] = useState<string[]>([]);
+  const [pollQuestion, setPollQuestion] = useState('');
+  const [pollOptions, setPollOptions] = useState<string[]>(['', '']);
+  const [pollStatus, setPollStatus] = useState<PollStatus>('idle');
+  const [activePollId, setActivePollId] = useState<string | null>(null);
+  const [pollError, setPollError] = useState('');
 
   if (!isAdmin) return null;
 
@@ -53,6 +62,70 @@ export const AdminPanel: React.FC = () => {
       setErrorMessage(error instanceof Error ? error.message : 'An error occurred');
     }
   };
+
+  const updatePollOption = (index: number, value: string) => {
+    setPollOptions((opts) => opts.map((o, i) => (i === index ? value : o)));
+  };
+  const addPollOption = () => {
+    setPollOptions((opts) => (opts.length >= MAX_POLL_OPTIONS ? opts : [...opts, '']));
+  };
+  const removePollOption = (index: number) => {
+    setPollOptions((opts) => (opts.length <= 2 ? opts : opts.filter((_, i) => i !== index)));
+  };
+
+  const handleStartPoll = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const question = pollQuestion.trim();
+    const options = pollOptions.map((o) => o.trim()).filter(Boolean);
+    if (!question || options.length < 2 || pollStatus === 'starting') return;
+
+    setPollStatus('starting');
+    setPollError('');
+    try {
+      const response = await fetch('/api/poll', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'start', code: adminCode, question, options }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to start poll');
+      }
+      setActivePollId(data.poll.id);
+      setPollStatus('live');
+    } catch (error) {
+      setPollStatus('error');
+      setPollError(error instanceof Error ? error.message : 'An error occurred');
+    }
+  };
+
+  const handleEndPoll = async () => {
+    if (!activePollId || pollStatus === 'closing') return;
+    setPollStatus('closing');
+    setPollError('');
+    try {
+      const response = await fetch('/api/poll', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'close', code: adminCode, pollId: activePollId }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to end poll');
+      }
+      setActivePollId(null);
+      setPollStatus('idle');
+      setPollQuestion('');
+      setPollOptions(['', '']);
+    } catch (error) {
+      setPollStatus('error');
+      setPollError(error instanceof Error ? error.message : 'An error occurred');
+    }
+  };
+
+  const canStartPoll =
+    pollQuestion.trim().length > 0 &&
+    pollOptions.filter((o) => o.trim()).length >= 2;
 
   return (
     <div className="w-full max-w-[400px] rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-xl overflow-hidden">
@@ -124,6 +197,96 @@ export const AdminPanel: React.FC = () => {
                   {status === 'sending' ? 'Broadcasting…' : 'Broadcast to everyone'}
                 </button>
               </form>
+            </section>
+
+            {/* Poll */}
+            <section className="border-t border-slate-200 dark:border-slate-700 pt-4">
+              <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200">Poll</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Ask a question and let every player vote in real time.
+              </p>
+
+              {activePollId ? (
+                <div className="mt-3 space-y-3">
+                  <div className="flex items-center gap-2 p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800">
+                    <span className="relative flex h-2.5 w-2.5">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
+                    </span>
+                    <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+                      Poll is live — results update on every screen.
+                    </p>
+                  </div>
+                  {pollError && (
+                    <p className="text-xs text-red-600 dark:text-red-400">{pollError}</p>
+                  )}
+                  <button
+                    onClick={handleEndPoll}
+                    disabled={pollStatus === 'closing'}
+                    className="btn3d btn3d--danger w-full px-4 py-2.5 text-sm"
+                  >
+                    {pollStatus === 'closing' ? 'Ending…' : 'End poll'}
+                  </button>
+                </div>
+              ) : (
+                <form onSubmit={handleStartPoll} className="mt-3 space-y-2">
+                  <input
+                    value={pollQuestion}
+                    onChange={(e) => setPollQuestion(e.target.value)}
+                    placeholder="Poll question…"
+                    maxLength={MAX_POLL_QUESTION_LENGTH}
+                    className="w-full px-3 py-2 text-sm border-2 border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-violet-500 transition bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500"
+                  />
+
+                  <div className="space-y-2">
+                    {pollOptions.map((option, index) => (
+                      <div key={index} className="flex items-center gap-2">
+                        <input
+                          value={option}
+                          onChange={(e) => updatePollOption(index, e.target.value)}
+                          placeholder={`Option ${index + 1}`}
+                          maxLength={MAX_POLL_OPTION_LENGTH}
+                          className="flex-1 px-3 py-2 text-sm border-2 border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-violet-500 transition bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500"
+                        />
+                        {pollOptions.length > 2 && (
+                          <button
+                            type="button"
+                            onClick={() => removePollOption(index)}
+                            aria-label={`Remove option ${index + 1}`}
+                            className="shrink-0 p-1.5 text-slate-400 hover:text-rose-500 transition-colors"
+                          >
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  {pollOptions.length < MAX_POLL_OPTIONS && (
+                    <button
+                      type="button"
+                      onClick={addPollOption}
+                      className="text-xs font-semibold text-violet-600 dark:text-violet-400 hover:underline"
+                    >
+                      + Add option
+                    </button>
+                  )}
+
+                  {pollError && (
+                    <p className="text-xs text-red-600 dark:text-red-400">{pollError}</p>
+                  )}
+
+                  <button
+                    type="submit"
+                    disabled={!canStartPoll || pollStatus === 'starting'}
+                    className="btn3d btn3d--primary w-full px-4 py-2.5 text-sm"
+                  >
+                    {pollStatus === 'starting' ? 'Starting…' : 'Start poll'}
+                  </button>
+                </form>
+              )}
             </section>
 
             {recent.length > 0 && (

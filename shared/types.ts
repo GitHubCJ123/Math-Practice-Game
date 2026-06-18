@@ -42,6 +42,44 @@ export interface BroadcastMessage {
 export const GLOBAL_BROADCAST_CHANNEL = 'global-broadcast';
 export const GLOBAL_BROADCAST_EVENT = 'new-message';
 
+/** A single selectable option within an admin poll. */
+export interface PollOption {
+  id: string;
+  text: string;
+}
+
+/** A live poll an admin pushes to every connected player to vote on. */
+export interface Poll {
+  id: string;
+  question: string;
+  options: PollOption[];
+  startedAt: number; // epoch milliseconds
+}
+
+/**
+ * Broadcast each time a vote is cast. Votes are relayed (not tallied on the
+ * server), so every connected client aggregates the same event stream into an
+ * identical live tally — avoiding per-instance serverless split-brain.
+ */
+export interface PollVote {
+  pollId: string;
+  optionId: string;
+}
+
+/** Broadcast when an admin closes a poll. */
+export interface PollClosed {
+  pollId: string;
+}
+
+/**
+ * Poll lifecycle events. They ride the SAME public channel as announcements
+ * (`GLOBAL_BROADCAST_CHANNEL`) but use distinct event names so the announcement
+ * banner and the poll widget subscribe independently.
+ */
+export const GLOBAL_POLL_STARTED_EVENT = 'poll-started';
+export const GLOBAL_POLL_VOTE_EVENT = 'poll-vote';
+export const GLOBAL_POLL_CLOSED_EVENT = 'poll-closed';
+
 declare global {
   interface Window {
     onFinishQuiz?: (answers: string[], time: number) => void;

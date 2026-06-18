@@ -97,6 +97,29 @@ export const BroadcastSchema = z.object({
   message: z.string().trim().min(1).max(280),
 });
 
+const PollStartActionSchema = z.object({
+  action: z.literal("start"),
+  code: z.string().min(1),
+  question: z.string().trim().min(1).max(200),
+  options: z.array(z.string().trim().min(1).max(80)).min(2).max(6),
+});
+const PollVoteActionSchema = z.object({
+  action: z.literal("vote"),
+  pollId: requiredString,
+  optionId: requiredString,
+});
+const PollCloseActionSchema = z.object({
+  action: z.literal("close"),
+  code: z.string().min(1),
+  pollId: requiredString,
+});
+
+export const PollActionSchema = z.discriminatedUnion("action", [
+  PollStartActionSchema,
+  PollVoteActionSchema,
+  PollCloseActionSchema,
+]);
+
 const CreateRoomActionSchema = z.object({ action: z.literal("create-room"), playerId: id, playerName: requiredString });
 const JoinRoomActionSchema = z.object({ action: z.literal("join-room"), roomCode: id, playerId: id, playerName: requiredString });
 const LeaveRoomActionSchema = z.object({ action: z.literal("leave-room"), roomId: id, playerId: id, playerName: requiredString.optional() });

@@ -31,6 +31,7 @@ import { MultiplayerProvider, useMultiplayerContext } from './contexts/Multiplay
 import { AdminProvider } from './contexts/AdminContext';
 import { AdminPanel } from './components/ui/AdminPanel';
 import { GlobalBroadcastBanner } from './components/ui/GlobalBroadcastBanner';
+import { GlobalPollBanner } from './components/ui/GlobalPollBanner';
 
 interface QuizSettings {
   operation: Operation;
@@ -145,6 +146,7 @@ const AppShell: React.FC = () => {
       <SpeedInsights />
       <FeedbackButtonConditional />
       <GlobalBroadcastBanner />
+      <GlobalPollBanner />
     </div>
   );
 };
