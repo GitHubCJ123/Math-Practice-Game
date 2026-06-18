@@ -24,7 +24,7 @@ import {
 } from "../lib/api/room-store.js";
 import { createAIPlayer } from "../lib/api/ai-player.js";
 import { generateQuestions } from "../shared/questions.js";
-import type { Operation, MultiplayerResult, TeamResult, AIDifficulty, RoomEventName, RoomEventPayloads } from "../shared/types.js";
+import type { Operation, MultiplayerResult, TeamResult, AIDifficulty, RoomEventName, RoomEventPayloads, Room } from "../shared/types.js";
 
 type ActionBody<TAction extends MultiplayerActionInput["action"]> = Extract<MultiplayerActionInput, { action: TAction }>;
 
@@ -48,6 +48,88 @@ async function triggerRoomEvent<E extends RoomEventName>(
   data: RoomEventPayloads[E]
 ): Promise<void> {
   await triggerPusher(`room-${roomId}`, event, data);
+}
+
+/**
+ * Build the final ranked results (and team results in team mode) for a finished
+ * room. Shared by the submit and disconnect end-of-game paths so both emit an
+ * identical, fully-ranked payload (FFA rank + teamId + team winner).
+ */
+function buildGameResults(room: Room): { results: MultiplayerResult[]; teamResults?: TeamResult[] } {
+  const rankedStates = [...room.playerStates].sort((a, b) => {
+    // Sort by score descending, then by time ascending
+    if (b.score !== a.score) return b.score - a.score;
+    return (a.finishTime ?? Infinity) - (b.finishTime ?? Infinity);
+  });
+
+  const getPlayerTeamId = (pid: string): string | undefined => {
+    const player = room.players.find(p => p.id === pid);
+    if (player?.teamId) return player.teamId;
+    for (const team of room.teams) {
+      if (team.playerIds.includes(pid)) return team.id;
+    }
+    return undefined;
+  };
+
+  const results: MultiplayerResult[] = rankedStates.map((ps, index) => ({
+    playerId: ps.playerId,
+    playerName: ps.playerName,
+    score: ps.score,
+    totalQuestions: room.questions.length,
+    timeTaken: ps.finishTime || 0,
+    answers: ps.answers,
+    questions: room.questions,
+    teamId: getPlayerTeamId(ps.playerId),
+    rank: index + 1,
+  }));
+
+  let teamResults: TeamResult[] | undefined;
+
+  // Safety check: ensure teams exist if in team mode
+  if (room.settings.gameMode === "teams" && room.teams.length === 0) {
+    assignRandomTeams(room);
+  }
+
+  if (room.settings.gameMode === "teams" && room.teams.length > 0) {
+    teamResults = room.teams.map(team => {
+      // Use team.playerIds directly instead of relying on player.teamId
+      const teamPlayerStates = room.playerStates.filter(ps =>
+        team.playerIds.includes(ps.playerId)
+      );
+
+      const totalScore = teamPlayerStates.reduce((sum, ps) => sum + ps.score, 0);
+      const totalTime = teamPlayerStates.reduce((sum, ps) => sum + (ps.finishTime || 0), 0);
+      const playerCount = teamPlayerStates.length || 1;
+
+      return {
+        teamId: team.id,
+        teamName: team.name,
+        playerIds: team.playerIds,
+        averageScore: totalScore / playerCount,
+        averageTime: totalTime / playerCount,
+        totalScore,
+        totalTime,
+        isWinner: false, // Will be set below
+      };
+    });
+
+    // Determine winner (higher average score wins, tiebreaker: lower average time)
+    if (teamResults.length === 2) {
+      const [teamA, teamB] = teamResults;
+      if (teamA.averageScore > teamB.averageScore) {
+        teamA.isWinner = true;
+      } else if (teamB.averageScore > teamA.averageScore) {
+        teamB.isWinner = true;
+      } else if (teamA.averageTime < teamB.averageTime) {
+        teamA.isWinner = true;
+      } else if (teamB.averageTime < teamA.averageTime) {
+        teamB.isWinner = true;
+      }
+      // Else it's a draw, no winner
+    }
+  }
+
+  return { results, teamResults };
 }
 
 // Action handlers
@@ -522,92 +604,11 @@ async function handleSubmitMultiplayer(body: ActionBody<"submit-multiplayer">, r
     finishTime: playerState?.finishTime ?? null,
   });
 
+  let results: MultiplayerResult[] | undefined;
+  let teamResults: TeamResult[] | undefined;
+
   if (allFinished) {
-    // Calculate rankings for FFA mode
-    const rankedStates = [...updatedRoom.playerStates].sort((a, b) => {
-      // Sort by score descending, then by time ascending
-      if (b.score !== a.score) return b.score - a.score;
-      return (a.finishTime || Infinity) - (b.finishTime || Infinity);
-    });
-
-    // Get player's teamId - check teams.playerIds array as fallback for player.teamId
-    const getPlayerTeamId = (playerId: string): string | undefined => {
-      // First check player.teamId
-      const player = updatedRoom.players.find(p => p.id === playerId);
-      if (player?.teamId) return player.teamId;
-      // Fallback: check teams.playerIds arrays
-      for (const team of updatedRoom.teams) {
-        if (team.playerIds.includes(playerId)) {
-          return team.id;
-        }
-      }
-      return undefined;
-    };
-
-    const results: MultiplayerResult[] = rankedStates.map((ps, index) => ({
-      playerId: ps.playerId,
-      playerName: ps.playerName,
-      score: ps.score,
-      totalQuestions: updatedRoom.questions.length,
-      timeTaken: ps.finishTime || 0,
-      answers: ps.answers,
-      questions: updatedRoom.questions,
-      teamId: getPlayerTeamId(ps.playerId),
-      rank: index + 1,
-    }));
-
-    // Calculate team results if in team mode
-    let teamResults: TeamResult[] | undefined;
-    
-    // Safety check: ensure teams exist if in team mode
-    if (updatedRoom.settings.gameMode === "teams" && updatedRoom.teams.length === 0) {
-      assignRandomTeams(updatedRoom);
-    }
-
-    if (updatedRoom.settings.gameMode === "teams" && updatedRoom.teams.length > 0) {
-      
-      teamResults = updatedRoom.teams.map(team => {
-        // Use team.playerIds directly instead of relying on player.teamId
-        const teamPlayerStates = updatedRoom.playerStates.filter(ps => 
-          team.playerIds.includes(ps.playerId)
-        );
-        
-
-        const totalScore = teamPlayerStates.reduce((sum, ps) => sum + ps.score, 0);
-        const totalTime = teamPlayerStates.reduce((sum, ps) => sum + (ps.finishTime || 0), 0);
-        const playerCount = teamPlayerStates.length || 1;
-
-        return {
-          teamId: team.id,
-          teamName: team.name,
-          playerIds: team.playerIds,
-          averageScore: totalScore / playerCount,
-          averageTime: totalTime / playerCount,
-          totalScore,
-          totalTime,
-          isWinner: false, // Will be set below
-        };
-      });
-
-
-      // Determine winner (higher average score wins, tiebreaker: lower average time)
-      if (teamResults.length === 2) {
-        const [teamA, teamB] = teamResults;
-        if (teamA.averageScore > teamB.averageScore) {
-          teamA.isWinner = true;
-        } else if (teamB.averageScore > teamA.averageScore) {
-          teamB.isWinner = true;
-        } else {
-          // Tiebreaker: lower average time wins
-          if (teamA.averageTime < teamB.averageTime) {
-            teamA.isWinner = true;
-          } else if (teamB.averageTime < teamA.averageTime) {
-            teamB.isWinner = true;
-          }
-          // Else it's a draw, no winner
-        }
-      }
-    }
+    ({ results, teamResults } = buildGameResults(updatedRoom));
 
     await triggerRoomEvent(roomId, "game-ended", {
       results,
@@ -615,10 +616,15 @@ async function handleSubmitMultiplayer(body: ActionBody<"submit-multiplayer">, r
     });
   }
 
+  // Return the full results in the HTTP response too. If this submit was the one
+  // that completed the game, the finishing client can navigate to results from
+  // this authoritative response even if the `game-ended` broadcast is missed.
   return res.status(200).json({
     success: true,
     allFinished,
-    finishTime: playerState?.finishTime,
+    finishTime: playerState?.finishTime ?? undefined,
+    results,
+    teamResults,
   });
 }
 
@@ -782,18 +788,11 @@ async function handlePlayerDisconnect(body: ActionBody<"player-disconnect">, res
     });
 
     if (room.gameState === "finished") {
-      const results = room.playerStates.map(ps => ({
-        playerId: ps.playerId,
-        playerName: ps.playerName,
-        score: ps.score,
-        totalQuestions: room.questions.length,
-        timeTaken: ps.finishTime || 0,
-        answers: ps.answers,
-        questions: room.questions,
-      }));
+      const { results, teamResults } = buildGameResults(room);
 
       await triggerRoomEvent(roomId, "game-ended", {
         results,
+        teamResults,
       });
     }
   }

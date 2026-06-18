@@ -74,6 +74,20 @@ export type GameMode = 'ffa' | 'teams';
 export type TimeLimit = number;
 export type AIDifficulty = 'easy' | 'medium' | 'hard' | 'expert';
 
+/**
+ * Everything needed to (re)start an AI game with the same setup. Stored when an
+ * AI game begins so the results screen's "Play Again vs AI" can replay it.
+ */
+export interface AIGameConfig {
+  difficulty: AIDifficulty;
+  settings: {
+    operation: Operation;
+    selectedNumbers: number[];
+    questionCount: number;
+    timeLimit: number;
+  };
+}
+
 export interface Player {
   id: string;
   name: string;
@@ -252,6 +266,8 @@ interface MultiplayerSuccessByAction {
   'submit-multiplayer': {
     allFinished: boolean;
     finishTime?: number;
+    results?: MultiplayerResult[];
+    teamResults?: TeamResult[];
   };
   'rematch': {
     message?: string;

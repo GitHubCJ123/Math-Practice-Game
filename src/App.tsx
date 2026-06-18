@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import type {
+  AIGameConfig,
   GameMode,
   MultiplayerResult,
   Operation,
@@ -23,6 +24,7 @@ import { FeedbackButton } from './components/ui/FeedbackButton';
 import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from '@vercel/speed-insights/react';
 import { trackPageView } from './lib/ga';
+import { createAIGame } from './lib/multiplayer';
 import { generateQuestions } from '@shared/questions';
 import { ThemeProvider, useThemeContext } from './contexts/ThemeContext';
 import { MultiplayerProvider, useMultiplayerContext } from './contexts/MultiplayerContext';
@@ -127,6 +129,7 @@ const AppShell: React.FC = () => {
                 userAnswers={userAnswers}
                 timeTaken={timeTaken}
                 quizSettings={quizSettings}
+                onStartQuiz={handleStartQuiz}
               />
             }
           />
@@ -255,7 +258,8 @@ const ResultsScreenWrapper: React.FC<{
   userAnswers: string[];
   timeTaken: number;
   quizSettings: QuizSettings | null;
-}> = ({ questions, userAnswers, timeTaken, quizSettings }) => {
+  onStartQuiz: (operation: Operation, selectedNumbers: number[], timeLimit: number, questionCount: number) => void;
+}> = ({ questions, userAnswers, timeTaken, quizSettings, onStartQuiz }) => {
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -263,11 +267,19 @@ const ResultsScreenWrapper: React.FC<{
   }, [questions, navigate]);
 
   if (questions.length === 0 || !quizSettings) return null;
+
+  // Play Again replays the exact same quiz setup instead of returning to the menu.
+  const handlePlayAgain = () => {
+    onStartQuiz(quizSettings.operation, quizSettings.selectedNumbers, quizSettings.timeLimit, quizSettings.questionCount);
+    navigate('/quiz', { replace: true });
+  };
+
   return (
     <ResultsScreen
       questions={questions}
       userAnswers={userAnswers}
       timeTaken={timeTaken}
+      onPlayAgain={handlePlayAgain}
       onRestart={() => navigate('/', { replace: true })}
       quizSettings={quizSettings}
     />
@@ -294,9 +306,10 @@ const MultiplayerLobbyRoute: React.FC = () => {
     players: Player[],
     teams: Team[],
     gameMode: GameMode,
-    timeLimit?: number
+    timeLimit?: number,
+    aiConfig?: AIGameConfig
   ) => {
-    mp.startGame({ roomId, playerId, playerName, questions, isHost, players, teams, gameMode, timeLimit });
+    mp.startGame({ roomId, playerId, playerName, questions, isHost, players, teams, gameMode, timeLimit, aiConfig });
     navigate('/multiplayer/quiz', { replace: true });
   };
 
@@ -369,9 +382,41 @@ const MultiplayerResultsRoute: React.FC = () => {
     mp.beginRematch(data);
   };
 
+  // Replay the AI game with the same difficulty and settings. Falls back to the
+  // AI Mode tab if the config is missing or the new game can't be created.
+  const handlePlayAgainAI = async () => {
+    const config = mp.aiConfig;
+    if (!config) {
+      navigate('/multiplayer?tab=aimode', { replace: true });
+      return;
+    }
+    try {
+      const result = await createAIGame(mp.playerId, mp.playerName, config.difficulty, config.settings);
+      if (result.success && result.roomId) {
+        mp.startGame({
+          roomId: result.roomId,
+          playerId: mp.playerId,
+          playerName: mp.playerName,
+          questions: result.questions,
+          isHost: false,
+          players: result.players,
+          teams: [],
+          gameMode: 'ffa',
+          timeLimit: config.settings.timeLimit,
+          aiConfig: config,
+        });
+        navigate('/multiplayer/quiz', { replace: true });
+        return;
+      }
+    } catch (error) {
+      console.error('Failed to start AI rematch:', error);
+    }
+    navigate('/multiplayer?tab=aimode', { replace: true });
+  };
+
   const handleExit = () => {
     mp.exitMultiplayer();
-    navigate('/', { replace: true });
+    navigate('/multiplayer', { replace: true });
   };
 
   if (mp.rematchData) return null;
@@ -387,6 +432,7 @@ const MultiplayerResultsRoute: React.FC = () => {
       teamResults={mp.teamResults}
       players={mp.players}
       onRematch={handleRematch}
+      onPlayAgainAI={handlePlayAgainAI}
       onExit={handleExit}
     />
   );

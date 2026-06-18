@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
 import type {
+  AIGameConfig,
   GameMode,
   MultiplayerResult,
   Player,
@@ -32,6 +33,8 @@ interface MultiplayerState {
   teamResults: TeamResult[];
   timeLimit: number;
   rematchData: RematchData | null;
+  // Set when the current game is against AI, so results can offer a replay.
+  aiConfig: AIGameConfig | null;
 }
 
 interface MultiplayerContextValue extends MultiplayerState {
@@ -45,6 +48,7 @@ interface MultiplayerContextValue extends MultiplayerState {
     teams: Team[];
     gameMode: GameMode;
     timeLimit?: number;
+    aiConfig?: AIGameConfig | null;
   }) => void;
   finishGame: (results: MultiplayerResult[], teamResults?: TeamResult[]) => void;
   beginRematch: (data: RematchPayload) => void;
@@ -67,6 +71,7 @@ const INITIAL: MultiplayerState = {
   teamResults: [],
   timeLimit: 0,
   rematchData: null,
+  aiConfig: null,
 };
 
 export const MultiplayerProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -84,6 +89,7 @@ export const MultiplayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
       teams: args.teams,
       gameMode: args.gameMode,
       timeLimit: args.timeLimit ?? 0,
+      aiConfig: args.aiConfig ?? null,
       results: [],
       teamResults: [],
     }));

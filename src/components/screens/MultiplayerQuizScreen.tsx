@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import type { Question, Operation, MultiplayerResult, Team, GameMode, Player, TeamResult, AIDifficulty } from "@shared/types";
 import { ClockIcon, CheckBadgeIcon } from "../ui/icons";
 import { IntroCountdown } from "../ui/IntroCountdown";
@@ -132,6 +132,27 @@ export const MultiplayerQuizScreen: React.FC<MultiplayerQuizScreenProps> = ({
     answersRef.current = answers;
   }, [answers]);
 
+  // Keep the latest callback/props/state reachable from the Pusher handlers
+  // WITHOUT putting them in the subscription effect's dependency array. If the
+  // subscription tears down and re-subscribes mid-game (e.g. when `quizFinished`
+  // flips on submit), the terminal `game-ended` event can arrive during the gap
+  // and be dropped — leaving the player stuck on "waiting for others to finish".
+  const onFinishRef = useRef(onFinish);
+  const playersRef = useRef(players);
+  const quizFinishedRef = useRef(quizFinished);
+  const finalizedRef = useRef(false);
+  useEffect(() => { onFinishRef.current = onFinish; }, [onFinish]);
+  useEffect(() => { playersRef.current = players; }, [players]);
+  useEffect(() => { quizFinishedRef.current = quizFinished; }, [quizFinished]);
+
+  // Navigate to the results screen exactly once, whether the trigger is the
+  // Pusher `game-ended` broadcast or the authoritative HTTP submit response.
+  const finalizeGame = useCallback((finalResults: MultiplayerResult[], finalTeamResults?: TeamResult[]) => {
+    if (finalizedRef.current) return;
+    finalizedRef.current = true;
+    onFinishRef.current(finalResults, finalTeamResults);
+  }, []);
+
   const lastProgressRef = useRef(0);
   const gameStartTimeRef = useRef<number | null>(null);
 
@@ -190,38 +211,47 @@ export const MultiplayerQuizScreen: React.FC<MultiplayerQuizScreenProps> = ({
     return () => clearInterval(intervalId);
   }, [isAIGame, aiOpponent, introStage, quizFinished, questions.length, opponentFinished, timeLimit]);
 
-  // Subscribe to room channel for opponent events
+  // Subscribe to room channel for opponent events. Bind ONCE per room and read
+  // the latest props/state through refs, so the subscription is never torn down
+  // and re-created during the game. A resubscribe gap can otherwise drop the
+  // terminal `game-ended` event (most likely for the last player to finish,
+  // whose own submit triggers it), stranding them on the waiting screen.
   useEffect(() => {
     const pusher = getPusherClient();
     const channel = pusher.subscribe(`room-${roomId}`);
 
-    channel.bind("opponent-progress", (data: { playerId: string; currentQuestion: number }) => {
+    const handleProgress = (data: { playerId: string; currentQuestion: number }) => {
       if (data.playerId !== playerId) {
         setOpponentProgress((prev) => ({ ...prev, [data.playerId]: data.currentQuestion }));
       }
-    });
+    };
 
-    channel.bind("opponent-finished", (data: { playerId: string; finishTime: number }) => {
+    const handleFinished = (data: { playerId: string; finishTime: number }) => {
       if (data.playerId !== playerId) {
         setOpponentFinished((prev) => ({ ...prev, [data.playerId]: true }));
-        if (!quizFinished) {
-          const finishedPlayer = players.find((p) => p.id === data.playerId);
+        if (!quizFinishedRef.current) {
+          const finishedPlayer = playersRef.current.find((p) => p.id === data.playerId);
           setShowFinishedPopup(finishedPlayer?.name || "Someone");
           setTimeout(() => setShowFinishedPopup(null), 2000);
         }
       }
-    });
+    };
 
-    channel.bind("game-ended", (data: { results: MultiplayerResult[]; teamResults?: TeamResult[] }) => {
-      onFinish(data.results, data.teamResults);
-    });
+    const handleGameEnded = (data: { results: MultiplayerResult[]; teamResults?: TeamResult[] }) => {
+      finalizeGame(data.results, data.teamResults);
+    };
 
-    channel.bind("player-disconnected", (data: { playerId: string }) => {
+    const handleDisconnected = (data: { playerId: string }) => {
       if (data.playerId !== playerId) {
         setDisconnectedPlayers((prev) => new Set([...prev, data.playerId]));
         setOpponentFinished((prev) => ({ ...prev, [data.playerId]: true }));
       }
-    });
+    };
+
+    channel.bind("opponent-progress", handleProgress);
+    channel.bind("opponent-finished", handleFinished);
+    channel.bind("game-ended", handleGameEnded);
+    channel.bind("player-disconnected", handleDisconnected);
 
     // Notify server on page unload
     const handleBeforeUnload = () => {
@@ -230,10 +260,14 @@ export const MultiplayerQuizScreen: React.FC<MultiplayerQuizScreenProps> = ({
     window.addEventListener("beforeunload", handleBeforeUnload);
 
     return () => {
+      channel.unbind("opponent-progress", handleProgress);
+      channel.unbind("opponent-finished", handleFinished);
+      channel.unbind("game-ended", handleGameEnded);
+      channel.unbind("player-disconnected", handleDisconnected);
       pusher.unsubscribe(`room-${roomId}`);
       window.removeEventListener("beforeunload", handleBeforeUnload);
     };
-  }, [roomId, playerId, onFinish, quizFinished, players]);
+  }, [roomId, playerId, finalizeGame]);
 
   // Intro animation
   useEffect(() => {
@@ -344,13 +378,21 @@ export const MultiplayerQuizScreen: React.FC<MultiplayerQuizScreenProps> = ({
       });
 
       // Call onFinish directly for AI games
-      onFinish(allResults);
+      finalizeGame(allResults);
       return;
     }
 
     // For real multiplayer games, wait for server response
     setWaitingForOpponents(true);
-    await submitMultiplayerAnswers(roomId, playerId, finalAnswers, score);
+    const response = await submitMultiplayerAnswers(roomId, playerId, finalAnswers, score);
+
+    // If this submit was the one that completed the game, the server returns the
+    // full ranked results synchronously. Finalize from this authoritative
+    // response so we don't depend solely on the `game-ended` broadcast, which
+    // can be missed.
+    if (response?.success && response.allFinished && response.results) {
+      finalizeGame(response.results, response.teamResults);
+    }
   };
 
   const normalizeDecimalInput = (input: string) => {

@@ -90,6 +90,7 @@ interface ResultsScreenProps {
   questions: Question[];
   userAnswers: string[];
   timeTaken: number;
+  onPlayAgain: () => void;
   onRestart: () => void;
   quizSettings: {
     operation: Operation;
@@ -99,7 +100,7 @@ interface ResultsScreenProps {
   };
 }
 
-export const ResultsScreen: React.FC<ResultsScreenProps> = ({ questions, userAnswers, timeTaken, onRestart, quizSettings }) => {
+export const ResultsScreen: React.FC<ResultsScreenProps> = ({ questions, userAnswers, timeTaken, onPlayAgain, onRestart, quizSettings }) => {
   const [feedback, setFeedback] = useState('');
   const [isNewHighScore, setIsNewHighScore] = useState(false);
   const [celebrate, setCelebrate] = useState(false);
@@ -514,13 +515,19 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({ questions, userAns
             ))}
         </div>
 
-        <div className="mt-10 text-center">
+        <div className="mt-10 flex flex-col sm:flex-row gap-4 justify-center items-center">
             <button
-                onClick={onRestart}
-                className="btn3d btn3d--party w-full sm:w-auto px-16 py-4 text-xl"
+                onClick={onPlayAgain}
+                className="btn3d btn3d--party w-full sm:w-auto px-12 py-4 text-xl"
             >
                 <RocketIcon className="w-6 h-6" />
                 Play Again
+            </button>
+            <button
+                onClick={onRestart}
+                className="btn3d btn3d--neutral w-full sm:w-auto px-12 py-4 text-xl"
+            >
+                Back to Menu
             </button>
         </div>
     </div>

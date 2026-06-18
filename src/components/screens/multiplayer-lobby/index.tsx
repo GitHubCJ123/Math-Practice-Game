@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import type {
+  AIGameConfig,
   GameMode,
   Operation,
   Player,
@@ -51,7 +52,8 @@ export interface MultiplayerLobbyScreenProps {
     players: Player[],
     teams: Team[],
     gameMode: GameMode,
-    timeLimit?: number
+    timeLimit?: number,
+    aiConfig?: AIGameConfig
   ) => void;
   rematchData?: {
     roomId: string;
@@ -534,7 +536,8 @@ export const MultiplayerLobbyScreen: React.FC<MultiplayerLobbyScreenProps> = ({
           result.players,
           [],
           'ffa',
-          settings.timeLimit
+          settings.timeLimit,
+          { difficulty: aiState.difficulty, settings }
         );
       } else {
         alert(result.error || 'Failed to start AI game');
