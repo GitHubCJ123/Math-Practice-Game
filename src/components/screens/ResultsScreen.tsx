@@ -390,7 +390,7 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({ questions, userAns
                 <div className="mt-4 flex justify-center">
                     <div className="px-4 py-2.5 bg-gradient-to-r from-amber-400 to-yellow-500 rounded-2xl inline-flex items-center justify-center gap-2 animate-tada shadow-lg shadow-amber-500/40">
                         <StarIcon className="w-6 h-6 text-white" />
-                        <span className="text-lg font-display font-bold text-white">New High Score!</span>
+                        <span className="text-lg font-display font-bold text-white">New Personal High Score!</span>
                     </div>
                 </div>
             )}
