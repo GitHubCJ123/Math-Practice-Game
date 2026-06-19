@@ -4,9 +4,12 @@ import type {
   GameMode,
   AIDifficulty,
   Operation,
+  Player,
+  Question,
   MultiplayerAction,
   MultiplayerApiResponse,
 } from "@shared/types";
+import { generateQuestions } from "@shared/questions";
 import { logger } from "./logger";
 
 let pusherClient: Pusher | null = null;
@@ -175,8 +178,17 @@ export function getOrCreatePlayerId(): string {
   return newId;
 }
 
-// Create an AI game - immediately starts a game against an AI opponent
-export async function createAIGame(
+const AI_BOT_NAMES: Record<AIDifficulty, string> = {
+  easy: "Easy Bot",
+  medium: "Medium Bot",
+  hard: "Hard Bot",
+  expert: "Expert Bot",
+};
+
+// Build an AI game entirely on the client — no server call, no Supabase, no
+// Pusher. AI matches are simulated and scored in the browser, so there's nothing
+// to coordinate server-side. Returns the shape the multiplayer game screen expects.
+export function createLocalAIGame(
   playerId: string,
   playerName: string,
   aiDifficulty: AIDifficulty,
@@ -186,11 +198,24 @@ export async function createAIGame(
     questionCount: number;
     timeLimit: number;
   }
-): Promise<MultiplayerApiResponse<"create-ai-game">> {
-  return multiplayerApi("create-ai-game", {
-    playerId,
-    playerName,
+): { roomId: string; questions: Question[]; players: Player[] } {
+  const questions = generateQuestions(settings.operation, settings.selectedNumbers, settings.questionCount);
+  const humanPlayer: Player = {
+    id: playerId,
+    name: playerName.substring(0, 20),
+    isHost: true,
+    isReady: false,
+    connected: true,
+  };
+  const aiPlayer: Player = {
+    id: `ai_${aiDifficulty}_${Date.now()}`,
+    name: AI_BOT_NAMES[aiDifficulty],
+    isHost: false,
+    isReady: true,
+    connected: true,
+    isAI: true,
     aiDifficulty,
-    settings,
-  });
+  };
+  const roomId = `local_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+  return { roomId, questions, players: [humanPlayer, aiPlayer] };
 }

@@ -2,7 +2,7 @@ import { apiError, handleApiError } from "../lib/api/errors.js";
 import { BroadcastSchema, validate } from "../lib/api/validation.js";
 import { getPusher } from "../lib/api/pusher.js";
 import { isValidAdminCode } from "../lib/api/admin-auth.js";
-import { createRateLimiter, getClientKey } from "../lib/api/rate-limit.js";
+import { rateLimitHit, getClientKey } from "../lib/api/rate-limit.js";
 import { logger } from "../lib/api/logger.js";
 import {
   GLOBAL_BROADCAST_CHANNEL,
@@ -10,8 +10,6 @@ import {
   type BroadcastMessage,
 } from "../shared/types.js";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-
-const allowRequest = createRateLimiter({ windowMs: 60_000, max: 20 });
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   logger.log("[api/broadcast] Function invoked.");
@@ -23,7 +21,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const { code, message } = validate(BroadcastSchema, req.body);
 
-    if (!allowRequest(getClientKey(req))) {
+    if (!(await rateLimitHit(`broadcast:${getClientKey(req)}`, 10, 60_000))) {
       return apiError(res, 429, "Too many requests. Please slow down.");
     }
 

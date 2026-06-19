@@ -1,340 +1,198 @@
-import type { Room, RoomSettings, Question } from "../../shared/types.js";
-import { generateRoomCode, generatePlayerId } from "./pusher.js";
+import type { Room, RoomSettings, Operation, Question } from "../../shared/types.js";
+import { getSupabase } from "./db-pool.js";
 
-// In-memory room storage (for production, use Supabase)
-// Rooms auto-expire after 1 hour of inactivity
-const rooms: Map<string, Room> = new Map();
-const roomsByCode: Map<string, string> = new Map(); // code -> roomId
-const quickMatchQueue: Map<string, { playerId: string; playerName: string; operation: string; timestamp: number }> = new Map();
+/**
+ * Multiplayer room store backed by Supabase Postgres. Every concurrent mutation
+ * runs through an atomic `mp_*` plpgsql function (see
+ * migrations/schema/multiplayer-functions.sql), so all serverless instances
+ * share one source of truth — fixing the in-memory, per-lambda split-brain that
+ * stranded players on "waiting for opponents". The Postgres functions return the
+ * full Room object already shaped to match shared/types.ts.
+ */
 
-const ROOM_EXPIRY_MS = 60 * 60 * 1000; // 1 hour
-
-// Cleanup expired rooms periodically
-setInterval(() => {
-  try {
-    const now = Date.now();
-    for (const [roomId, room] of rooms.entries()) {
-      if (now - room.createdAt > ROOM_EXPIRY_MS) {
-        rooms.delete(roomId);
-        roomsByCode.delete(room.code);
-      }
-    }
-    // Cleanup old queue entries (5 minutes)
-    for (const [playerId, entry] of quickMatchQueue.entries()) {
-      if (now - entry.timestamp > 5 * 60 * 1000) {
-        quickMatchQueue.delete(playerId);
-      }
-    }
-  } catch (error) {
-    console.error("[lib/api/room-store] Room/quick-match cleanup interval failed:", error);
+async function callRpc<T>(fn: string, args: Record<string, unknown>): Promise<T> {
+  const { data, error } = await getSupabase().rpc(fn, args);
+  if (error) {
+    console.error(`[lib/api/room-store] rpc ${fn} failed:`, error);
+    throw new Error(error.message);
   }
-}, 60000); // Check every minute
-
-export function createRoom(hostId: string, hostName: string, isQuickMatch: boolean = false): Room {
-  const roomId = generatePlayerId();
-  const code = generateRoomCode();
-  
-  const room: Room = {
-    id: roomId,
-    code,
-    hostId,
-    players: [{
-      id: hostId,
-      name: hostName,
-      isHost: true,
-      isReady: false,
-      connected: true,
-    }],
-    teams: [],
-    settings: {
-      operation: "multiplication",
-      selectedNumbers: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
-      questionCount: 10,
-      timeLimit: 0,
-      maxPlayers: 2,
-      gameMode: "ffa",
-    },
-    questions: [],
-    gameState: "waiting",
-    gameStartTime: null,
-    playerStates: [],
-    createdAt: Date.now(),
-    isQuickMatch,
-  };
-
-  rooms.set(roomId, room);
-  roomsByCode.set(code, roomId);
-  
-  return room;
+  return data as T;
 }
 
-export function getRoom(roomId: string): Room | undefined {
-  return rooms.get(roomId);
+// Envelope shapes returned by the mp_* functions.
+export interface RoomResult {
+  ok: boolean;
+  error?: string;
+  room: Room | null;
+}
+export interface LeaveResult {
+  ok: boolean;
+  error?: string;
+  room: Room | null;
+  playerName?: string;
+  deleted?: boolean;
+}
+export interface ReadyResult {
+  room: Room | null;
+  allReady: boolean;
+}
+export interface StartResult {
+  started: boolean;
+  room: Room | null;
+}
+export interface SubmitResult {
+  room: Room | null;
+  allFinished: boolean;
+  finishTime: number | null;
+}
+export interface DisconnectResult {
+  room: Room | null;
+  ended: boolean;
+}
+export interface QuickMatchResult {
+  matched: boolean;
+  opponent?: { playerId: string; playerName: string };
+}
+export interface RematchResult {
+  ok: boolean;
+  error?: string;
+  action?: "request" | "accept" | "decline";
+  allAccepted?: boolean;
+  acceptedCount?: number;
+  totalNeeded?: number;
+  playerId?: string;
+  playerName?: string;
+  declinedBy?: string;
+  newRoom?: Room | null;
 }
 
-export function getRoomByCode(code: string): Room | undefined {
-  const roomId = roomsByCode.get(code.toUpperCase());
-  return roomId ? rooms.get(roomId) : undefined;
+export async function getRoom(roomId: string): Promise<Room | null> {
+  return callRpc<Room | null>("mp_room_json", { p_room_id: roomId });
 }
 
-export function joinRoom(code: string, playerId: string, playerName: string): { success: boolean; room?: Room; error?: string } {
-  const room = getRoomByCode(code);
-  
-  if (!room) {
-    return { success: false, error: "Room not found" };
-  }
-  
-  if (room.gameState !== "waiting") {
-    return { success: false, error: "Game already in progress" };
-  }
-  
-  const maxPlayers = room.settings.maxPlayers || 2;
-  if (room.players.length >= maxPlayers) {
-    return { success: false, error: "Room is full" };
-  }
-  
-  // Check if player already in room
-  const existingPlayer = room.players.find(p => p.id === playerId);
-  if (existingPlayer) {
-    existingPlayer.connected = true;
-    return { success: true, room };
-  }
-  
-  room.players.push({
-    id: playerId,
-    name: playerName,
-    isHost: false,
-    isReady: false,
-    connected: true,
+export async function createRoom(
+  hostId: string,
+  hostName: string,
+  isQuickMatch: boolean,
+  settings: RoomSettings
+): Promise<Room> {
+  const res = await callRpc<{ room: Room }>("mp_create_room", {
+    p_host_id: hostId,
+    p_name: hostName,
+    p_is_quick: isQuickMatch,
+    p_settings: settings,
   });
-  
-  return { success: true, room };
+  return res.room;
 }
 
-export function updateRoomSettings(roomId: string, settings: Partial<RoomSettings>): Room | undefined {
-  const room = rooms.get(roomId);
-  if (room) {
-    room.settings = { ...room.settings, ...settings };
-  }
-  return room;
+export async function joinRoom(code: string, playerId: string, playerName: string): Promise<RoomResult> {
+  return callRpc<RoomResult>("mp_join_room", {
+    p_code: code.toUpperCase(),
+    p_player_id: playerId,
+    p_name: playerName,
+  });
 }
 
-export function setPlayerReady(roomId: string, playerId: string, ready: boolean): Room | undefined {
-  const room = rooms.get(roomId);
-  if (room) {
-    const player = room.players.find(p => p.id === playerId);
-    if (player) {
-      player.isReady = ready;
-    }
-  }
-  return room;
+export async function leaveRoom(roomId: string, playerId: string): Promise<LeaveResult> {
+  return callRpc<LeaveResult>("mp_leave_room", { p_room_id: roomId, p_player_id: playerId });
 }
 
-export function updateRoom(room: Room): void {
-  rooms.set(room.id, room);
+export async function updateRoomSettings(
+  roomId: string,
+  playerId: string,
+  settings: Partial<RoomSettings>
+): Promise<RoomResult> {
+  return callRpc<RoomResult>("mp_update_settings", {
+    p_room_id: roomId,
+    p_player_id: playerId,
+    p_settings: settings,
+  });
 }
 
-export function startGame(roomId: string, questions: Question[]): Room | undefined {
-  const room = rooms.get(roomId);
-  if (room && room.players.length >= 2) {
-    room.questions = questions;
-    room.gameState = "countdown";
-    
-    // Assign teams if in team mode and teams aren't already assigned
-    if (room.settings.gameMode === "teams" && room.teams.length === 0) {
-      assignRandomTeams(room);
-    }
-    
-    room.playerStates = room.players.map(p => ({
-      playerId: p.id,
-      playerName: p.name,
-      answers: [],
-      currentQuestion: 0,
-      finished: false,
-      finishTime: null,
-      score: 0,
-    }));
-  }
-  return room;
+export async function assignPlayerToTeam(
+  roomId: string,
+  playerId: string,
+  targetPlayerId: string,
+  teamId: string
+): Promise<RoomResult> {
+  return callRpc<RoomResult>("mp_assign_team", {
+    p_room_id: roomId,
+    p_player_id: playerId,
+    p_target: targetPlayerId,
+    p_team: teamId,
+  });
 }
 
-// Randomly assign players to Team A and Team B
-export function assignRandomTeams(room: Room): void {
-  const playerIds = room.players.map(p => p.id);
-  
-  // Shuffle players randomly
-  for (let i = playerIds.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [playerIds[i], playerIds[j]] = [playerIds[j], playerIds[i]];
-  }
-  
-  // Split into two teams
-  const halfPoint = Math.ceil(playerIds.length / 2);
-  const teamAPlayerIds = playerIds.slice(0, halfPoint);
-  const teamBPlayerIds = playerIds.slice(halfPoint);
-  
-  room.teams = [
-    { id: 'team-a', name: 'Team A', playerIds: teamAPlayerIds },
-    { id: 'team-b', name: 'Team B', playerIds: teamBPlayerIds },
-  ];
-  
-  // Update player teamId references
-  for (const player of room.players) {
-    if (teamAPlayerIds.includes(player.id)) {
-      player.teamId = 'team-a';
-    } else {
-      player.teamId = 'team-b';
-    }
-  }
+export async function startReadyPhase(
+  roomId: string,
+  playerId: string,
+  settings: Partial<RoomSettings> | undefined
+): Promise<RoomResult> {
+  return callRpc<RoomResult>("mp_start_ready_phase", {
+    p_room_id: roomId,
+    p_player_id: playerId,
+    p_settings: settings ?? null,
+  });
 }
 
-// Allow host to manually reassign a player to a different team
-export function assignPlayerToTeam(roomId: string, playerId: string, teamId: string): Room | undefined {
-  const room = rooms.get(roomId);
-  if (!room || room.settings.gameMode !== "teams") {
-    return room;
-  }
-  
-  // Initialize teams if not already done
-  if (room.teams.length === 0) {
-    room.teams = [
-      { id: 'team-a', name: 'Team A', playerIds: [] },
-      { id: 'team-b', name: 'Team B', playerIds: [] },
-    ];
-  }
-  
-  // Remove player from current team
-  for (const team of room.teams) {
-    team.playerIds = team.playerIds.filter(id => id !== playerId);
-  }
-  
-  // Add player to new team
-  const targetTeam = room.teams.find(t => t.id === teamId);
-  if (targetTeam) {
-    targetTeam.playerIds.push(playerId);
-  }
-  
-  // Update player's teamId
-  const player = room.players.find(p => p.id === playerId);
-  if (player) {
-    player.teamId = teamId;
-  }
-  
-  return room;
+export async function setPlayerReady(roomId: string, playerId: string, isReady: boolean): Promise<ReadyResult> {
+  return callRpc<ReadyResult>("mp_set_ready", {
+    p_room_id: roomId,
+    p_player_id: playerId,
+    p_is_ready: isReady,
+  });
 }
 
-// Re-randomize teams for rematch
-export function reshuffleTeams(room: Room): void {
-  assignRandomTeams(room);
+export async function startGame(roomId: string, questions: Question[]): Promise<StartResult> {
+  return callRpc<StartResult>("mp_start_game", { p_room_id: roomId, p_questions: questions });
 }
 
-export function setGamePlaying(roomId: string): Room | undefined {
-  const room = rooms.get(roomId);
-  if (room) {
-    room.gameState = "playing";
-    room.gameStartTime = Date.now();
-  }
-  return room;
-}
-
-export function updatePlayerProgress(roomId: string, playerId: string, currentQuestion: number): Room | undefined {
-  const room = rooms.get(roomId);
-  if (room) {
-    const playerState = room.playerStates.find(p => p.playerId === playerId);
-    if (playerState) {
-      playerState.currentQuestion = currentQuestion;
-    }
-  }
-  return room;
-}
-
-export function submitPlayerAnswers(
+export async function submitPlayerAnswers(
   roomId: string,
   playerId: string,
   answers: string[],
   score: number
-): { room?: Room; allFinished: boolean } {
-  const room = rooms.get(roomId);
-  if (!room) {
-    return { allFinished: false };
-  }
-
-  const playerState = room.playerStates.find(p => p.playerId === playerId);
-  if (playerState && !playerState.finished) {
-    playerState.answers = answers;
-    playerState.finished = true;
-    playerState.finishTime = Date.now() - (room.gameStartTime || Date.now());
-    playerState.score = score;
-  }
-
-  const allFinished = room.playerStates.every(p => p.finished);
-  if (allFinished) {
-    room.gameState = "finished";
-  }
-
-  return { room, allFinished };
+): Promise<SubmitResult> {
+  return callRpc<SubmitResult>("mp_submit_answers", {
+    p_room_id: roomId,
+    p_player_id: playerId,
+    p_answers: answers,
+    p_score: score,
+  });
 }
 
-export function playerDisconnected(roomId: string, playerId: string): Room | undefined {
-  const room = rooms.get(roomId);
-  if (room) {
-    const player = room.players.find(p => p.id === playerId);
-    if (player) {
-      player.connected = false;
-    }
-    
-    // If game is in progress and a player disconnects, they lose
-    if (room.gameState === "playing" || room.gameState === "countdown") {
-      const playerState = room.playerStates.find(p => p.playerId === playerId);
-      if (playerState && !playerState.finished) {
-        playerState.finished = true;
-        playerState.finishTime = Date.now() - (room.gameStartTime || Date.now());
-        playerState.score = 0; // Disconnected = 0 score
-      }
-      
-      // Check if game should end (all players finished)
-      const allFinished = room.playerStates.every(p => p.finished);
-      if (allFinished) {
-        room.gameState = "finished";
-      }
-    }
-  }
-  return room;
+export async function playerDisconnected(roomId: string, playerId: string): Promise<DisconnectResult> {
+  return callRpc<DisconnectResult>("mp_mark_disconnected", { p_room_id: roomId, p_player_id: playerId });
 }
 
-export function deleteRoom(roomId: string): void {
-  const room = rooms.get(roomId);
-  if (room) {
-    roomsByCode.delete(room.code);
-    rooms.delete(roomId);
-  }
+export async function rematch(
+  roomId: string,
+  playerId: string,
+  playerName: string,
+  keepTeams: boolean,
+  action: "request" | "accept" | "decline"
+): Promise<RematchResult> {
+  return callRpc<RematchResult>("mp_rematch", {
+    p_room_id: roomId,
+    p_player_id: playerId,
+    p_name: playerName,
+    p_keep_teams: keepTeams,
+    p_action: action,
+  });
 }
 
-// Quick Match Queue Functions
-export function addToQuickMatchQueue(playerId: string, playerName: string, operation: string): void {
-  quickMatchQueue.set(playerId, { playerId, playerName, operation, timestamp: Date.now() });
+export async function claimQuickMatch(
+  playerId: string,
+  playerName: string,
+  operation: Operation | string
+): Promise<QuickMatchResult> {
+  return callRpc<QuickMatchResult>("mp_claim_quick_match", {
+    p_player_id: playerId,
+    p_name: playerName,
+    p_operation: operation,
+  });
 }
 
-export function removeFromQuickMatchQueue(playerId: string): void {
-  quickMatchQueue.delete(playerId);
-}
-
-export function findQuickMatchOpponent(playerId: string, operation: string): { playerId: string; playerName: string } | null {
-  for (const [queuedId, entry] of quickMatchQueue.entries()) {
-    if (queuedId !== playerId && entry.operation === operation) {
-      quickMatchQueue.delete(queuedId);
-      return { playerId: entry.playerId, playerName: entry.playerName };
-    }
-  }
-  return null;
-}
-
-export function getQuickMatchQueueSize(operation: string): number {
-  let count = 0;
-  for (const entry of quickMatchQueue.values()) {
-    if (entry.operation === operation) {
-      count++;
-    }
-  }
-  return count;
+export async function removeFromQuickMatchQueue(playerId: string): Promise<void> {
+  await callRpc<null>("mp_dequeue", { p_player_id: playerId });
 }

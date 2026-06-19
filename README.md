@@ -141,11 +141,13 @@ flowchart TD
     Fns -- "@supabase/supabase-js" --> DB[("Supabase · Postgres")]
     Fns -- "emit room events" --> Pusher
     Fns -- "explanations" --> Azure["Azure OpenAI"]
-    Fns -. "in-memory · ephemeral" .-> Rooms["Room Store<br/>lib/api/room-store.ts"]
+    Fns -- "atomic room + queue functions" --> DB
 
     DB --- T1["leaderboard_scores"]
     DB --- T2["hall_of_fame"]
     DB --- T3["feedback"]
+    DB --- T4["multiplayer_rooms · players · states"]
+    DB --- T5["multiplayer_queue · rate_limits · poll_state"]
 
     Cron["Vercel Cron — monthly"] --> Fns
 ```
@@ -156,7 +158,7 @@ flowchart TD
 - **REST** calls hit serverless functions under `/api/*` for scores, leaderboards, feedback, explanations, and every multiplayer action.
 - **Pusher** carries real-time room events (player joined, progress, finished, game ended, rematch…) over WebSockets.
 - A separate **global broadcast channel** (`global-broadcast`) delivers admin announcements to every connected client.
-- **Multiplayer rooms live in server memory** (`room-store.ts`) and expire after ~1 hour — they are intentionally ephemeral and not persisted to the database.
+- **Multiplayer state lives in Supabase Postgres** (`room-store.ts` calls atomic `mp_*` SQL functions), so every serverless instance shares one source of truth — rooms still expire after ~1 hour. The quick-match queue, rate limits, and the active-poll snapshot are stored the same way, so nothing critical lives in per-instance lambda memory.
 - A **monthly Vercel cron** promotes each month's leaderboard winners into the Hall of Fame and prunes old scores.
 
 <p align="right"><a href="#-math-practice-game">⬆ Back to top</a></p>
@@ -195,7 +197,7 @@ flowchart TD
 ├─ lib/api/                    # Shared server modules
 │  ├─ db-pool.ts               # Supabase client (service role)
 │  ├─ pusher.ts                # Pusher server SDK + room-code helpers
-│  ├─ room-store.ts            # In-memory room state machine
+│  ├─ room-store.ts            # Supabase-backed room store (atomic mp_* functions)
 │  ├─ ai-player.ts             # AI opponent profiles (easy → expert)
 │  ├─ score-eligibility.ts     # Leaderboard eligibility rules
 │  ├─ validation.ts            # Zod schemas for every endpoint
@@ -256,6 +258,9 @@ In your Supabase project's **SQL Editor**, run the schema files in order (they'r
 
 1. [`migrations/schema/supabase-schema.sql`](migrations/schema/supabase-schema.sql) — `leaderboard_scores` + `hall_of_fame` (with RLS)
 2. [`migrations/schema/feedback-table.sql`](migrations/schema/feedback-table.sql) — `feedback`
+3. [`migrations/schema/multiplayer-tables.sql`](migrations/schema/multiplayer-tables.sql) — multiplayer rooms, players, states, quick-match queue, rate limits, polls (with RLS)
+4. [`migrations/schema/multiplayer-functions.sql`](migrations/schema/multiplayer-functions.sql) — the atomic `mp_*` room functions (run after the tables)
+5. *(optional)* [`migrations/schema/multiplayer-cron.sql`](migrations/schema/multiplayer-cron.sql) — schedule room cleanup via pg_cron
 
 ### 4. Run it
 
@@ -347,13 +352,16 @@ npm run preview  # serve the built bundle locally
 
 ## 💾 Database
 
-Three Postgres tables, all with Row Level Security enabled (public read where appropriate; writes go through the service-role key on the server).
+Postgres tables, all with Row Level Security enabled. The leaderboard and feedback tables allow public reads; the multiplayer tables are server-only (all access goes through the service-role key).
 
 | Table | Purpose |
 |---|---|
 | `leaderboard_scores` | The current month's live scores, per operation. Lower score = faster = better. |
 | `hall_of_fame` | Archived monthly champions — one winner per operation per month (enforced by a unique index). |
 | `feedback` | Beta feedback submissions (bug / feature). |
+| `multiplayer_rooms` (+ `multiplayer_players`, `multiplayer_player_states`) | Live multiplayer rooms and per-player game state, mutated by atomic `mp_*` functions. Expire after ~1 hour. |
+| `multiplayer_queue` | Quick-match waiting list. |
+| `rate_limits` · `poll_state` | Shared rate-limit counters and the active admin-poll snapshot. |
 
 Schema, indexes, and RLS policies live in [`migrations/schema/`](migrations/schema). See [`migrations/README.md`](migrations/README.md) for how to apply them and for notes on the `archive/` and `legacy-azure/` folders.
 
@@ -384,11 +392,12 @@ The app is wired for **Vercel** out of the box. [`vercel.json`](vercel.json) dec
 A few details worth knowing if you're poking around the code:
 
 - **Fair timing.** Quizzes time with the wall clock (`performance.now()`), not an accumulating `setInterval` counter — so the clock stays accurate even when the browser throttles timers. This is locked in by [`src/__tests__/timer-fairness.test.ts`](src/__tests__/timer-fairness.test.ts), which even asserts the quiz screens don't reintroduce the old drifting pattern.
-- **Tested core.** A Vitest suite covers the logic-heavy pieces — question generation, conversions, score eligibility, Zod validation, Eastern-time month boundaries, the profanity filter, AI profiles, the in-memory room-store state machine, and the `useQuizTimer` hook (the last via Testing Library on `jsdom`). CI runs it with a V8 coverage floor so coverage can't slide backwards.
+- **Tested core.** A Vitest suite covers the logic-heavy pieces — question generation, conversions, score eligibility, Zod validation, Eastern-time month boundaries, the profanity filter, AI profiles, multiplayer results ranking, and the `useQuizTimer` hook (the last via Testing Library on `jsdom`). The room store itself is exercised by an opt-in integration suite that runs against a real Supabase instance when credentials are present. CI runs it with a V8 coverage floor so coverage can't slide backwards.
 - **Anti-cheat.** Hiding or switching away from the tab mid-quiz auto-submits your answers, in both solo and multiplayer.
 - **Leaderboard integrity.** A score only counts if it's a perfect run on exactly 10 questions with all numbers selected (enforced server-side in `score-eligibility.ts`). Player names are profanity-filtered.
 - **Eastern-time months.** Leaderboards roll over on `America/New_York` month boundaries (via Luxon), and the monthly cron archives the previous month's winners.
-- **Ephemeral rooms.** Multiplayer rooms are held in server memory and expire after ~1 hour; the quick-match queue cleans itself up too.
+- **Shared room state.** Multiplayer rooms, the quick-match queue, rate limits, and the live poll all live in Supabase Postgres, mutated through atomic `mp_*` functions so concurrent players — and serverless instances — never disagree (this is what makes large tournament rooms safe). Rooms expire after ~1 hour and a scheduled cleanup prunes stale rows.
+- **AI games don't touch the room store.** A match against the AI bot is scored entirely in the browser (the opponent is simulated client-side), so it never creates a multiplayer room, player, or state row in Supabase — there's nothing to persist or clean up. Only human-vs-human play uses the database.
 - **Validated boundaries.** Every API request is validated with Zod before it touches the database, and errors flow through a single `ApiError` handler.
 - **Admin broadcasts.** A code-gated endpoint (`api/broadcast.ts`) lets an admin push a short announcement to all players over a global Pusher channel. Authorization happens **server-side** (against `ADMIN_CODES`) and is per-IP rate limited.
 

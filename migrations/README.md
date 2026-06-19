@@ -7,8 +7,11 @@ SQL files for the Math Practice Game database. The current backend uses Supabase
 ```
 migrations/
 ├── schema/         # Current Supabase schema — apply to a fresh database
-│   ├── supabase-schema.sql    # Core tables: leaderboard_scores, hall_of_fame (+ RLS policies)
-│   └── feedback-table.sql     # feedback table used by api/submit-feedback.ts
+│   ├── supabase-schema.sql        # Core tables: leaderboard_scores, hall_of_fame (+ RLS policies)
+│   ├── feedback-table.sql         # feedback table used by api/submit-feedback.ts
+│   ├── multiplayer-tables.sql     # Multiplayer rooms/players/states, queue, rate_limits, poll_state (+ RLS)
+│   ├── multiplayer-functions.sql  # Atomic mp_* room functions (run after multiplayer-tables.sql)
+│   └── multiplayer-cron.sql       # Optional: pg_cron schedule for room cleanup
 ├── archive/        # One-off operational scripts run to archive past months
 │   ├── archive-january-2026.sql
 │   └── archive-march-2026.sql
@@ -23,8 +26,11 @@ Run the files in `schema/` in your Supabase SQL Editor, in this order:
 
 1. `schema/supabase-schema.sql`
 2. `schema/feedback-table.sql`
+3. `schema/multiplayer-tables.sql`
+4. `schema/multiplayer-functions.sql`
+5. *(optional)* `schema/multiplayer-cron.sql` — schedules `mp_cleanup_expired()` via pg_cron
 
-All `CREATE POLICY` statements are preceded by `DROP POLICY IF EXISTS`, so re-applying the schema files is safe and idempotent.
+All `CREATE POLICY` statements are preceded by `DROP POLICY IF EXISTS`, and functions use `CREATE OR REPLACE`, so re-applying the schema files is safe and idempotent.
 
 ## Archive scripts
 

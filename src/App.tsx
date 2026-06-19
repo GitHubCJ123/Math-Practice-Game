@@ -24,7 +24,7 @@ import { FeedbackButton } from './components/ui/FeedbackButton';
 import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from '@vercel/speed-insights/react';
 import { trackPageView } from './lib/ga';
-import { createAIGame } from './lib/multiplayer';
+import { createLocalAIGame } from './lib/multiplayer';
 import { generateQuestions } from '@shared/questions';
 import { ThemeProvider, useThemeContext } from './contexts/ThemeContext';
 import { MultiplayerProvider, useMultiplayerContext } from './contexts/MultiplayerContext';
@@ -396,23 +396,21 @@ const MultiplayerResultsRoute: React.FC = () => {
       return;
     }
     try {
-      const result = await createAIGame(mp.playerId, mp.playerName, config.difficulty, config.settings);
-      if (result.success && result.roomId) {
-        mp.startGame({
-          roomId: result.roomId,
-          playerId: mp.playerId,
-          playerName: mp.playerName,
-          questions: result.questions,
-          isHost: false,
-          players: result.players,
-          teams: [],
-          gameMode: 'ffa',
-          timeLimit: config.settings.timeLimit,
-          aiConfig: config,
-        });
-        navigate('/multiplayer/quiz', { replace: true });
-        return;
-      }
+      const game = createLocalAIGame(mp.playerId, mp.playerName, config.difficulty, config.settings);
+      mp.startGame({
+        roomId: game.roomId,
+        playerId: mp.playerId,
+        playerName: mp.playerName,
+        questions: game.questions,
+        isHost: false,
+        players: game.players,
+        teams: [],
+        gameMode: 'ffa',
+        timeLimit: config.settings.timeLimit,
+        aiConfig: config,
+      });
+      navigate('/multiplayer/quiz', { replace: true });
+      return;
     } catch (error) {
       console.error('Failed to start AI rematch:', error);
     }

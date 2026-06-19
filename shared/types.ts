@@ -269,7 +269,6 @@ export type MultiplayerAction =
   | 'submit-multiplayer'
   | 'rematch'
   | 'assign-team'
-  | 'create-ai-game'
   | 'player-disconnect';
 
 interface MultiplayerSuccessByAction {
@@ -318,11 +317,6 @@ interface MultiplayerSuccessByAction {
   'assign-team': {
     teams?: Team[];
     players?: Player[];
-  };
-  'create-ai-game': {
-    roomId: string;
-    questions: Question[];
-    players: Player[];
   };
   'player-disconnect': Record<string, never>;
 }

@@ -132,7 +132,6 @@ const UpdateProgressActionSchema = z.object({ action: z.literal("update-progress
 const SubmitMultiplayerActionSchema = z.object({ action: z.literal("submit-multiplayer"), roomId: id, playerId: id, answers: z.array(z.string()), score: coerceNumber() });
 const RematchActionSchema = z.object({ action: z.literal("rematch"), roomId: id, playerId: id, playerName: requiredString, rematchAction: z.enum(["request", "accept", "decline"]), keepTeams: z.boolean().optional() });
 const AssignTeamActionSchema = z.object({ action: z.literal("assign-team"), roomId: id, playerId: id, targetPlayerId: id, teamId: id });
-const CreateAIGameActionSchema = z.object({ action: z.literal("create-ai-game"), playerId: id, playerName: requiredString, aiDifficulty: z.enum(["easy", "medium", "hard", "expert"]), settings: RoomSettingsSchema.extend({ operation: OperationTypeSchema }) });
 const PlayerDisconnectActionSchema = z.object({ action: z.literal("player-disconnect"), roomId: id, playerId: id });
 
 export const MultiplayerActionSchema = z.discriminatedUnion("action", [
@@ -148,7 +147,6 @@ export const MultiplayerActionSchema = z.discriminatedUnion("action", [
   SubmitMultiplayerActionSchema,
   RematchActionSchema,
   AssignTeamActionSchema,
-  CreateAIGameActionSchema,
   PlayerDisconnectActionSchema,
 ]);
 

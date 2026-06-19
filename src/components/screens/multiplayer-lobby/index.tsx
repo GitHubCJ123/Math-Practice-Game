@@ -12,7 +12,7 @@ import type {
 import {
   assignPlayerToTeam,
   cancelQuickMatch,
-  createAIGame,
+  createLocalAIGame,
   createRoom,
   getOrCreatePlayerId,
   joinRoom,
@@ -525,23 +525,19 @@ export const MultiplayerLobbyScreen: React.FC<MultiplayerLobbyScreenProps> = ({
             questionCount: 10,
             timeLimit: 0,
           };
-      const result = await createAIGame(playerId, playerName, aiState.difficulty, settings);
-      if (result.success && result.roomId) {
-        onGameStart(
-          result.roomId,
-          playerId,
-          playerName,
-          result.questions,
-          false,
-          result.players,
-          [],
-          'ffa',
-          settings.timeLimit,
-          { difficulty: aiState.difficulty, settings }
-        );
-      } else {
-        alert(result.error || 'Failed to start AI game');
-      }
+      const game = createLocalAIGame(playerId, playerName, aiState.difficulty, settings);
+      onGameStart(
+        game.roomId,
+        playerId,
+        playerName,
+        game.questions,
+        false,
+        game.players,
+        [],
+        'ffa',
+        settings.timeLimit,
+        { difficulty: aiState.difficulty, settings }
+      );
     } catch (error) {
       console.error('Error starting AI game:', error);
       alert('Failed to start AI game');

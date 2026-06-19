@@ -217,6 +217,10 @@ export const MultiplayerQuizScreen: React.FC<MultiplayerQuizScreenProps> = ({
   // terminal `game-ended` event (most likely for the last player to finish,
   // whose own submit triggers it), stranding them on the waiting screen.
   useEffect(() => {
+    // AI games are scored entirely client-side — no server room, no opponents on
+    // the channel — so skip the Pusher subscription (and the unload ping) entirely.
+    if (isAIGame) return;
+
     const pusher = getPusherClient();
     const channel = pusher.subscribe(`room-${roomId}`);
 
@@ -267,7 +271,7 @@ export const MultiplayerQuizScreen: React.FC<MultiplayerQuizScreenProps> = ({
       pusher.unsubscribe(`room-${roomId}`);
       window.removeEventListener("beforeunload", handleBeforeUnload);
     };
-  }, [roomId, playerId, finalizeGame]);
+  }, [roomId, playerId, finalizeGame, isAIGame]);
 
   // Intro animation
   useEffect(() => {
@@ -433,9 +437,9 @@ export const MultiplayerQuizScreen: React.FC<MultiplayerQuizScreenProps> = ({
     newAnswers[index] = filteredValue;
     setAnswers(newAnswers);
 
-    // Report progress (only when moving forward)
+    // Report progress to opponents (real multiplayer only — AI games are local).
     const filledCount = newAnswers.filter((a) => a.trim() !== "").length;
-    if (filledCount > lastProgressRef.current) {
+    if (!isAIGame && filledCount > lastProgressRef.current) {
       lastProgressRef.current = filledCount;
       updateProgress(roomId, playerId, filledCount);
     }

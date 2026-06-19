@@ -1,8 +1,9 @@
 import { apiError, handleApiError } from "../lib/api/errors.js";
 import { PollActionSchema, validate } from "../lib/api/validation.js";
 import { getPusher } from "../lib/api/pusher.js";
+import { getSupabase } from "../lib/api/db-pool.js";
 import { isValidAdminCode } from "../lib/api/admin-auth.js";
-import { createRateLimiter, getClientKey } from "../lib/api/rate-limit.js";
+import { rateLimitHit, getClientKey } from "../lib/api/rate-limit.js";
 import { logger } from "../lib/api/logger.js";
 import {
   GLOBAL_BROADCAST_CHANNEL,
@@ -22,41 +23,45 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
  *
  * Votes are RELAYED to every connected client (via the `poll-vote` event), so
  * each client aggregates the same stream into an identical live tally. On top of
- * that the function keeps a LIGHTWEIGHT in-memory snapshot of the single active
- * poll (question, options, running tally, closed flag) purely so a client that
- * loads mid-poll can GET the current state and join in — Pusher only delivers
- * events fired after you subscribe. The snapshot is best-effort: like the
- * multiplayer rooms it lives per serverless instance, so connected clients stay
- * exact while late joiners may be approximate under multi-instance serverless.
- * A closed poll is retained for 30s (so latecomers still see the result), then
- * dropped on every device.
+ * that, the single active poll (question, options, running tally, closed flag) is
+ * persisted in the shared `poll_state` table so a client that loads mid-poll can
+ * GET the current state and join in — Pusher only delivers events fired after you
+ * subscribe. Because the snapshot now lives in Postgres (not per-instance memory),
+ * late joiners are consistent across serverless instances. A closed poll is shown
+ * for 30s (final results) before it is hidden, then `mp_cleanup_expired()` drops it.
  */
-interface ActivePollState {
-  poll: Poll;
+const POLL_RETENTION_AFTER_CLOSE_MS = 30_000;
+
+interface PollSnapshot {
+  poll: Poll | null;
   tallies: Record<string, number>;
   closed: boolean;
   closedAt: number | null;
 }
 
-/** A closed poll lingers this long (showing final results) before it vanishes. */
-const POLL_RETENTION_AFTER_CLOSE_MS = 30_000;
-
-let activePoll: ActivePollState | null = null;
-
-/** The live poll, expired 30s after it was closed. */
-function currentPoll(): ActivePollState | null {
-  if (
-    activePoll &&
-    activePoll.closed &&
-    activePoll.closedAt !== null &&
-    Date.now() - activePoll.closedAt > POLL_RETENTION_AFTER_CLOSE_MS
-  ) {
-    activePoll = null;
+async function pollGet(): Promise<PollSnapshot | null> {
+  const { data, error } = await getSupabase().rpc("poll_get");
+  if (error) {
+    console.error("[api/poll] poll_get rpc failed:", error);
+    return null;
   }
-  return activePoll;
+  return (data as PollSnapshot | null) ?? null;
 }
 
-const allowRequest = createRateLimiter({ windowMs: 60_000, max: 60 });
+async function pollStart(poll: Poll): Promise<void> {
+  const { error } = await getSupabase().rpc("poll_start", { p_poll: poll });
+  if (error) throw new Error(error.message);
+}
+
+async function pollVote(pollId: string, optionId: string): Promise<void> {
+  const { error } = await getSupabase().rpc("poll_vote", { p_poll_id: pollId, p_option_id: optionId });
+  if (error) console.error("[api/poll] poll_vote rpc failed:", error);
+}
+
+async function pollClose(pollId: string): Promise<void> {
+  const { error } = await getSupabase().rpc("poll_close", { p_poll_id: pollId });
+  if (error) throw new Error(error.message);
+}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   logger.log("[api/poll] Function invoked.");
@@ -65,8 +70,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Late-join snapshot: a client loading mid-poll asks for the current state
     // so the poll shows up immediately (Pusher only replays nothing on join).
     if (req.method === "GET") {
-      const active = currentPoll();
-      if (!active) {
+      const active = await pollGet();
+      if (
+        !active ||
+        !active.poll ||
+        (active.closed &&
+          active.closedAt !== null &&
+          Date.now() - active.closedAt > POLL_RETENTION_AFTER_CLOSE_MS)
+      ) {
         return res.status(200).json({ poll: null });
       }
       return res.status(200).json({
@@ -81,7 +92,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return apiError(res, 405, "Method Not Allowed");
     }
 
-    if (!allowRequest(getClientKey(req))) {
+    if (!(await rateLimitHit(`poll:${getClientKey(req)}`, 60, 60_000))) {
       return apiError(res, 429, "Too many requests. Please slow down.");
     }
 
@@ -92,6 +103,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // just in the client UI.
       if (!isValidAdminCode(body.code)) {
         return apiError(res, 401, "Invalid admin code.");
+      }
+
+      // Cap how many polls one admin/IP can START per minute (separate from the
+      // general per-IP poll limit above, which also covers votes/closes).
+      if (!(await rateLimitHit(`poll-start:${getClientKey(req)}`, 5, 60_000))) {
+        return apiError(res, 429, "Too many requests. Please slow down.");
       }
 
       const options: PollOption[] = body.options.map((text, index) => ({
@@ -105,12 +122,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         startedAt: Date.now(),
       };
 
-      activePoll = {
-        poll,
-        tallies: Object.fromEntries(options.map((o) => [o.id, 0])),
-        closed: false,
-        closedAt: null,
-      };
+      await pollStart(poll);
 
       await getPusher().trigger(GLOBAL_BROADCAST_CHANNEL, GLOBAL_POLL_STARTED_EVENT, poll);
       logger.log(`[api/poll] Poll started: options=${options.length}`);
@@ -118,15 +130,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (body.action === "vote") {
-      // Keep the snapshot tally in sync so late joiners get an accurate count.
-      const active = currentPoll();
-      if (
-        active &&
-        active.poll.id === body.pollId &&
-        Object.prototype.hasOwnProperty.call(active.tallies, body.optionId)
-      ) {
-        active.tallies[body.optionId] += 1;
-      }
+      // Persist the tally so late joiners get an accurate count, then relay the
+      // vote so connected clients converge on the same running total.
+      await pollVote(body.pollId, body.optionId);
       const vote: PollVote = { pollId: body.pollId, optionId: body.optionId };
       await getPusher().trigger(GLOBAL_BROADCAST_CHANNEL, GLOBAL_POLL_VOTE_EVENT, vote);
       return res.status(202).json({ ok: true });
@@ -136,11 +142,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!isValidAdminCode(body.code)) {
       return apiError(res, 401, "Invalid admin code.");
     }
-    const active = currentPoll();
-    if (active && active.poll.id === body.pollId) {
-      active.closed = true;
-      active.closedAt = Date.now();
-    }
+    await pollClose(body.pollId);
     const closed: PollClosed = { pollId: body.pollId };
     await getPusher().trigger(GLOBAL_BROADCAST_CHANNEL, GLOBAL_POLL_CLOSED_EVENT, closed);
     logger.log("[api/poll] Poll closed.");

@@ -4,33 +4,8 @@ import { isScoreEligible } from "../lib/api/score-eligibility.js";
 import { getCurrentEasternMonthBounds } from "../lib/api/time-utils.js";
 import { CheckScoreSchema, validate } from "../lib/api/validation.js";
 import { logger } from "../lib/api/logger.js";
+import { rateLimitHit, getClientKey } from "../lib/api/rate-limit.js";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-
-const RATE_LIMIT_WINDOW_MS = 60_000;
-const RATE_LIMIT_MAX = 30;
-const rateLimit = new Map<string, { count: number; resetAt: number }>();
-
-function allowRequest(key: string) {
-  const now = Date.now();
-  const entry = rateLimit.get(key);
-  if (!entry || entry.resetAt < now) {
-    rateLimit.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
-    return true;
-  }
-  if (entry.count >= RATE_LIMIT_MAX) {
-    return false;
-  }
-  entry.count += 1;
-  return true;
-}
-
-function getClientKey(req: VercelRequest): string {
-  const xff = req.headers["x-forwarded-for"];
-  if (typeof xff === "string" && xff.length > 0) {
-    return xff.split(",")[0].trim();
-  }
-  return req.socket?.remoteAddress || "unknown";
-}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   logger.log("[api/check-score] Function invoked.");
@@ -42,7 +17,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const { operationType, score, questionCount, selectedNumbersCount, allNumbersSelected } = validate(CheckScoreSchema, req.query);
 
     const clientKey = getClientKey(req);
-    if (!allowRequest(clientKey)) {
+    if (!(await rateLimitHit(`check-score:${clientKey}`, 30, 60_000))) {
       return apiError(res, 429, "Too many requests. Please slow down.");
     }
 
