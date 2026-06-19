@@ -29,6 +29,7 @@ import { generateQuestions } from '@shared/questions';
 import { ThemeProvider, useThemeContext } from './contexts/ThemeContext';
 import { MultiplayerProvider, useMultiplayerContext } from './contexts/MultiplayerContext';
 import { AdminProvider } from './contexts/AdminContext';
+import { OnlineCountProvider } from './contexts/OnlineCountContext';
 import { AdminPanel } from './components/ui/AdminPanel';
 import { GlobalBroadcastBanner } from './components/ui/GlobalBroadcastBanner';
 import { GlobalPollBanner } from './components/ui/GlobalPollBanner';
@@ -45,10 +46,12 @@ const App: React.FC = () => {
     <ThemeProvider>
       <MultiplayerProvider>
         <AdminProvider>
-          <BrowserRouter>
-            <RouteChangeTracker />
-            <AppShell />
-          </BrowserRouter>
+          <OnlineCountProvider>
+            <BrowserRouter>
+              <RouteChangeTracker />
+              <AppShell />
+            </BrowserRouter>
+          </OnlineCountProvider>
         </AdminProvider>
       </MultiplayerProvider>
     </ThemeProvider>

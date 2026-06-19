@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAdminContext } from '../../contexts/AdminContext';
+import { useOnlineCount } from '../../contexts/OnlineCountContext';
 
 const MAX_BROADCAST_LENGTH = 280;
 const MAX_POLL_QUESTION_LENGTH = 200;
@@ -20,6 +21,7 @@ type PollStatus = 'idle' | 'starting' | 'live' | 'closing' | 'error';
  */
 export const AdminPanel: React.FC = () => {
   const { isAdmin, adminCode, logout } = useAdminContext();
+  const onlineCount = useOnlineCount();
   const [expanded, setExpanded] = useState(true);
   const [message, setMessage] = useState('');
   const [status, setStatus] = useState<SendStatus>('idle');
@@ -140,20 +142,38 @@ export const AdminPanel: React.FC = () => {
           <span aria-hidden="true">🛠️</span>
           Admin Panel
         </span>
-        <svg
-          className={`w-5 h-5 text-slate-400 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
+        <span className="flex items-center gap-2.5">
+          <span
+            title="People connected right now (live)"
+            className="inline-flex items-center gap-1 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 text-xs font-bold px-2 py-0.5"
+          >
+            <span aria-hidden="true">👥</span>
+            {onlineCount ?? '—'}
+          </span>
+          <svg
+            className={`w-5 h-5 text-slate-400 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </span>
       </button>
 
       {expanded && (
         <>
           {/* Body */}
           <div className="px-4 pt-4 pb-4 space-y-4 border-t border-slate-200 dark:border-slate-700">
+            {onlineCount !== null && (
+              <p className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+                <span aria-hidden="true">👥</span>
+                <span>
+                  <span className="font-bold text-slate-700 dark:text-slate-200">{onlineCount}</span>{' '}
+                  {onlineCount === 1 ? 'person' : 'people'} online right now
+                </span>
+              </p>
+            )}
             <section>
               <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200">Global chat</h3>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
