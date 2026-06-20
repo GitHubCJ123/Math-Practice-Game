@@ -32,6 +32,7 @@ import { AdminProvider } from './contexts/AdminContext';
 import { OnlineCountProvider } from './contexts/OnlineCountContext';
 import { AdminPanel } from './components/ui/AdminPanel';
 import { GlobalBroadcastBanner } from './components/ui/GlobalBroadcastBanner';
+import { AnnouncementBanner } from './components/ui/AnnouncementBanner';
 import { GlobalPollBanner } from './components/ui/GlobalPollBanner';
 
 interface QuizSettings {
@@ -102,7 +103,7 @@ const AppShell: React.FC = () => {
   }, [handleShowResults]);
 
   return (
-    <div className="arcade-bg min-h-screen flex flex-col items-center justify-center p-4 transition-colors duration-300 relative overflow-x-hidden">
+    <div className="arcade-bg min-h-screen flex flex-col items-center justify-center p-4 pt-12 transition-colors duration-300 relative overflow-x-hidden">
       <BackdropDecor />
       <main className="w-full flex justify-center">
         <Routes>
@@ -148,7 +149,10 @@ const AppShell: React.FC = () => {
       <Analytics />
       <SpeedInsights />
       <FeedbackButtonConditional />
-      <GlobalBroadcastBanner />
+      <div className="fixed top-0 inset-x-0 z-[60]">
+        <AnnouncementBanner />
+        <GlobalBroadcastBanner />
+      </div>
       <GlobalPollBanner />
     </div>
   );
