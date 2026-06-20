@@ -29,7 +29,7 @@ export const AnnouncementBanner: React.FC = () => {
     <div className="w-full bg-gradient-to-r from-violet-600 via-fuchsia-600 to-violet-600 text-white shadow-lg">
       <p
         key={index}
-        className="px-4 py-2 text-center text-xs sm:text-sm font-semibold tracking-wide truncate animate-fade-in"
+        className="mx-auto max-w-3xl px-4 py-2 text-center text-xs sm:text-sm font-semibold tracking-wide leading-snug animate-fade-in"
       >
         {MESSAGES[index]}
       </p>
