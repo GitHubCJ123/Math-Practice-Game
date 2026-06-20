@@ -193,16 +193,20 @@ flowchart TD
 │  ├─ submit-feedback.ts       # Store beta feedback
 │  ├─ multiplayer.ts           # All room actions (create/join/start/answer/finish…)
 │  ├─ broadcast.ts             # Admin → global announcement banner (Pusher)
+│  ├─ poll.ts                  # Admin live polls (start/vote/close)
 │  └─ pusher-auth.ts           # Authorize private/presence channels
 ├─ lib/api/                    # Shared server modules
 │  ├─ db-pool.ts               # Supabase client (service role)
 │  ├─ pusher.ts                # Pusher server SDK + room-code helpers
 │  ├─ room-store.ts            # Supabase-backed room store (atomic mp_* functions)
+│  ├─ game-results.ts          # Pure multiplayer ranking + team results
 │  ├─ ai-player.ts             # AI opponent profiles (easy → expert)
 │  ├─ score-eligibility.ts     # Leaderboard eligibility rules
 │  ├─ validation.ts            # Zod schemas for every endpoint
 │  ├─ profanity.ts             # Player-name profanity filter
 │  ├─ time-utils.ts            # Luxon — Eastern-time month boundaries
+│  ├─ rate-limit.ts            # Postgres-backed rate limiter (fails open)
+│  ├─ admin-auth.ts            # Admin-code validation (broadcast / polls)
 │  ├─ errors.ts                # ApiError + shared error handling
 │  ├─ logger.ts                # Server logger (silences debug logs in prod)
 │  └─ constants.ts             # Allowed operations
@@ -365,7 +369,7 @@ Postgres tables, all with Row Level Security enabled. The leaderboard and feedba
 
 Schema, indexes, and RLS policies live in [`migrations/schema/`](migrations/schema). See [`migrations/README.md`](migrations/README.md) for how to apply them and for notes on the `archive/` and `legacy-azure/` folders.
 
-> **History:** this app originally ran on **Azure SQL** (the `legacy-azure/` scripts are kept for reference) and has since migrated to **Supabase / Postgres**. Azure OpenAI is still used — but only for answer explanations, not for data.
+> **History:** this app originally ran on **Azure SQL** (the `legacy-azure/` scripts are kept for reference) and has since migrated to **Supabase / Postgres**. Live multiplayer state — rooms, players, the quick-match queue, rate limits, and polls — also moved **out of per-lambda memory into Postgres** (mutated by atomic `mp_*` functions), so every serverless instance shares one source of truth and large rooms stay consistent. Azure OpenAI is still used — but only for answer explanations, not for data.
 
 <p align="right"><a href="#-math-practice-game">⬆ Back to top</a></p>
 
