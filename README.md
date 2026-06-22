@@ -201,8 +201,7 @@ flowchart TD
 │  ├─ submit-score.ts          # Validate + store an eligible leaderboard score
 │  ├─ check-score.ts           # Is this run a top-5 score this month?
 │  ├─ get-leaderboard.ts       # Top 5 for an operation (current month)
-│  ├─ get-hall-of-fame.ts      # Champions for an operation/year/month
-│  ├─ get-hall-of-fame-dates.ts# Which year/month buckets have data
+│  ├─ get-hall-of-fame.ts      # Champions for an operation/year/month (+ ?view=dates for which buckets have data)
 │  ├─ archive-scores.ts        # Monthly cron → Hall of Fame + pruning
 │  ├─ get-explanation.ts       # Azure OpenAI answer explanations
 │  ├─ submit-feedback.ts       # Store beta feedback

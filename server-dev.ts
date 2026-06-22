@@ -14,7 +14,6 @@ import multiplayer from './api/multiplayer.js';
 import tournament from './api/tournament.js';
 import getLeaderboard from './api/get-leaderboard.js';
 import getHallOfFame from './api/get-hall-of-fame.js';
-import getHallOfFameDates from './api/get-hall-of-fame-dates.js';
 import getExplanation from './api/get-explanation.js';
 import checkScore from './api/check-score.js';
 import archiveScores from './api/archive-scores.js';
@@ -60,7 +59,6 @@ const routes: Array<[string, Handler]> = [
     ['tournament', tournament as unknown as Handler],
     ['get-leaderboard', getLeaderboard as unknown as Handler],
     ['get-hall-of-fame', getHallOfFame as unknown as Handler],
-    ['get-hall-of-fame-dates', getHallOfFameDates as unknown as Handler],
     ['get-explanation', getExplanation as unknown as Handler],
     ['check-score', checkScore as unknown as Handler],
     ['archive-scores', archiveScores as unknown as Handler],

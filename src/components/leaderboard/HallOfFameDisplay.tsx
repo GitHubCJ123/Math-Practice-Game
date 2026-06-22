@@ -26,7 +26,7 @@ export const HallOfFameDisplay: React.FC = () => {
     const fetchDates = async () => {
       setIsLoading(true);
       try {
-        const response = await fetch('/api/get-hall-of-fame-dates');
+        const response = await fetch('/api/get-hall-of-fame?view=dates');
         if (!response.ok) throw new Error('Failed to fetch dates');
         const data = await response.json();
         setAvailableDates(data);
