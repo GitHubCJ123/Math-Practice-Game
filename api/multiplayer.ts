@@ -17,6 +17,7 @@ import {
   claimQuickMatch,
   setPlayerReady,
   assignPlayerToTeam,
+  kickPlayer,
   rematch,
 } from "../lib/api/room-store.js";
 import { buildGameResults } from "../lib/api/game-results.js";
@@ -554,6 +555,34 @@ async function handleAssignTeam(body: ActionBody<"assign-team">, res: VercelResp
   });
 }
 
+// Host kicks another player from the room (lobby/ready phase only).
+async function handleKickPlayer(body: ActionBody<"kick-player">, res: VercelResponse) {
+  const { roomId, playerId, targetPlayerId } = body;
+
+  if (!roomId || !playerId || !targetPlayerId) {
+    return apiError(res, 400, "Room ID, host player ID, and target player ID are required");
+  }
+
+  const result = await kickPlayer(roomId, playerId, targetPlayerId);
+  if (!result.ok || !result.room) {
+    const status = result.error === "Room not found" ? 404
+      : result.error === "Only the host can kick players" || result.error === "Host cannot be kicked" ? 403
+      : 400;
+    return apiError(res, status, result.error ?? "Unable to kick player");
+  }
+
+  await triggerRoomEvent(roomId, "player-kicked", {
+    playerId: targetPlayerId,
+    playerName: result.playerName ?? "Player",
+  });
+
+  return res.status(200).json({
+    success: true,
+    teams: result.room.teams,
+    players: result.room.players,
+  });
+}
+
 // Main handler - routes by action parameter
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
@@ -599,6 +628,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           return await handleRematch(body, res);
         case "assign-team":
           return await handleAssignTeam(body, res);
+        case "kick-player":
+          return await handleKickPlayer(body, res);
         case "player-disconnect":
           return await handlePlayerDisconnect(body, res);
         default:

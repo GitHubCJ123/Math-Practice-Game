@@ -8,7 +8,6 @@ import React, { useEffect, useState } from 'react';
  * this bar instead of covering it.
  */
 const MESSAGES = [
-  '🏆 Multiplayer tournament mode is coming soon!',
   '✨ New design is here — do you like it? Let us know in Feedback!',
 ];
 

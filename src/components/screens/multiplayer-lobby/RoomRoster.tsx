@@ -38,33 +38,53 @@ export const ModeButton: React.FC<ModeButtonProps> = ({
 interface RoomPlayerCardProps {
   player: Player;
   isMe: boolean;
+  viewerIsHost?: boolean;
+  onKick?: (playerId: string) => void;
 }
 
 /** Compact player tile used in the FFA roster. */
-export const RoomPlayerCard: React.FC<RoomPlayerCardProps> = ({ player, isMe }) => (
-  <div
-    className={`p-4 rounded-2xl border-2 ${
-      isMe
-        ? 'bg-violet-50 dark:bg-violet-900/20 border-violet-300 dark:border-violet-600'
-        : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700'
-    }`}
-  >
-    <div className='flex items-center gap-2'>
-      <div
-        className={`w-3 h-3 rounded-full ${
-          player.connected ? 'bg-emerald-500' : 'bg-rose-500'
-        }`}
-      />
-      <span className='font-display font-semibold text-slate-800 dark:text-white'>
-        {player.name}
-        {isMe && ' (You)'}
-      </span>
+export const RoomPlayerCard: React.FC<RoomPlayerCardProps> = ({
+  player,
+  isMe,
+  viewerIsHost = false,
+  onKick,
+}) => {
+  const canKick = viewerIsHost && !isMe && !player.isHost && !!onKick;
+  return (
+    <div
+      className={`p-4 rounded-2xl border-2 ${
+        isMe
+          ? 'bg-violet-50 dark:bg-violet-900/20 border-violet-300 dark:border-violet-600'
+          : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700'
+      }`}
+    >
+      <div className='flex items-center gap-2'>
+        <div
+          className={`w-3 h-3 rounded-full ${
+            player.connected ? 'bg-emerald-500' : 'bg-rose-500'
+          }`}
+        />
+        <span className='font-display font-semibold text-slate-800 dark:text-white'>
+          {player.name}
+          {isMe && ' (You)'}
+        </span>
+        {canKick && (
+          <button
+            onClick={() => onKick?.(player.id)}
+            title={`Remove ${player.name}`}
+            aria-label={`Remove ${player.name}`}
+            className='ml-auto grid place-items-center w-6 h-6 rounded-lg text-rose-500 hover:bg-rose-100 dark:hover:bg-rose-900/30 transition-colors'
+          >
+            ✕
+          </button>
+        )}
+      </div>
+      {player.isHost && (
+        <span className='text-xs text-violet-600 dark:text-violet-400 font-semibold'>Host</span>
+      )}
     </div>
-    {player.isHost && (
-      <span className='text-xs text-violet-600 dark:text-violet-400 font-semibold'>Host</span>
-    )}
-  </div>
-);
+  );
+};
 
 interface TeamSectionProps {
   label: string;
@@ -76,6 +96,7 @@ interface TeamSectionProps {
   switchLabel: string;
   switchClass: string;
   onAssignTeam: (playerId: string, teamId: string) => void;
+  onKick?: (playerId: string) => void;
 }
 
 /** One of the two team blocks in the team-mode roster. */
@@ -89,6 +110,7 @@ export const TeamSection: React.FC<TeamSectionProps> = ({
   switchLabel,
   switchClass,
   onAssignTeam,
+  onKick,
 }) => {
   const headerColor =
     color === 'blue' ? 'text-blue-600 dark:text-blue-400' : 'text-red-600 dark:text-red-400';
@@ -127,20 +149,34 @@ export const TeamSection: React.FC<TeamSectionProps> = ({
                 {player.id === playerId && ' (You)'}
               </span>
             </div>
-            <div className='flex justify-between items-center mt-1'>
-              {player.isHost && (
+            <div className='flex justify-between items-center mt-1 gap-2'>
+              {player.isHost ? (
                 <span className='text-xs text-violet-600 dark:text-violet-400 font-semibold'>
                   Host
                 </span>
+              ) : (
+                <span />
               )}
-              {isHost && player.id !== playerId && switchToTeam && (
-                <button
-                  onClick={() => onAssignTeam(player.id, switchToTeam.id)}
-                  className={`text-xs hover:underline ml-auto ${switchClass}`}
-                >
-                  {switchLabel}
-                </button>
-              )}
+              <div className='flex items-center gap-2 ml-auto'>
+                {isHost && player.id !== playerId && switchToTeam && (
+                  <button
+                    onClick={() => onAssignTeam(player.id, switchToTeam.id)}
+                    className={`text-xs hover:underline ${switchClass}`}
+                  >
+                    {switchLabel}
+                  </button>
+                )}
+                {isHost && player.id !== playerId && !player.isHost && onKick && (
+                  <button
+                    onClick={() => onKick(player.id)}
+                    title={`Remove ${player.name}`}
+                    aria-label={`Remove ${player.name}`}
+                    className='text-xs text-rose-500 hover:underline'
+                  >
+                    Kick
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         ))}

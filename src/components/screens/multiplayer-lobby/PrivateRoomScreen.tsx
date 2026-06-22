@@ -24,6 +24,8 @@ interface PrivateRoomScreenProps {
   onCopy: (text: string) => void;
   onSettingsChange: (patch: SettingsPatch) => void;
   onAssignTeam: (playerId: string, teamId: string) => void;
+  onKick?: (playerId: string) => void;
+  onTournament?: () => void;
   onStartGame: () => void;
 }
 
@@ -62,6 +64,8 @@ export const PrivateRoomScreen: React.FC<PrivateRoomScreenProps> = ({
   onCopy,
   onSettingsChange,
   onAssignTeam,
+  onKick,
+  onTournament,
   onStartGame,
 }) => {
   const availableNumbers = getNumbersForOperation(operation);
@@ -91,9 +95,23 @@ export const PrivateRoomScreen: React.FC<PrivateRoomScreenProps> = ({
         />
 
         <div className='game-panel p-6 md:p-8 mb-6 animate-fade-in'>
-          <h1 className='font-display text-2xl md:text-3xl font-bold text-slate-800 dark:text-white mb-4'>
-            {isHost ? 'Your Room' : 'Joined Room'}
-          </h1>
+          <div className='flex items-center justify-between gap-3 mb-4'>
+            <h1 className='font-display text-2xl md:text-3xl font-bold text-slate-800 dark:text-white'>
+              {isHost ? 'Your Room' : 'Joined Room'}
+            </h1>
+            {onTournament && (
+              <button
+                onClick={onTournament}
+                title='Run a bracket for many players instead'
+                className='shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-xl font-display font-bold text-sm text-white bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 transition-colors shadow-sm'
+              >
+                🏆 Tournament
+                <span className='text-[10px] font-bold uppercase px-1.5 py-0.5 rounded-full bg-white/25'>
+                  Heavy Beta
+                </span>
+              </button>
+            )}
+          </div>
 
           <div className='rounded-2xl p-5 mb-6 bg-gradient-to-br from-violet-50 to-fuchsia-50 dark:from-violet-900/20 dark:to-fuchsia-900/20 border border-violet-200 dark:border-violet-500/30'>
             <div className='flex flex-col md:flex-row md:items-center gap-4'>
@@ -139,6 +157,7 @@ export const PrivateRoomScreen: React.FC<PrivateRoomScreenProps> = ({
                   switchLabel='→ Team B'
                   switchClass='text-red-600 dark:text-red-400'
                   onAssignTeam={onAssignTeam}
+                  onKick={onKick}
                 />
                 <TeamSection
                   label='🔴 Team B'
@@ -150,6 +169,7 @@ export const PrivateRoomScreen: React.FC<PrivateRoomScreenProps> = ({
                   switchLabel='→ Team A'
                   switchClass='text-blue-600 dark:text-blue-400'
                   onAssignTeam={onAssignTeam}
+                  onKick={onKick}
                 />
               </div>
             ) : (
@@ -159,6 +179,8 @@ export const PrivateRoomScreen: React.FC<PrivateRoomScreenProps> = ({
                     key={player.id}
                     player={player}
                     isMe={player.id === playerId}
+                    viewerIsHost={isHost}
+                    onKick={onKick}
                   />
                 ))}
                 {Array.from({ length: maxPlayers - players.length }).map((_, i) => (
@@ -184,8 +206,8 @@ export const PrivateRoomScreen: React.FC<PrivateRoomScreenProps> = ({
               <label className='block text-sm font-display font-semibold text-slate-600 dark:text-slate-400 mb-2'>
                 Max Players
               </label>
-              <div className='flex gap-2'>
-                {[2, 3, 4].map(num => {
+              <div className='flex flex-wrap gap-2'>
+                {[2, 3, 4, 5, 6, 7, 8].map(num => {
                   const isDisabled = !isHost || num < players.length;
                   return (
                     <button
@@ -197,9 +219,9 @@ export const PrivateRoomScreen: React.FC<PrivateRoomScreenProps> = ({
                         onSettingsChange({ maxPlayers: num, gameMode: newGameMode });
                       }}
                       disabled={isDisabled}
-                      className={`seg px-4 py-2 ${maxPlayers === num ? 'seg--active' : ''} ${isDisabled ? 'opacity-60 cursor-not-allowed' : ''}`}
+                      className={`seg px-4 py-2 min-w-[3rem] ${maxPlayers === num ? 'seg--active' : ''} ${isDisabled ? 'opacity-60 cursor-not-allowed' : ''}`}
                     >
-                      {num} Players
+                      {num}
                     </button>
                   );
                 })}
@@ -223,7 +245,7 @@ export const PrivateRoomScreen: React.FC<PrivateRoomScreenProps> = ({
                   disabled={!isHost || maxPlayers < 3}
                   onClick={() => onSettingsChange({ gameMode: 'teams' })}
                   activeClass='bg-gradient-to-br from-fuchsia-500 to-purple-600 text-white'
-                  label='Teams (2v2 / 1v3 / 2v1)'
+                  label='Teams (up to 4v4)'
                   title={maxPlayers < 3 ? 'Teams require 3 players' : ''}
                 />
               </div>

@@ -1021,3 +1021,94 @@
     animation: none !important;
   }
 }
+
+/* ===========================================================================
+   TOURNAMENT BRACKET (NCAA-style connectors)
+   Equal-height rounds + flex-1 match wraps mean each next-round match centers
+   on its two feeders, so the elbow connectors below line up automatically.
+   =========================================================================== */
+.tt-bracket {
+  display: flex;
+  align-items: stretch;
+  --tt-line: rgb(148 163 184 / 0.6);
+}
+.dark .tt-bracket {
+  --tt-line: rgb(71 85 105 / 0.85);
+}
+.tt-round {
+  display: flex;
+  flex-direction: column;
+  min-width: 210px;
+}
+.tt-round:not(:first-child) {
+  margin-left: 44px;
+}
+.tt-round__title {
+  flex: 0 0 auto;
+}
+.tt-round__body {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+}
+.tt-match-wrap {
+  flex: 1 1 0;
+  display: flex;
+  align-items: center;
+  position: relative;
+  min-height: 96px;
+}
+.tt-match {
+  position: relative;
+  width: 100%;
+  animation: ttPop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+/* Horizontal stub out the right of every match except the final. */
+.tt-round:not(:last-child) .tt-match-wrap::after {
+  content: '';
+  position: absolute;
+  left: 100%;
+  top: 50%;
+  width: 22px;
+  height: 2px;
+  background: var(--tt-line);
+}
+/* Vertical line joining each pair at the midpoint of the right margin. */
+.tt-round:not(:last-child) .tt-match-wrap:nth-child(odd)::before {
+  content: '';
+  position: absolute;
+  left: calc(100% + 22px);
+  top: 50%;
+  height: 50%;
+  width: 2px;
+  background: var(--tt-line);
+}
+.tt-round:not(:last-child) .tt-match-wrap:nth-child(even)::before {
+  content: '';
+  position: absolute;
+  left: calc(100% + 22px);
+  bottom: 50%;
+  height: 50%;
+  width: 2px;
+  background: var(--tt-line);
+}
+/* Horizontal stub into the left of each match except the first round. */
+.tt-round:not(:first-child) .tt-match::before {
+  content: '';
+  position: absolute;
+  right: 100%;
+  top: 50%;
+  width: 22px;
+  height: 2px;
+  background: var(--tt-line);
+}
+@keyframes ttPop {
+  0% {
+    opacity: 0;
+    transform: scale(0.9) translateY(6px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}

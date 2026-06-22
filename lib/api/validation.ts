@@ -29,7 +29,7 @@ const RoomSettingsSchema = z.object({
   selectedNumbers: z.array(coerceInt()).optional(),
   questionCount: coerceInt(z.number().int().min(1).max(50)).optional(),
   timeLimit: coerceInt(z.number().int().min(0)).optional(),
-  maxPlayers: coerceInt(z.number().int().min(2).max(4)).optional(),
+  maxPlayers: coerceInt(z.number().int().min(2).max(8)).optional(),
   gameMode: z.enum(["ffa", "teams"]).optional(),
 }).passthrough();
 
@@ -132,6 +132,7 @@ const UpdateProgressActionSchema = z.object({ action: z.literal("update-progress
 const SubmitMultiplayerActionSchema = z.object({ action: z.literal("submit-multiplayer"), roomId: id, playerId: id, answers: z.array(z.string()), score: coerceNumber() });
 const RematchActionSchema = z.object({ action: z.literal("rematch"), roomId: id, playerId: id, playerName: requiredString, rematchAction: z.enum(["request", "accept", "decline"]), keepTeams: z.boolean().optional() });
 const AssignTeamActionSchema = z.object({ action: z.literal("assign-team"), roomId: id, playerId: id, targetPlayerId: id, teamId: id });
+const KickPlayerActionSchema = z.object({ action: z.literal("kick-player"), roomId: id, playerId: id, targetPlayerId: id });
 const PlayerDisconnectActionSchema = z.object({ action: z.literal("player-disconnect"), roomId: id, playerId: id });
 
 export const MultiplayerActionSchema = z.discriminatedUnion("action", [
@@ -147,10 +148,116 @@ export const MultiplayerActionSchema = z.discriminatedUnion("action", [
   SubmitMultiplayerActionSchema,
   RematchActionSchema,
   AssignTeamActionSchema,
+  KickPlayerActionSchema,
   PlayerDisconnectActionSchema,
 ]);
 
 export type MultiplayerActionInput = z.infer<typeof MultiplayerActionSchema>;
+
+// ---- Tournament mode ----
+
+const TournamentSettingsSchema = z.object({
+  operation: OperationTypeSchema,
+  selectedNumbers: z.array(coerceInt()),
+  questionCount: coerceInt(z.number().int().min(1).max(50)),
+  timeLimit: coerceInt(z.number().int().min(0)),
+});
+
+const CreateTournamentActionSchema = z.object({
+  action: z.literal("create-tournament"),
+  organizerId: id,
+  name: requiredString.max(60),
+  format: z.enum(["individual", "teams"]).optional(),
+  settings: TournamentSettingsSchema,
+});
+const JoinTournamentActionSchema = z.object({
+  action: z.literal("join-tournament"),
+  code: id,
+  participantId: id,
+  name: requiredString,
+});
+const LeaveTournamentActionSchema = z.object({
+  action: z.literal("leave-tournament"),
+  tournamentId: id,
+  participantId: id,
+});
+const KickParticipantActionSchema = z.object({
+  action: z.literal("kick-participant"),
+  tournamentId: id,
+  organizerId: id,
+  targetId: id,
+});
+const SeedBracketActionSchema = z.object({
+  action: z.literal("seed-bracket"),
+  tournamentId: id,
+  organizerId: id,
+  mode: z.enum(["auto", "manual"]).optional(),
+  participantOrder: z.array(z.string()).optional(), // required for manual mode
+});
+const FormTeamsActionSchema = z.object({
+  action: z.literal("form-teams"),
+  tournamentId: id,
+  organizerId: id,
+  teams: z
+    .array(
+      z.object({
+        teamId: requiredString,
+        name: requiredString.max(40),
+        memberIds: z.array(z.string()),
+      })
+    )
+    .min(2)
+    .max(16),
+});
+const SetRoundSettingsActionSchema = z.object({
+  action: z.literal("set-round-settings"),
+  tournamentId: id,
+  organizerId: id,
+  round: coerceInt(z.number().int().min(1)),
+  settings: TournamentSettingsSchema,
+});
+const StartRoundActionSchema = z.object({
+  action: z.literal("start-round"),
+  tournamentId: id,
+  organizerId: id,
+  round: coerceInt(z.number().int().min(1)),
+});
+const UpdateMatchProgressActionSchema = z.object({
+  action: z.literal("update-match-progress"),
+  tournamentId: id,
+  matchId: id,
+  participantId: id,
+  currentQuestion: coerceInt(z.number().int().min(0)),
+});
+const SubmitMatchActionSchema = z.object({
+  action: z.literal("submit-match"),
+  tournamentId: id,
+  matchId: id,
+  participantId: id,
+  answers: z.array(z.string()),
+  score: coerceNumber(),
+});
+const AdvanceRoundActionSchema = z.object({
+  action: z.literal("advance-round"),
+  tournamentId: id,
+  organizerId: id,
+});
+
+export const TournamentActionSchema = z.discriminatedUnion("action", [
+  CreateTournamentActionSchema,
+  JoinTournamentActionSchema,
+  LeaveTournamentActionSchema,
+  KickParticipantActionSchema,
+  SeedBracketActionSchema,
+  FormTeamsActionSchema,
+  SetRoundSettingsActionSchema,
+  StartRoundActionSchema,
+  UpdateMatchProgressActionSchema,
+  SubmitMatchActionSchema,
+  AdvanceRoundActionSchema,
+]);
+
+export type TournamentActionInput = z.infer<typeof TournamentActionSchema>;
 
 export function validate<S extends z.ZodTypeAny>(schema: S, data: unknown): z.infer<S> {
   const result = schema.safeParse(data);

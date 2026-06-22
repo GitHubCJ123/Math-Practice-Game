@@ -16,6 +16,7 @@ import {
   createRoom,
   getOrCreatePlayerId,
   joinRoom,
+  kickPlayer,
   leaveRoom,
   quickMatch,
   setReady,
@@ -24,6 +25,10 @@ import {
 } from '../../../lib/multiplayer';
 import { logger } from '../../../lib/logger';
 import { usePusherChannel } from '../../../hooks/usePusherChannel';
+import { useToast } from '../../../hooks/useToast';
+import { Toast } from '../../ui/Toast';
+import { joinTournament } from '../../../lib/tournament';
+import { useTournamentContext } from '../../../contexts/TournamentContext';
 import { AIModeFlow, type AIModeFlowState } from './AIModeFlow';
 import { CreateRoomFlow } from './CreateRoomFlow';
 import { JoinRoomFlow } from './JoinRoomFlow';
@@ -114,6 +119,8 @@ export const MultiplayerLobbyScreen: React.FC<MultiplayerLobbyScreenProps> = ({
   );
   const [nameError, setNameError] = useState(false);
   const [playerId] = useState<string>(() => getOrCreatePlayerId());
+  const { toast, showToast, dismiss } = useToast();
+  const { enterTournament } = useTournamentContext();
 
   // Room state.
   const [roomId, setRoomId] = useState<string | null>(null);
@@ -218,6 +225,20 @@ export const MultiplayerLobbyScreen: React.FC<MultiplayerLobbyScreenProps> = ({
         dispatch({ type: 'OPPONENT_LEFT' });
       }
       setPlayers(prev => prev.filter(p => p.id !== data.playerId));
+    },
+    'player-kicked': (data: { playerId: string; playerName?: string }) => {
+      logger.log('[Lobby] player-kicked event:', data);
+      if (data.playerId === playerId) {
+        // The host removed me from the room.
+        setRoomId(null);
+        setPlayers([]);
+        setMyReady(false);
+        setReadyStates({});
+        dispatch({ type: 'GO_HOME' });
+        showToast('You were removed from the room by the host.', 'error');
+      } else {
+        setPlayers(prev => prev.filter(p => p.id !== data.playerId));
+      }
     },
     'player-ready': (data: { playerId: string; isReady: boolean }) => {
       logger.log('[Lobby] player-ready event:', data);
@@ -375,7 +396,14 @@ export const MultiplayerLobbyScreen: React.FC<MultiplayerLobbyScreenProps> = ({
         if (result.room.teams) setTeams(result.room.teams);
         dispatch({ type: 'CREATE_OR_JOIN_PRIVATE' });
       } else {
-        setJoinError(result.error || 'Failed to join room');
+        // Not a room — the same code box also joins tournaments.
+        const tRes = await joinTournament(joinCodeInput.toUpperCase(), playerId, playerName);
+        if (tRes.success && tRes.tournament) {
+          enterTournament(tRes.tournament, playerId);
+          navigate('/tournament');
+          return;
+        }
+        setJoinError(result.error || 'No room or tournament found for that code');
       }
     } catch (error) {
       console.error('Error joining room:', error);
@@ -489,6 +517,13 @@ export const MultiplayerLobbyScreen: React.FC<MultiplayerLobbyScreenProps> = ({
   const localAssignTeam = (targetPlayerId: string, teamId: string) => {
     if (!roomId) return;
     assignPlayerToTeam(roomId, playerId, targetPlayerId, teamId);
+  };
+
+  const handleKickPlayer = async (targetPlayerId: string) => {
+    if (!roomId) return;
+    // Optimistically drop the player; the player-kicked broadcast also fires.
+    setPlayers(prev => prev.filter(p => p.id !== targetPlayerId));
+    await kickPlayer(roomId, playerId, targetPlayerId);
   };
 
   const handleLeaveRoom = async () => {
@@ -621,6 +656,8 @@ export const MultiplayerLobbyScreen: React.FC<MultiplayerLobbyScreenProps> = ({
         onCopy={copyToClipboard}
         onSettingsChange={handleSettingsChange}
         onAssignTeam={localAssignTeam}
+        onKick={handleKickPlayer}
+        onTournament={() => navigate('/tournament')}
         onStartGame={handleStartGame}
       />
     );
@@ -633,7 +670,9 @@ export const MultiplayerLobbyScreen: React.FC<MultiplayerLobbyScreenProps> = ({
   }
 
   return (
-    <LobbyHome
+    <>
+      <Toast toast={toast} onDismiss={dismiss} />
+      <LobbyHome
       isDarkMode={isDarkMode}
       toggleDarkMode={toggleDarkMode}
       onBack={() => navigate('/')}
@@ -674,6 +713,7 @@ export const MultiplayerLobbyScreen: React.FC<MultiplayerLobbyScreenProps> = ({
         />
       )}
     </LobbyHome>
+    </>
   );
 };
 

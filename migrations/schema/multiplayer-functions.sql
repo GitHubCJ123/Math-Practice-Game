@@ -249,6 +249,46 @@ BEGIN
 END;
 $$;
 
+-- Host kicks another player (waiting only). Host-authorized; the host can't be
+-- kicked. Rebuilds teams when in team mode so the roster stays accurate.
+CREATE OR REPLACE FUNCTION mp_kick_player(p_room_id TEXT, p_host_id TEXT, p_target TEXT)
+RETURNS JSONB
+LANGUAGE plpgsql AS $$
+DECLARE
+  v_room multiplayer_rooms;
+  v_name TEXT;
+BEGIN
+  SELECT * INTO v_room FROM multiplayer_rooms WHERE id = p_room_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('ok', FALSE, 'error', 'Room not found');
+  END IF;
+  IF v_room.host_id <> p_host_id THEN
+    RETURN jsonb_build_object('ok', FALSE, 'error', 'Only the host can kick players');
+  END IF;
+  IF p_target = v_room.host_id THEN
+    RETURN jsonb_build_object('ok', FALSE, 'error', 'Host cannot be kicked');
+  END IF;
+  IF v_room.game_state <> 'waiting' THEN
+    RETURN jsonb_build_object('ok', FALSE, 'error', 'Cannot kick players while game is in progress');
+  END IF;
+
+  SELECT name INTO v_name FROM multiplayer_players WHERE room_id = p_room_id AND player_id = p_target;
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('ok', FALSE, 'error', 'Player not in room');
+  END IF;
+
+  DELETE FROM multiplayer_players WHERE room_id = p_room_id AND player_id = p_target;
+  DELETE FROM multiplayer_player_states WHERE room_id = p_room_id AND player_id = p_target;
+
+  IF v_room.settings->>'gameMode' = 'teams' THEN
+    PERFORM mp_rebuild_teams(p_room_id);
+  END IF;
+
+  PERFORM mp_touch(p_room_id);
+  RETURN jsonb_build_object('ok', TRUE, 'playerName', v_name, 'room', mp_room_json(p_room_id));
+END;
+$$;
+
 -- Host updates settings (waiting only). Switching to teams assigns; ffa clears.
 CREATE OR REPLACE FUNCTION mp_update_settings(p_room_id TEXT, p_player_id TEXT, p_settings JSONB)
 RETURNS JSONB
@@ -646,7 +686,11 @@ BEGIN
   GET DIAGNOSTICS v_count = ROW_COUNT;
   DELETE FROM multiplayer_queue WHERE created_at < now() - INTERVAL '5 minutes';
   DELETE FROM rate_limits WHERE expires_at < now();
-  DELETE FROM poll_state WHERE closed AND closed_at < now() - INTERVAL '30 seconds';
+  -- Drop closed polls after their 30s results window, plus any poll that blew
+  -- past the 10-min auto-close cutoff (its `closed` column may still be FALSE).
+  DELETE FROM poll_state
+    WHERE (closed AND closed_at < now() - INTERVAL '30 seconds')
+       OR started_at < now() - INTERVAL '11 minutes';
   RETURN v_count;
 END;
 $$;
@@ -696,10 +740,13 @@ $$;
 
 CREATE OR REPLACE FUNCTION poll_vote(p_poll_id TEXT, p_option_id TEXT) RETURNS VOID
 LANGUAGE sql AS $$
+  -- Reject votes on a closed OR auto-expired poll. A poll auto-closes 10 minutes
+  -- after it starts (see poll_get) so a forgotten poll can't keep taking votes.
   UPDATE poll_state
     SET tallies = jsonb_set(tallies, ARRAY[p_option_id],
                             to_jsonb(COALESCE((tallies->>p_option_id)::int, 0) + 1))
-    WHERE id = p_poll_id AND NOT closed;
+    WHERE id = p_poll_id AND NOT closed
+      AND started_at > now() - INTERVAL '10 minutes';
 $$;
 
 CREATE OR REPLACE FUNCTION poll_close(p_poll_id TEXT) RETURNS VOID
@@ -709,11 +756,21 @@ $$;
 
 CREATE OR REPLACE FUNCTION poll_get() RETURNS JSONB
 LANGUAGE sql STABLE AS $$
+  -- A poll auto-closes 10 minutes after it starts, so a forgotten poll can't
+  -- stay open forever (e.g. the admin closed their tab or moved to another
+  -- device with no way to end it). Report that cutoff as `closed` + a synthetic
+  -- `closedAt` so every client and the late-join snapshot treat it like a
+  -- normal close (final results shown briefly, then it disappears).
   SELECT jsonb_build_object(
     'poll', poll,
     'tallies', tallies,
-    'closed', closed,
-    'closedAt', CASE WHEN closed_at IS NULL THEN NULL ELSE (EXTRACT(EPOCH FROM closed_at) * 1000)::BIGINT END
+    'closed', (closed OR started_at < now() - INTERVAL '10 minutes'),
+    'closedAt', CASE
+        WHEN closed_at IS NOT NULL THEN (EXTRACT(EPOCH FROM closed_at) * 1000)::BIGINT
+        WHEN started_at < now() - INTERVAL '10 minutes'
+          THEN (EXTRACT(EPOCH FROM (started_at + INTERVAL '10 minutes')) * 1000)::BIGINT
+        ELSE NULL
+      END
   )
   FROM poll_state
   ORDER BY started_at DESC

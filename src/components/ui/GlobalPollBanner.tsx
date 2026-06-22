@@ -16,6 +16,13 @@ const pusherConfigured = Boolean(
 /** A closed poll lingers this long (final results) before it disappears. */
 const REMOVE_AFTER_CLOSE_MS = 30_000;
 
+/**
+ * A poll auto-closes this long after it starts if the admin never ends it, so a
+ * forgotten poll can't stay open forever (the admin may have closed their tab or
+ * moved to another device). The server enforces the same cutoff.
+ */
+const AUTO_CLOSE_AFTER_START_MS = 10 * 60_000;
+
 /** Remembers which option this browser voted for, so a refresh stays locked. */
 const votedStorageKey = (pollId: string) => `mathPollVoted:${pollId}`;
 
@@ -164,6 +171,19 @@ export const GlobalPollBanner: React.FC = () => {
     }, remaining);
     return () => window.clearTimeout(timer);
   }, [closedAt]);
+
+  // Safety net: if the admin never ends the poll, every client closes its own
+  // banner 10 minutes after the poll started (the server enforces the same
+  // cutoff for votes + late joiners). The timer fires async, so no sync setState.
+  useEffect(() => {
+    if (!poll || closed) return;
+    const closeAt = poll.startedAt + AUTO_CLOSE_AFTER_START_MS;
+    const timer = window.setTimeout(() => {
+      setClosed(true);
+      setClosedAt(closeAt);
+    }, Math.max(0, closeAt - Date.now()));
+    return () => window.clearTimeout(timer);
+  }, [poll, closed]);
 
   // Stay out of the way during a solo or multiplayer game; only surface on the
   // home screen. The component stays mounted elsewhere, so votes and the close

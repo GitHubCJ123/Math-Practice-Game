@@ -9,7 +9,8 @@ interface JoinRoomFlowProps {
 }
 
 /**
- * "Join Room" tab content. Captures an 8-character code and submits it.
+ * "Join Room" tab content. Captures a room code (8 chars) or a tournament code
+ * (6 chars) and submits it.
  */
 export const JoinRoomFlow: React.FC<JoinRoomFlowProps> = ({
   joinCode,
@@ -22,7 +23,7 @@ export const JoinRoomFlow: React.FC<JoinRoomFlowProps> = ({
   return (
     <div>
       <p className='text-slate-600 dark:text-slate-400 mb-4 text-center'>
-        Enter the 8-character room code to join.
+        Enter a room code or a tournament code to join.
       </p>
       <input
         type='text'
@@ -38,7 +39,7 @@ export const JoinRoomFlow: React.FC<JoinRoomFlowProps> = ({
         disabled={disabled}
         className='btn3d btn3d--success w-full py-4 text-lg'
       >
-        {isJoining ? 'Joining...' : 'Join Room'}
+        {isJoining ? 'Joining...' : 'Join'}
       </button>
     </div>
   );

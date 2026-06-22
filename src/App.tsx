@@ -19,6 +19,10 @@ import { AdminScreen } from './components/screens/AdminScreen';
 import { MultiplayerLobbyScreen } from './components/screens/multiplayer-lobby';
 import { MultiplayerQuizScreen } from './components/screens/MultiplayerQuizScreen';
 import { MultiplayerResultsScreen } from './components/screens/MultiplayerResultsScreen';
+import { TournamentLobby } from './components/screens/tournament/TournamentLobby';
+import { BracketView } from './components/screens/tournament/BracketView';
+import { TournamentMatch } from './components/screens/tournament/TournamentMatch';
+import { OrganizerDashboard } from './components/screens/tournament/OrganizerDashboard';
 import { MathDashAd } from './components/ui/MathDashAd';
 import { FeedbackButton } from './components/ui/FeedbackButton';
 import { Analytics } from '@vercel/analytics/react';
@@ -28,6 +32,7 @@ import { createLocalAIGame } from './lib/multiplayer';
 import { generateQuestions } from '@shared/questions';
 import { ThemeProvider, useThemeContext } from './contexts/ThemeContext';
 import { MultiplayerProvider, useMultiplayerContext } from './contexts/MultiplayerContext';
+import { TournamentProvider, useTournamentContext } from './contexts/TournamentContext';
 import { AdminProvider } from './contexts/AdminContext';
 import { OnlineCountProvider } from './contexts/OnlineCountContext';
 import { AdminPanel } from './components/ui/AdminPanel';
@@ -46,14 +51,16 @@ const App: React.FC = () => {
   return (
     <ThemeProvider>
       <MultiplayerProvider>
-        <AdminProvider>
-          <OnlineCountProvider>
-            <BrowserRouter>
-              <RouteChangeTracker />
-              <AppShell />
-            </BrowserRouter>
-          </OnlineCountProvider>
-        </AdminProvider>
+        <TournamentProvider>
+          <AdminProvider>
+            <OnlineCountProvider>
+              <BrowserRouter>
+                <RouteChangeTracker />
+                <AppShell />
+              </BrowserRouter>
+            </OnlineCountProvider>
+          </AdminProvider>
+        </TournamentProvider>
       </MultiplayerProvider>
     </ThemeProvider>
   );
@@ -142,6 +149,10 @@ const AppShell: React.FC = () => {
           <Route path="/join/:roomCode" element={<MultiplayerLobbyRoute />} />
           <Route path="/multiplayer/quiz" element={<MultiplayerQuizRoute />} />
           <Route path="/multiplayer/results" element={<MultiplayerResultsRoute />} />
+          <Route path="/tournament" element={<TournamentLobbyRoute />} />
+          <Route path="/tournament/bracket" element={<TournamentBracketRoute />} />
+          <Route path="/tournament/match" element={<TournamentMatchRoute />} />
+          <Route path="/tournament/dashboard" element={<TournamentDashboardRoute />} />
           <Route path="/admin" element={<AdminRoute />} />
         </Routes>
       </main>
@@ -298,6 +309,57 @@ const ResultsScreenWrapper: React.FC<{
 const AdminRoute: React.FC = () => {
   const { isDarkMode, toggleDarkMode } = useThemeContext();
   return <AdminScreen isDarkMode={isDarkMode} toggleDarkMode={toggleDarkMode} />;
+};
+
+const TournamentLobbyRoute: React.FC = () => {
+  const navigate = useNavigate();
+  const t = useTournamentContext();
+  useEffect(() => {
+    if (t.tournament && t.tournament.status !== 'lobby') {
+      navigate('/tournament/bracket', { replace: true });
+    }
+  }, [t.tournament, navigate]);
+  return <TournamentLobby />;
+};
+
+const TournamentBracketRoute: React.FC = () => {
+  const navigate = useNavigate();
+  const t = useTournamentContext();
+  useEffect(() => {
+    if (!t.tournament) {
+      navigate('/tournament', { replace: true });
+    } else if (t.myMatchId) {
+      navigate('/tournament/match', { replace: true });
+    }
+  }, [t.tournament, t.myMatchId, navigate]);
+  if (!t.tournament) return null;
+  return <BracketView />;
+};
+
+const TournamentMatchRoute: React.FC = () => {
+  const navigate = useNavigate();
+  const t = useTournamentContext();
+  useEffect(() => {
+    if (!t.tournament) {
+      navigate('/tournament', { replace: true });
+    } else if (!t.myMatchId) {
+      navigate('/tournament/bracket', { replace: true });
+    }
+  }, [t.tournament, t.myMatchId, navigate]);
+  if (!t.tournament || !t.myMatchId) return null;
+  return <TournamentMatch />;
+};
+
+const TournamentDashboardRoute: React.FC = () => {
+  const navigate = useNavigate();
+  const t = useTournamentContext();
+  useEffect(() => {
+    if (!t.tournament) {
+      navigate('/tournament', { replace: true });
+    }
+  }, [t.tournament, navigate]);
+  if (!t.tournament) return null;
+  return <OrganizerDashboard />;
 };
 
 const MultiplayerLobbyRoute: React.FC = () => {

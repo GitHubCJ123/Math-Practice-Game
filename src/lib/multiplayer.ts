@@ -167,6 +167,14 @@ export async function assignPlayerToTeam(
   });
 }
 
+export async function kickPlayer(
+  roomId: string,
+  hostPlayerId: string,
+  targetPlayerId: string
+): Promise<MultiplayerApiResponse<"kick-player">> {
+  return multiplayerApi("kick-player", { roomId, playerId: hostPlayerId, targetPlayerId });
+}
+
 // Generate a unique player ID (stored in sessionStorage for per-tab uniqueness)
 // This allows testing multiplayer in two browser tabs
 export function getOrCreatePlayerId(): string {

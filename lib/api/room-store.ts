@@ -97,6 +97,14 @@ export async function leaveRoom(roomId: string, playerId: string): Promise<Leave
   return callRpc<LeaveResult>("mp_leave_room", { p_room_id: roomId, p_player_id: playerId });
 }
 
+export async function kickPlayer(roomId: string, hostId: string, targetPlayerId: string): Promise<LeaveResult> {
+  return callRpc<LeaveResult>("mp_kick_player", {
+    p_room_id: roomId,
+    p_host_id: hostId,
+    p_target: targetPlayerId,
+  });
+}
+
 export async function updateRoomSettings(
   roomId: string,
   playerId: string,

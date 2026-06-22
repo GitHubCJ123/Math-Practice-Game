@@ -161,7 +161,7 @@ export interface RoomSettings {
   selectedNumbers: number[];
   questionCount: number;
   timeLimit: TimeLimit; // 0 for no limit
-  maxPlayers: number; // 2, 3, or 4
+  maxPlayers: number; // 2-8 (teams mode splits into two sides, e.g. 4v4)
   gameMode: GameMode; // 'ffa' or 'teams'
 }
 
@@ -233,6 +233,7 @@ export interface TeamResult {
 export interface RoomEventPayloads {
   'player-joined': { player: Player };
   'player-left': { playerId: string; playerName?: string };
+  'player-kicked': { playerId: string; playerName?: string };
   'player-ready': { playerId: string; isReady: boolean };
   'settings-updated': { settings: RoomSettings };
   'teams-updated': { teams: Team[]; players: Player[] };
@@ -269,6 +270,7 @@ export type MultiplayerAction =
   | 'submit-multiplayer'
   | 'rematch'
   | 'assign-team'
+  | 'kick-player'
   | 'player-disconnect';
 
 interface MultiplayerSuccessByAction {
@@ -318,9 +320,150 @@ interface MultiplayerSuccessByAction {
     teams?: Team[];
     players?: Player[];
   };
+  'kick-player': {
+    teams?: Team[];
+    players?: Player[];
+  };
   'player-disconnect': Record<string, never>;
 }
 
 export type MultiplayerApiResponse<TAction extends MultiplayerAction> =
   | ({ success: true; action?: TAction; error?: never } & MultiplayerSuccessByAction[TAction])
   | ({ success: false; action?: TAction; error: string } & Partial<MultiplayerSuccessByAction[TAction]>);
+
+// ============================================
+// Tournament Mode (single-elimination brackets)
+// ============================================
+
+export type TournamentFormat = 'individual' | 'teams';
+export type TournamentStatus = 'lobby' | 'seeding' | 'running' | 'finished';
+export type TournamentMatchStatus = 'pending' | 'playing' | 'finished';
+
+/** Per-round question settings (a subset of RoomSettings, no player counts). */
+export interface TournamentSettings {
+  operation: Operation;
+  selectedNumbers: number[];
+  questionCount: number;
+  timeLimit: number; // 0 for no limit
+}
+
+export interface TournamentParticipant {
+  participantId: string;
+  name: string;
+  seed: number | null;
+  eliminatedRound: number | null; // null = still alive
+  connected: boolean;
+  teamId?: string | null; // which team this player is on ('teams' format)
+}
+
+/** A team in a 'teams' format tournament; the bracket is seeded over these. */
+export interface TournamentTeam {
+  teamId: string;
+  name: string;
+  seed: number | null;
+  eliminatedRound: number | null;
+  memberIds: string[];
+}
+
+export interface TournamentMatch {
+  id: string;
+  round: number;
+  slot: number;
+  p1Id: string | null;
+  p2Id: string | null;
+  p1Score: number | null;
+  p2Score: number | null;
+  p1FinishMs: number | null;
+  p2FinishMs: number | null;
+  winnerId: string | null;
+  state: TournamentMatchStatus;
+  roundSettings: TournamentSettings | null;
+  startedAt: number | null;
+}
+
+export interface Tournament {
+  id: string;
+  code: string;
+  organizerId: string;
+  name: string;
+  format: TournamentFormat;
+  status: TournamentStatus;
+  currentRound: number;
+  championId: string | null;
+  settings: TournamentSettings; // default round settings
+  roundSettings: Record<string, TournamentSettings>; // per-round overrides, keyed by round
+  participants: TournamentParticipant[];
+  teams: TournamentTeam[]; // empty for 'individual' format
+  matches: TournamentMatch[];
+}
+
+/** Live per-participant in-match progress, for the organizer's analytics. */
+export interface TournamentLiveState {
+  matchId: string;
+  participantId: string;
+  name: string;
+  currentQuestion: number;
+  score: number;
+  finished: boolean;
+  finishMs: number | null;
+}
+
+/**
+ * Realtime events on the `tournament-${id}` channel (bracket-wide), keyed by
+ * event name. In-match 1v1 progress uses the separate `tmatch-${matchId}`
+ * channel ({@link TournamentMatchEventPayloads}).
+ */
+export interface TournamentEventPayloads {
+  'participant-joined': { participant: TournamentParticipant };
+  'participant-left': { participantId: string };
+  'participant-kicked': { participantId: string };
+  'teams-formed': { tournament: Tournament };
+  'bracket-seeded': { tournament: Tournament };
+  'round-settings-updated': {
+    round: number;
+    roundSettings: Record<string, TournamentSettings>;
+  };
+  'round-started': { round: number; tournament: Tournament; questions: Question[] };
+  'match-finished': { matchId: string; winnerId: string | null; round: number };
+  'round-advanced': { tournament: Tournament };
+  'tournament-finished': { championId: string | null; tournament: Tournament };
+}
+
+export type TournamentEventName = keyof TournamentEventPayloads;
+
+/** Realtime events on the per-match `tmatch-${matchId}` channel (the two players). */
+export interface TournamentMatchEventPayloads {
+  'match-progress': { participantId: string; currentQuestion: number };
+  'match-opponent-finished': { participantId: string; score: number };
+}
+
+export type TournamentAction =
+  | 'create-tournament'
+  | 'join-tournament'
+  | 'leave-tournament'
+  | 'kick-participant'
+  | 'seed-bracket'
+  | 'form-teams'
+  | 'set-round-settings'
+  | 'start-round'
+  | 'update-match-progress'
+  | 'submit-match'
+  | 'advance-round';
+
+interface TournamentSuccessByAction {
+  'create-tournament': { tournament: Tournament };
+  'join-tournament': { tournamentId: string; tournament: Tournament };
+  'leave-tournament': Record<string, never>;
+  'kick-participant': { tournament: Tournament };
+  'seed-bracket': { tournament: Tournament };
+  'form-teams': { tournament: Tournament };
+  'set-round-settings': { tournament: Tournament };
+  'start-round': { tournament: Tournament };
+  'update-match-progress': Record<string, never>;
+  'submit-match': { matchFinished: boolean; winnerId: string | null };
+  'advance-round': { finished: boolean; championId?: string | null; tournament?: Tournament };
+}
+
+export type TournamentApiResponse<TAction extends TournamentAction> =
+  | ({ success: true; error?: never } & TournamentSuccessByAction[TAction])
+  | ({ success: false; error: string } & Partial<TournamentSuccessByAction[TAction]>);

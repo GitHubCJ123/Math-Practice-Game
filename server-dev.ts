@@ -11,6 +11,7 @@ import broadcast from './api/broadcast.js';
 import poll from './api/poll.js';
 import pusherAuth from './api/pusher-auth.js';
 import multiplayer from './api/multiplayer.js';
+import tournament from './api/tournament.js';
 import getLeaderboard from './api/get-leaderboard.js';
 import getHallOfFame from './api/get-hall-of-fame.js';
 import getHallOfFameDates from './api/get-hall-of-fame-dates.js';
@@ -56,6 +57,7 @@ const routes: Array<[string, Handler]> = [
     ['poll', poll as unknown as Handler],
     ['pusher-auth', pusherAuth as unknown as Handler],
     ['multiplayer', multiplayer as unknown as Handler],
+    ['tournament', tournament as unknown as Handler],
     ['get-leaderboard', getLeaderboard as unknown as Handler],
     ['get-hall-of-fame', getHallOfFame as unknown as Handler],
     ['get-hall-of-fame-dates', getHallOfFameDates as unknown as Handler],

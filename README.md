@@ -73,15 +73,26 @@ Pick exactly what you want to drill — the question engine handles the rest.
 - **Local progress & personal bests** — an expandable per-operation panel of accuracy, average time, most-practiced numbers, and your best score, saved in your browser.
 - **Anti-cheat** — switching or hiding the tab mid-quiz auto-submits your run.
 
-### 🌐 Multiplayer (2–4 players)
+### 🌐 Multiplayer (2–8 players)
 
 - **Quick Match** — instant 1v1 matchmaking by operation.
 - **Private rooms** — shareable 8-character codes and `/join/:code` invite links.
-- **Free-for-all or 2v2 teams** — the host picks the mode and can shuffle or reassign players.
+- **Free-for-all or teams (up to 4v4)** — the host picks the mode, can shuffle or reassign players, and can remove anyone from the room.
 - **AI opponents** — four difficulty tiers: `easy` · `medium` · `hard` · `expert`.
 - **Live race view** — see opponents' progress and finish times as they happen.
 - **Ready-up & rematch** — synchronized countdowns and one-tap rematches.
 - **Identical question sets** — everyone races the exact same quiz, so it's a fair fight.
+
+### 🏆 Tournament Mode (Beta)
+
+- **Single-elimination brackets** — a non-playing organizer gathers up to **32 players** by code and runs an NCAA-style bracket (with connector lines) to the final. Players reach it from **Multiplayer → Create Room → 🏆 Tournament**, and the same room-code box joins either a room or a tournament.
+- **Solo or team brackets** — run a 1v1 bracket, or have the organizer form teams (auto-balance or hand-assign) and run team-vs-team matches where each team's score is the sum of its players.
+- **Flexible seeding** — **Auto-Seed** by join order, **🎲 Random Seed** for a random draw, or drag / **🔀 Shuffle** the entrants and lock in with **Use This Order**. The top of the list is the #1 seed.
+- **Adaptive play-in round** — when the field isn't a power of two, the lowest seeds play a small NCAA "First Four"–style play-in so the main bracket is always full (no instant-win byes).
+- **Per-round operations** — choose a different operation for each round, and change the *next* round's operation while the current one is still being played.
+- **Live organizer dashboard** — watch every match's progress, scores, and a round leaderboard update in real time (durable across refresh).
+- **Match results & forfeits** — once both sides finish, each player gets a head-to-head results screen (scores, finish times, answer review) before heading back to the bracket. Removing a player, or a player switching tabs / closing the page mid-match, forfeits so the bracket keeps moving.
+- **Fair matches** — both sides race the same questions; higher score wins, ties broken by the faster finish.
 
 ### 🏆 Leaderboards & Hall of Fame
 
@@ -133,6 +144,7 @@ flowchart TD
     subgraph Browser["React 19 SPA — Vite · Tailwind · React Router 7"]
         Solo["Solo&nbsp;&nbsp;Selection → Quiz → Results"]
         MP["Multiplayer&nbsp;&nbsp;Lobby → Quiz → Results"]
+        Tourney["Tournament&nbsp;&nbsp;Lobby → Bracket → Match → Dashboard"]
     end
 
     Browser -- "REST · /api/*" --> Fns["Vercel Serverless Functions<br/>api/*.ts"]
@@ -148,17 +160,19 @@ flowchart TD
     DB --- T3["feedback"]
     DB --- T4["multiplayer_rooms · players · states"]
     DB --- T5["multiplayer_queue · rate_limits · poll_state"]
+    DB --- T6["tournaments · participants · matches · match_states"]
 
     Cron["Vercel Cron — monthly"] --> Fns
 ```
 
 **How the pieces talk:**
 
-- The **client** is a pure SPA. Solo play keeps all state in React; multiplayer state is coordinated through a `MultiplayerContext`.
+- The **client** is a pure SPA. Solo play keeps all state in React; multiplayer state is coordinated through a `MultiplayerContext`, and tournaments through a `TournamentContext`.
 - **REST** calls hit serverless functions under `/api/*` for scores, leaderboards, feedback, explanations, and every multiplayer action.
 - **Pusher** carries real-time room events (player joined, progress, finished, game ended, rematch…) over WebSockets.
 - A separate **global broadcast channel** (`global-broadcast`) delivers admin announcements to every connected client.
 - **Multiplayer state lives in Supabase Postgres** (`room-store.ts` calls atomic `mp_*` SQL functions), so every serverless instance shares one source of truth — rooms still expire after ~1 hour. The quick-match queue, rate limits, and the active-poll snapshot are stored the same way, so nothing critical lives in per-instance lambda memory.
+- **Tournament mode** uses its own tables and atomic `tt_*` functions (`tournament-store.ts`), with bracket math computed by the pure [`shared/bracket.ts`](shared/bracket.ts). Non-power-of-two fields get an adaptive **play-in round** (NCAA "First Four" style) that trims the field to a full main bracket, so there are no instant-win byes. A bracket splits players into 2-person matches on per-match channels, so realtime fan-out stays small even with 32 players; the organizer dashboard fans those matches in for live analytics.
 - A **monthly Vercel cron** promotes each month's leaderboard winners into the Hall of Fame and prunes old scores.
 
 <p align="right"><a href="#-math-practice-game">⬆ Back to top</a></p>
@@ -176,12 +190,13 @@ flowchart TD
 │  ├─ index.css                # Tailwind v4 CSS-first config + custom keyframe animations
 │  ├─ components/
 │  │  ├─ screens/              # Selection, Quiz, Results (solo + multiplayer), Admin
-│  │  │  └─ multiplayer-lobby/ # Lobby home, create/join/quick-match/AI flows
+│  │  │  ├─ multiplayer-lobby/ # Lobby home, create/join/quick-match/AI flows
+│  │  │  └─ tournament/        # Tournament lobby, bracket view, 1v1 match runner, organizer dashboard
 │  │  ├─ leaderboard/          # Global leaderboard, Hall of Fame, progress & personal bests
 │  │  └─ ui/                   # Buttons, icons, toast, feedback, ad card, admin panel + broadcast banner
-│  ├─ contexts/                # ThemeContext, MultiplayerContext, AdminContext
+│  ├─ contexts/                # ThemeContext, MultiplayerContext, TournamentContext, AdminContext
 │  ├─ hooks/                   # useQuizTimer, usePusherChannel, useTheme, …
-│  └─ lib/                     # operations, audio, ga, logger, feedbackMessages, multiplayer
+│  └─ lib/                     # operations, audio, ga, logger, feedbackMessages, multiplayer, tournament
 ├─ api/                        # Vercel serverless functions
 │  ├─ submit-score.ts          # Validate + store an eligible leaderboard score
 │  ├─ check-score.ts           # Is this run a top-5 score this month?
@@ -192,6 +207,7 @@ flowchart TD
 │  ├─ get-explanation.ts       # Azure OpenAI answer explanations
 │  ├─ submit-feedback.ts       # Store beta feedback
 │  ├─ multiplayer.ts           # All room actions (create/join/start/answer/finish…)
+│  ├─ tournament.ts            # All tournament actions (create/join/seed/start/submit/advance…)
 │  ├─ broadcast.ts             # Admin → global announcement banner (Pusher)
 │  ├─ poll.ts                  # Admin live polls (start/vote/close)
 │  └─ pusher-auth.ts           # Authorize private/presence channels
@@ -199,6 +215,8 @@ flowchart TD
 │  ├─ db-pool.ts               # Supabase client (service role)
 │  ├─ pusher.ts                # Pusher server SDK + room-code helpers
 │  ├─ room-store.ts            # Supabase-backed room store (atomic mp_* functions)
+│  ├─ tournament-store.ts      # Supabase-backed tournament store (atomic tt_* functions)
+│  ├─ bracket.ts               # Pure single-elimination bracket math (seeding, byes, advancement)
 │  ├─ game-results.ts          # Pure multiplayer ranking + team results
 │  ├─ ai-player.ts             # AI opponent profiles (easy → expert)
 │  ├─ score-eligibility.ts     # Leaderboard eligibility rules
@@ -223,7 +241,7 @@ flowchart TD
 └─ vercel.json                 # Functions config + monthly cron
 ```
 
-> **Single source of truth:** every shared shape — `Operation`, `Question`, `Room`, `Player`, `Team`, `MultiplayerResult`, `RoomEvent`, … — lives in [`shared/types.ts`](shared/types.ts) and is imported by both the client and the API, so the contract never drifts.
+> **Single source of truth:** every shared shape — `Operation`, `Question`, `Room`, `Player`, `Team`, `MultiplayerResult`, `RoomEvent`, `Tournament`, `TournamentMatch`, … — lives in [`shared/types.ts`](shared/types.ts) and is imported by both the client and the API, so the contract never drifts.
 
 <p align="right"><a href="#-math-practice-game">⬆ Back to top</a></p>
 
@@ -265,6 +283,9 @@ In your Supabase project's **SQL Editor**, run the schema files in order (they'r
 3. [`migrations/schema/multiplayer-tables.sql`](migrations/schema/multiplayer-tables.sql) — multiplayer rooms, players, states, quick-match queue, rate limits, polls (with RLS)
 4. [`migrations/schema/multiplayer-functions.sql`](migrations/schema/multiplayer-functions.sql) — the atomic `mp_*` room functions (run after the tables)
 5. *(optional)* [`migrations/schema/multiplayer-cron.sql`](migrations/schema/multiplayer-cron.sql) — schedule room cleanup via pg_cron
+6. [`migrations/schema/tournament-tables.sql`](migrations/schema/tournament-tables.sql) — tournaments, participants, teams, matches, and live match states (with RLS)
+7. [`migrations/schema/tournament-functions.sql`](migrations/schema/tournament-functions.sql) — the atomic `tt_*` tournament functions (run after the tournament tables)
+8. *(optional)* [`migrations/schema/tournament-cron.sql`](migrations/schema/tournament-cron.sql) — schedule tournament cleanup via pg_cron (run after the tournament functions)
 
 ### 4. Run it
 
