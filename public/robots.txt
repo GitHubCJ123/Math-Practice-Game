@@ -1,0 +1,9 @@
+# https://www.robotstxt.org/robotstxt.html
+User-agent: *
+Allow: /
+
+# Private / non-content areas
+Disallow: /admin
+Disallow: /api/
+
+Sitemap: https://mathpracticegame.vercel.app/sitemap.xml

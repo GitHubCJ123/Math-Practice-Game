@@ -20,6 +20,7 @@ import { playClickSound } from '../../lib/audio';
 import { StatisticsDisplay } from '../leaderboard/StatisticsDisplay';
 import { GlobalLeaderboard } from '../leaderboard/GlobalLeaderboard';
 import { HallOfFameDisplay } from '../leaderboard/HallOfFameDisplay';
+import { HomeSeoContent } from '../seo/HomeSeoContent';
 import { ALL_OPERATIONS } from '../../lib/operations';
 
 interface SelectionScreenProps {
@@ -444,6 +445,7 @@ export const SelectionScreen: React.FC<SelectionScreenProps> = ({ onStartQuiz, i
       {showStats && <StatisticsDisplay />}
       <GlobalLeaderboard />
       <HallOfFameDisplay />
+      <HomeSeoContent />
     </div>
   );
 };

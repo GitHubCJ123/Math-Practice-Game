@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import type {
   AIGameConfig,
@@ -13,16 +13,8 @@ import type {
 } from '@shared/types';
 import { DEFAULT_QUESTION_COUNT } from '@shared/types';
 import { SelectionScreen } from './components/screens/SelectionScreen';
-import { QuizScreen } from './components/screens/QuizScreen';
-import { ResultsScreen } from './components/screens/ResultsScreen';
-import { AdminScreen } from './components/screens/AdminScreen';
-import { MultiplayerLobbyScreen } from './components/screens/multiplayer-lobby';
-import { MultiplayerQuizScreen } from './components/screens/MultiplayerQuizScreen';
-import { MultiplayerResultsScreen } from './components/screens/MultiplayerResultsScreen';
-import { TournamentLobby } from './components/screens/tournament/TournamentLobby';
-import { BracketView } from './components/screens/tournament/BracketView';
-import { TournamentMatch } from './components/screens/tournament/TournamentMatch';
-import { OrganizerDashboard } from './components/screens/tournament/OrganizerDashboard';
+// Heavy, non-home route screens are code-split via lazy() below to keep the
+// initial (home page) bundle small for faster LCP/TBT.
 import { MathDashAd } from './components/ui/MathDashAd';
 import { FeedbackButton } from './components/ui/FeedbackButton';
 import { Analytics } from '@vercel/analytics/react';
@@ -39,6 +31,62 @@ import { AdminPanel } from './components/ui/AdminPanel';
 import { GlobalBroadcastBanner } from './components/ui/GlobalBroadcastBanner';
 import { AnnouncementBanner } from './components/ui/AnnouncementBanner';
 import { GlobalPollBanner } from './components/ui/GlobalPollBanner';
+import { RouteSeo } from './components/seo/RouteSeo';
+import { NotFound } from './components/screens/NotFound';
+
+// Code-split screens (named exports wrapped for React.lazy).
+const QuizScreen = lazy(() =>
+  import('./components/screens/QuizScreen').then((m) => ({ default: m.QuizScreen }))
+);
+const ResultsScreen = lazy(() =>
+  import('./components/screens/ResultsScreen').then((m) => ({ default: m.ResultsScreen }))
+);
+const AdminScreen = lazy(() =>
+  import('./components/screens/AdminScreen').then((m) => ({ default: m.AdminScreen }))
+);
+const MultiplayerLobbyScreen = lazy(() =>
+  import('./components/screens/multiplayer-lobby').then((m) => ({
+    default: m.MultiplayerLobbyScreen,
+  }))
+);
+const MultiplayerQuizScreen = lazy(() =>
+  import('./components/screens/MultiplayerQuizScreen').then((m) => ({
+    default: m.MultiplayerQuizScreen,
+  }))
+);
+const MultiplayerResultsScreen = lazy(() =>
+  import('./components/screens/MultiplayerResultsScreen').then((m) => ({
+    default: m.MultiplayerResultsScreen,
+  }))
+);
+const TournamentLobby = lazy(() =>
+  import('./components/screens/tournament/TournamentLobby').then((m) => ({
+    default: m.TournamentLobby,
+  }))
+);
+const BracketView = lazy(() =>
+  import('./components/screens/tournament/BracketView').then((m) => ({ default: m.BracketView }))
+);
+const TournamentMatch = lazy(() =>
+  import('./components/screens/tournament/TournamentMatch').then((m) => ({
+    default: m.TournamentMatch,
+  }))
+);
+const OrganizerDashboard = lazy(() =>
+  import('./components/screens/tournament/OrganizerDashboard').then((m) => ({
+    default: m.OrganizerDashboard,
+  }))
+);
+
+const RouteFallback: React.FC = () => (
+  <div
+    className="flex items-center justify-center min-h-[40vh] text-slate-400"
+    role="status"
+    aria-live="polite"
+  >
+    <span className="animate-pulse font-display text-lg">Loading...</span>
+  </div>
+);
 
 interface QuizSettings {
   operation: Operation;
@@ -56,6 +104,7 @@ const App: React.FC = () => {
             <OnlineCountProvider>
               <BrowserRouter>
                 <RouteChangeTracker />
+                <RouteSeo />
                 <AppShell />
               </BrowserRouter>
             </OnlineCountProvider>
@@ -73,7 +122,12 @@ const AppShell: React.FC = () => {
   const [quizSettings, setQuizSettings] = useState<QuizSettings | null>(null);
 
   const handleStartQuiz = useCallback(
-    (operation: Operation, selectedNumbers: number[], timeLimit: number, questionCount: number = DEFAULT_QUESTION_COUNT) => {
+    (
+      operation: Operation,
+      selectedNumbers: number[],
+      timeLimit: number,
+      questionCount: number = DEFAULT_QUESTION_COUNT
+    ) => {
       setQuizSettings({ operation, selectedNumbers, timeLimit, questionCount });
       const generated = generateQuestions(operation, selectedNumbers, questionCount);
       setQuestions(generated);
@@ -92,11 +146,16 @@ const AppShell: React.FC = () => {
   useEffect(() => {
     if (import.meta.env.VITE_NODE_ENV !== 'test') return;
     window.onFinishQuiz = (answers: string[], time: number) => {
-      setQuestions(prev => {
+      setQuestions((prev) => {
         if (prev.length > 0) return prev;
         const defaults: Operation = 'multiplication';
         const nums = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
-        setQuizSettings({ operation: defaults, selectedNumbers: nums, timeLimit: 0, questionCount: DEFAULT_QUESTION_COUNT });
+        setQuizSettings({
+          operation: defaults,
+          selectedNumbers: nums,
+          timeLimit: 0,
+          questionCount: DEFAULT_QUESTION_COUNT,
+        });
         return generateQuestions(defaults, nums, DEFAULT_QUESTION_COUNT);
       });
       handleShowResults(answers, time);
@@ -113,48 +172,51 @@ const AppShell: React.FC = () => {
     <div className="arcade-bg min-h-screen flex flex-col items-center justify-center p-4 pt-16 transition-colors duration-300 relative overflow-x-hidden">
       <BackdropDecor />
       <main className="w-full flex justify-center">
-        <Routes>
-          <Route
-            path="/"
-            element={
-              <SelectionScreenWrapper
-                initialSettings={quizSettings}
-                onStartQuiz={handleStartQuiz}
-              />
-            }
-          />
-          <Route
-            path="/quiz"
-            element={
-              <QuizScreenWrapper
-                questions={questions}
-                quizSettings={quizSettings}
-                onShowResults={handleShowResults}
-              />
-            }
-          />
-          <Route
-            path="/results"
-            element={
-              <ResultsScreenWrapper
-                questions={questions}
-                userAnswers={userAnswers}
-                timeTaken={timeTaken}
-                quizSettings={quizSettings}
-                onStartQuiz={handleStartQuiz}
-              />
-            }
-          />
-          <Route path="/multiplayer" element={<MultiplayerLobbyRoute />} />
-          <Route path="/join/:roomCode" element={<MultiplayerLobbyRoute />} />
-          <Route path="/multiplayer/quiz" element={<MultiplayerQuizRoute />} />
-          <Route path="/multiplayer/results" element={<MultiplayerResultsRoute />} />
-          <Route path="/tournament" element={<TournamentLobbyRoute />} />
-          <Route path="/tournament/bracket" element={<TournamentBracketRoute />} />
-          <Route path="/tournament/match" element={<TournamentMatchRoute />} />
-          <Route path="/tournament/dashboard" element={<TournamentDashboardRoute />} />
-          <Route path="/admin" element={<AdminRoute />} />
-        </Routes>
+        <Suspense fallback={<RouteFallback />}>
+          <Routes>
+            <Route
+              path="/"
+              element={
+                <SelectionScreenWrapper
+                  initialSettings={quizSettings}
+                  onStartQuiz={handleStartQuiz}
+                />
+              }
+            />
+            <Route
+              path="/quiz"
+              element={
+                <QuizScreenWrapper
+                  questions={questions}
+                  quizSettings={quizSettings}
+                  onShowResults={handleShowResults}
+                />
+              }
+            />
+            <Route
+              path="/results"
+              element={
+                <ResultsScreenWrapper
+                  questions={questions}
+                  userAnswers={userAnswers}
+                  timeTaken={timeTaken}
+                  quizSettings={quizSettings}
+                  onStartQuiz={handleStartQuiz}
+                />
+              }
+            />
+            <Route path="/multiplayer" element={<MultiplayerLobbyRoute />} />
+            <Route path="/join/:roomCode" element={<MultiplayerLobbyRoute />} />
+            <Route path="/multiplayer/quiz" element={<MultiplayerQuizRoute />} />
+            <Route path="/multiplayer/results" element={<MultiplayerResultsRoute />} />
+            <Route path="/tournament" element={<TournamentLobbyRoute />} />
+            <Route path="/tournament/bracket" element={<TournamentBracketRoute />} />
+            <Route path="/tournament/match" element={<TournamentMatchRoute />} />
+            <Route path="/tournament/dashboard" element={<TournamentDashboardRoute />} />
+            <Route path="/admin" element={<AdminRoute />} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </Suspense>
       </main>
 
       <Analytics />
@@ -214,13 +276,23 @@ const FeedbackButtonConditional: React.FC = () => {
 
 const SelectionScreenWrapper: React.FC<{
   initialSettings: QuizSettings | null;
-  onStartQuiz: (operation: Operation, selectedNumbers: number[], timeLimit: number, questionCount: number) => void;
+  onStartQuiz: (
+    operation: Operation,
+    selectedNumbers: number[],
+    timeLimit: number,
+    questionCount: number
+  ) => void;
 }> = ({ initialSettings, onStartQuiz }) => {
   const navigate = useNavigate();
   const { isDarkMode, toggleDarkMode } = useThemeContext();
 
   const handleStart = useCallback(
-    (operation: Operation, selectedNumbers: number[], timeLimit: number, questionCount: number = DEFAULT_QUESTION_COUNT) => {
+    (
+      operation: Operation,
+      selectedNumbers: number[],
+      timeLimit: number,
+      questionCount: number = DEFAULT_QUESTION_COUNT
+    ) => {
       onStartQuiz(operation, selectedNumbers, timeLimit, questionCount);
       navigate('/quiz', { replace: true });
     },
@@ -235,7 +307,10 @@ const SelectionScreenWrapper: React.FC<{
         isDarkMode={isDarkMode}
         toggleDarkMode={toggleDarkMode}
       />
-      <div className="absolute right-0 top-8 hidden 2xl:flex 2xl:flex-col 2xl:items-center 2xl:gap-6" style={{ width: 'calc((100vw - 896px) / 2)' }}>
+      <div
+        className="absolute right-0 top-8 hidden 2xl:flex 2xl:flex-col 2xl:items-center 2xl:gap-6"
+        style={{ width: 'calc((100vw - 896px) / 2)' }}
+      >
         <MathDashAd />
         <AdminPanel />
       </div>
@@ -278,7 +353,12 @@ const ResultsScreenWrapper: React.FC<{
   userAnswers: string[];
   timeTaken: number;
   quizSettings: QuizSettings | null;
-  onStartQuiz: (operation: Operation, selectedNumbers: number[], timeLimit: number, questionCount: number) => void;
+  onStartQuiz: (
+    operation: Operation,
+    selectedNumbers: number[],
+    timeLimit: number,
+    questionCount: number
+  ) => void;
 }> = ({ questions, userAnswers, timeTaken, quizSettings, onStartQuiz }) => {
   const navigate = useNavigate();
 
@@ -290,7 +370,12 @@ const ResultsScreenWrapper: React.FC<{
 
   // Play Again replays the exact same quiz setup instead of returning to the menu.
   const handlePlayAgain = () => {
-    onStartQuiz(quizSettings.operation, quizSettings.selectedNumbers, quizSettings.timeLimit, quizSettings.questionCount);
+    onStartQuiz(
+      quizSettings.operation,
+      quizSettings.selectedNumbers,
+      quizSettings.timeLimit,
+      quizSettings.questionCount
+    );
     navigate('/quiz', { replace: true });
   };
 
@@ -380,7 +465,18 @@ const MultiplayerLobbyRoute: React.FC = () => {
     timeLimit?: number,
     aiConfig?: AIGameConfig
   ) => {
-    mp.startGame({ roomId, playerId, playerName, questions, isHost, players, teams, gameMode, timeLimit, aiConfig });
+    mp.startGame({
+      roomId,
+      playerId,
+      playerName,
+      questions,
+      isHost,
+      players,
+      teams,
+      gameMode,
+      timeLimit,
+      aiConfig,
+    });
     navigate('/multiplayer/quiz', { replace: true });
   };
 
@@ -462,7 +558,12 @@ const MultiplayerResultsRoute: React.FC = () => {
       return;
     }
     try {
-      const game = createLocalAIGame(mp.playerId, mp.playerName, config.difficulty, config.settings);
+      const game = createLocalAIGame(
+        mp.playerId,
+        mp.playerName,
+        config.difficulty,
+        config.settings
+      );
       mp.startGame({
         roomId: game.roomId,
         playerId: mp.playerId,

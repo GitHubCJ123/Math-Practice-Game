@@ -136,21 +136,14 @@ export const ChevronDownIcon: React.FC<{ className?: string }> = ({ className })
  * Playful brand mark: a rounded gradient "tile" with a math glyph. Used in
  * the app headers. Gradient ids are unique per-instance to avoid collisions.
  */
-export const BrandMark: React.FC<{ className?: string }> = ({ className }) => {
-  const id = React.useId();
-  return (
-    <svg className={className} viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-      <defs>
-        <linearGradient id={`bm-${id}`} x1="0" y1="0" x2="48" y2="48" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#8b5cf6" />
-          <stop offset="0.5" stopColor="#d946ef" />
-          <stop offset="1" stopColor="#0ea5e9" />
-        </linearGradient>
-      </defs>
-      <rect x="2" y="2" width="44" height="44" rx="13" fill={`url(#bm-${id})`} />
-      <rect x="2" y="2" width="44" height="44" rx="13" fill="white" fillOpacity="0.08" />
-      <path d="M16 19h16M16 24h16M16 29h9" stroke="white" strokeWidth="2.6" strokeLinecap="round" opacity="0.55" />
-      <path d="M24 11.5 25.7 16l4.5 1.7-4.5 1.7L24 24l-1.7-4.6L17.8 17.7l4.5-1.7L24 11.5z" fill="white" />
-    </svg>
-  );
-};
+export const BrandMark: React.FC<{ className?: string }> = ({ className }) => (
+  <img
+    src="/logo.webp"
+    alt=""
+    aria-hidden="true"
+    width={56}
+    height={56}
+    draggable={false}
+    className={className}
+  />
+);
