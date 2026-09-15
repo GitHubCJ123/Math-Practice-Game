@@ -73,6 +73,9 @@ export const HallOfFameDisplay: React.FC = () => {
 
   const availableYears = Object.keys(availableDates).map(Number).sort((a, b) => b - a);
   const availableMonthsForYear = selectedYear ? availableDates[selectedYear] : [];
+  const isBetaLeaderboardMonth =
+    (selectedYear === 2025 && selectedMonth !== null && selectedMonth >= 10) ||
+    (selectedYear === 2026 && selectedMonth !== null && selectedMonth <= 2);
 
   if (availableYears.length === 0) {
     return (
@@ -125,10 +128,10 @@ export const HallOfFameDisplay: React.FC = () => {
             })}
           </select>
         </div>
-        {selectedYear === 2025 && selectedMonth === 10 && (
+        {isBetaLeaderboardMonth && (
           <div className="text-center bg-yellow-100 dark:bg-yellow-900/50 border border-yellow-300 dark:border-yellow-700 text-yellow-800 dark:text-yellow-200 px-4 py-3 rounded-lg relative mb-4" role="alert">
             <strong className="font-bold">Note:</strong>
-            <span className="block sm:inline"> During this month (October 2025), the leaderboard was in testing. Scores may be incorrect or inaccurate.</span>
+            <span className="block sm:inline"> From October 2025 through February 2026, the leaderboard was in testing. Scores may be incorrect or inaccurate.</span>
           </div>
         )}
       </div>

@@ -29,7 +29,6 @@ import { AdminProvider } from './contexts/AdminContext';
 import { OnlineCountProvider } from './contexts/OnlineCountContext';
 import { AdminPanel } from './components/ui/AdminPanel';
 import { GlobalBroadcastBanner } from './components/ui/GlobalBroadcastBanner';
-import { AnnouncementBanner } from './components/ui/AnnouncementBanner';
 import { GlobalPollBanner } from './components/ui/GlobalPollBanner';
 import { RouteSeo } from './components/seo/RouteSeo';
 import { NotFound } from './components/screens/NotFound';
@@ -223,7 +222,6 @@ const AppShell: React.FC = () => {
       <SpeedInsights />
       <FeedbackButtonConditional />
       <div className="fixed top-0 inset-x-0 z-[60]">
-        <AnnouncementBanner />
         <GlobalBroadcastBanner />
       </div>
       <GlobalPollBanner />
