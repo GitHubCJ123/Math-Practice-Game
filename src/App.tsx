@@ -168,7 +168,7 @@ const AppShell: React.FC = () => {
   }, [handleShowResults]);
 
   return (
-    <div className="arcade-bg min-h-screen flex flex-col items-center justify-center p-4 pt-16 transition-colors duration-300 relative overflow-x-hidden">
+    <div className="arcade-bg min-h-screen flex flex-col items-center justify-center p-4 transition-colors duration-300 relative overflow-x-hidden">
       <BackdropDecor />
       <main className="w-full flex justify-center">
         <Suspense fallback={<RouteFallback />}>
