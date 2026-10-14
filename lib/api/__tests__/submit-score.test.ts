@@ -170,6 +170,13 @@ describe('api/submit-score — finish', () => {
     expect(console.warn).toHaveBeenCalled();
   });
 
+  it('rejects an instant finish that claims a believable time it never waited for', async () => {
+    const { sessionId, answers } = await startQuiz();
+    vi.setSystemTime(Date.now() + 120);
+    const res = await call({ action: 'finish', sessionId, answers, timeMs: 2500 });
+    expect(res.body).toEqual({ verified: false, isTopScore: false });
+  });
+
   it('replaces an understated time with the server-measured window', async () => {
     const { sessionId, answers } = await startQuiz();
     playFor(12_000, 0);
