@@ -22,6 +22,13 @@ export const QUIZ_SESSION_TTL_MS = 2 * 60 * 60 * 1000;
 export const LATENCY_ALLOWANCE_MS = 1000;
 
 /**
+ * Slack for start and finish landing on different server instances whose
+ * clocks differ slightly. An honest client's timer can never exceed the
+ * server window (it starts after the questions arrive plus the full intro).
+ */
+export const CLOCK_TOLERANCE_MS = 250;
+
+/**
  * Fastest believable pace per question, by operation: ~75% of the fastest
  * Hall of Fame time on record for that mode (Oct 2025 – Sep 2026). Anything
  * faster is rejected outright — no human has come close, and a script that
@@ -41,7 +48,7 @@ export const MIN_MS_PER_QUESTION: Record<Operation, number> = {
 
 export type RunTimingVerdict =
   | { ok: true; scoreMs: number; serverMs: number }
-  | { ok: false; reason: "expired" | "too-fast"; serverMs: number };
+  | { ok: false; reason: "expired" | "inconsistent" | "too-fast"; serverMs: number };
 
 export function verifyRunTiming(input: {
   operation: Operation;
@@ -55,6 +62,12 @@ export function verifyRunTiming(input: {
 
   if (elapsedMs > QUIZ_SESSION_TTL_MS) {
     return { ok: false, reason: "expired", serverMs };
+  }
+
+  // Claiming more quiz time than has actually passed since the questions were
+  // issued is impossible — it means the time was made up rather than played.
+  if (input.clientMs > serverMs + CLOCK_TOLERANCE_MS) {
+    return { ok: false, reason: "inconsistent", serverMs };
   }
 
   // Trust the (more precise) client timer only within the latency allowance.

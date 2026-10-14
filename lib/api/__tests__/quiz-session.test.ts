@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  CLOCK_TOLERANCE_MS,
   LATENCY_ALLOWANCE_MS,
   MIN_MS_PER_QUESTION,
   QUIZ_SESSION_TTL_MS,
@@ -42,6 +43,17 @@ describe('verifyRunTiming', () => {
       finishedAtMs: ISSUED + 150,
       questionCount: 10,
     });
+    expect(verdict).toMatchObject({ ok: false, reason: 'inconsistent' });
+  });
+
+  it('rejects a faked 0.45s run even when the script waits out the window', () => {
+    const verdict = verifyRunTiming({
+      operation: 'multiplication',
+      clientMs: 450,
+      issuedAtMs: ISSUED,
+      finishedAtMs: ISSUED + INTRO_COUNTDOWN_TOTAL_MS + 1000,
+      questionCount: 10,
+    });
     expect(verdict).toMatchObject({ ok: false, reason: 'too-fast' });
   });
 
@@ -78,15 +90,38 @@ describe('verifyRunTiming', () => {
     expect(atFloor).toEqual({ ok: true, scoreMs: floor, serverMs: floor + LATENCY_ALLOWANCE_MS });
   });
 
-  it('keeps a client time that is slower than the server window', () => {
-    const verdict = verifyRunTiming({
+  it('rejects a client time longer than the time that actually passed (made up, not played)', () => {
+    // Oct 14 production finding: start, then instantly claim a believable 2.5s.
+    const instant = verifyRunTiming({
+      operation: 'multiplication',
+      clientMs: 2500,
+      issuedAtMs: ISSUED,
+      finishedAtMs: ISSUED + 120,
+      questionCount: 10,
+    });
+    expect(instant).toMatchObject({ ok: false, reason: 'inconsistent' });
+
+    const slowerThanWindow = verifyRunTiming({
       operation: 'multiplication',
       clientMs: 30_000,
       issuedAtMs: ISSUED,
       finishedAtMs: finishedAfter(20_000),
       questionCount: 10,
     });
-    expect(verdict.ok && verdict.scoreMs).toBe(30_000);
+    expect(slowerThanWindow).toMatchObject({ ok: false, reason: 'inconsistent' });
+  });
+
+  it('allows a small clock difference between server instances', () => {
+    const at = (clientMs: number) =>
+      verifyRunTiming({
+        operation: 'multiplication',
+        clientMs,
+        issuedAtMs: ISSUED,
+        finishedAtMs: ISSUED + INTRO_COUNTDOWN_TOTAL_MS + 9000,
+        questionCount: 10,
+      });
+    expect(at(9000 + CLOCK_TOLERANCE_MS)).toMatchObject({ ok: true, scoreMs: 9000 + CLOCK_TOLERANCE_MS });
+    expect(at(9000 + CLOCK_TOLERANCE_MS + 1)).toMatchObject({ ok: false, reason: 'inconsistent' });
   });
 
   it('rejects runs finished after the session lifetime', () => {
