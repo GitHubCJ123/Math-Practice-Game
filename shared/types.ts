@@ -15,6 +15,14 @@ export const MIN_QUESTION_COUNT = 5;
 export const MAX_QUESTION_COUNT = 50;
 export const MAX_CONVERSION_QUESTION_COUNT = 25; // Limited by available conversions
 
+/**
+ * The solo quiz's "Ready... Set... Go..." intro runs three stages of this length
+ * before the timer starts. The server subtracts the full intro when it measures
+ * a leaderboard run, so keep both values in sync with useIntroCountdown.
+ */
+export const INTRO_COUNTDOWN_STAGE_MS = 1000;
+export const INTRO_COUNTDOWN_TOTAL_MS = 3 * INTRO_COUNTDOWN_STAGE_MS;
+
 export interface Question {
   num1: number;
   num2?: number; // num2 is optional for unary operations like squares/roots

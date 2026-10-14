@@ -1,4 +1,4 @@
-import React, { lazy, Suspense, useCallback, useEffect, useState } from 'react';
+import React, { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { BrowserRouter, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import type {
   AIGameConfig,
@@ -22,6 +22,13 @@ import { SpeedInsights } from '@vercel/speed-insights/react';
 import { trackPageView } from './lib/ga';
 import { createLocalAIGame } from './lib/multiplayer';
 import { generateQuestions } from '@shared/questions';
+import { countCorrectAnswers } from '@shared/grading';
+import { isLeaderboardRun } from '@shared/score-eligibility';
+import {
+  finishLeaderboardQuiz,
+  startLeaderboardQuiz,
+  type LeaderboardCheck,
+} from './lib/leaderboard';
 import { ThemeProvider, useThemeContext } from './contexts/ThemeContext';
 import { MultiplayerProvider, useMultiplayerContext } from './contexts/MultiplayerContext';
 import { TournamentProvider, useTournamentContext } from './contexts/TournamentContext';
@@ -34,9 +41,8 @@ import { RouteSeo } from './components/seo/RouteSeo';
 import { NotFound } from './components/screens/NotFound';
 
 // Code-split screens (named exports wrapped for React.lazy).
-const QuizScreen = lazy(() =>
-  import('./components/screens/QuizScreen').then((m) => ({ default: m.QuizScreen }))
-);
+const loadQuizScreen = () => import('./components/screens/QuizScreen');
+const QuizScreen = lazy(() => loadQuizScreen().then((m) => ({ default: m.QuizScreen })));
 const ResultsScreen = lazy(() =>
   import('./components/screens/ResultsScreen').then((m) => ({ default: m.ResultsScreen }))
 );
@@ -119,6 +125,13 @@ const AppShell: React.FC = () => {
   const [userAnswers, setUserAnswers] = useState<string[]>([]);
   const [timeTaken, setTimeTaken] = useState(0);
   const [quizSettings, setQuizSettings] = useState<QuizSettings | null>(null);
+  // Leaderboard-eligible quizzes use server-issued questions so the server can
+  // grade and time the run itself (see api/submit-score.ts).
+  const [quizSessionId, setQuizSessionId] = useState<string | null>(null);
+  const [isPreparingQuiz, setIsPreparingQuiz] = useState(false);
+  const [leaderboardCheck, setLeaderboardCheck] = useState<LeaderboardCheck>({ status: 'ineligible' });
+  // Bumped on every new quiz so late responses from an older quiz are ignored.
+  const quizRunRef = useRef(0);
 
   const handleStartQuiz = useCallback(
     (
@@ -127,19 +140,72 @@ const AppShell: React.FC = () => {
       timeLimit: number,
       questionCount: number = DEFAULT_QUESTION_COUNT
     ) => {
-      setQuizSettings({ operation, selectedNumbers, timeLimit, questionCount });
-      const generated = generateQuestions(operation, selectedNumbers, questionCount);
-      setQuestions(generated);
-      setUserAnswers(Array(generated.length).fill(''));
-      setTimeTaken(0);
+      const runId = ++quizRunRef.current;
+
+      const beginQuiz = (generated: Question[], sessionId: string | null) => {
+        setQuizSettings({ operation, selectedNumbers, timeLimit, questionCount });
+        setQuestions(generated);
+        setUserAnswers(Array(generated.length).fill(''));
+        setTimeTaken(0);
+        setQuizSessionId(sessionId);
+        setLeaderboardCheck({ status: 'ineligible' });
+        setIsPreparingQuiz(false);
+      };
+
+      if (!isLeaderboardRun(operation, selectedNumbers, questionCount)) {
+        beginQuiz(generateQuestions(operation, selectedNumbers, questionCount), null);
+        return;
+      }
+
+      // Leave the current quiz state untouched until the new questions arrive.
+      // Navigation to /quiz commits in a transition, so the results screen can
+      // re-render first: clearing questions would redirect it home, and
+      // resetting the time would re-run its personal-best effect.
+      // QuizScreenWrapper shows a loader while isPreparingQuiz is true.
+      setIsPreparingQuiz(true);
+      // Fetch the quiz screen's chunk in parallel so it doesn't count against
+      // the server-measured time once the questions arrive.
+      void loadQuizScreen();
+      void startLeaderboardQuiz(operation, selectedNumbers, questionCount).then((session) => {
+        if (runId !== quizRunRef.current) return;
+        // Server unavailable → still let them practice, just not for the leaderboard.
+        beginQuiz(
+          session?.questions ?? generateQuestions(operation, selectedNumbers, questionCount),
+          session?.sessionId ?? null
+        );
+      });
     },
     []
   );
 
-  const handleShowResults = useCallback((answers: string[], time: number) => {
-    setUserAnswers(answers);
-    setTimeTaken(time);
-  }, []);
+  const handleShowResults = useCallback(
+    (answers: string[], time: number) => {
+      setUserAnswers(answers);
+      setTimeTaken(time);
+
+      const isPerfect =
+        questions.length > 0 && countCorrectAnswers(questions, answers) === questions.length;
+      if (!quizSessionId || !isPerfect) {
+        setLeaderboardCheck({ status: 'ineligible' });
+        return;
+      }
+
+      // Sent immediately (not from the lazily-loaded results screen) so the
+      // server's timing window stays as tight as possible.
+      const runId = quizRunRef.current;
+      const sessionId = quizSessionId;
+      setLeaderboardCheck({ status: 'checking' });
+      void finishLeaderboardQuiz(sessionId, answers, Math.round(time * 1000)).then((result) => {
+        if (runId !== quizRunRef.current) return;
+        setLeaderboardCheck(
+          result?.verified
+            ? { status: 'ready', sessionId, isTopScore: result.isTopScore, scoreMs: result.scoreMs }
+            : { status: 'ineligible' }
+        );
+      });
+    },
+    [questions, quizSessionId]
+  );
 
   // Test hook for E2E suites; gated to test mode only.
   useEffect(() => {
@@ -188,6 +254,7 @@ const AppShell: React.FC = () => {
                 <QuizScreenWrapper
                   questions={questions}
                   quizSettings={quizSettings}
+                  isPreparing={isPreparingQuiz}
                   onShowResults={handleShowResults}
                 />
               }
@@ -200,6 +267,7 @@ const AppShell: React.FC = () => {
                   userAnswers={userAnswers}
                   timeTaken={timeTaken}
                   quizSettings={quizSettings}
+                  leaderboardCheck={leaderboardCheck}
                   onStartQuiz={handleStartQuiz}
                 />
               }
@@ -323,19 +391,21 @@ const SelectionScreenWrapper: React.FC<{
 const QuizScreenWrapper: React.FC<{
   questions: Question[];
   quizSettings: { timeLimit: number } | null;
+  isPreparing: boolean;
   onShowResults: (answers: string[], time: number) => void;
-}> = ({ questions, quizSettings, onShowResults }) => {
+}> = ({ questions, quizSettings, isPreparing, onShowResults }) => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (questions.length === 0) navigate('/', { replace: true });
-  }, [questions, navigate]);
+    if (!isPreparing && questions.length === 0) navigate('/', { replace: true });
+  }, [questions, isPreparing, navigate]);
 
   const handleFinishQuiz = (answers: string[], time: number) => {
     onShowResults(answers, time);
     navigate('/results', { replace: true });
   };
 
+  if (isPreparing) return <RouteFallback />;
   if (questions.length === 0) return null;
   return (
     <QuizScreen
@@ -351,13 +421,14 @@ const ResultsScreenWrapper: React.FC<{
   userAnswers: string[];
   timeTaken: number;
   quizSettings: QuizSettings | null;
+  leaderboardCheck: LeaderboardCheck;
   onStartQuiz: (
     operation: Operation,
     selectedNumbers: number[],
     timeLimit: number,
     questionCount: number
   ) => void;
-}> = ({ questions, userAnswers, timeTaken, quizSettings, onStartQuiz }) => {
+}> = ({ questions, userAnswers, timeTaken, quizSettings, leaderboardCheck, onStartQuiz }) => {
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -385,6 +456,7 @@ const ResultsScreenWrapper: React.FC<{
       onPlayAgain={handlePlayAgain}
       onRestart={() => navigate('/', { replace: true })}
       quizSettings={quizSettings}
+      leaderboardCheck={leaderboardCheck}
     />
   );
 };

@@ -13,7 +13,8 @@ migrations/
 │   ├── multiplayer-functions.sql  # Atomic mp_* room functions (run after multiplayer-tables.sql)
 │   ├── multiplayer-cron.sql       # Optional: pg_cron schedule for room cleanup
 │   ├── tournament-tables.sql      # Tournament mode: tournaments/participants/matches/match_states (+ RLS)
-│   └── tournament-functions.sql   # Atomic tt_* tournament functions (run after tournament-tables.sql)
+│   ├── tournament-functions.sql   # Atomic tt_* tournament functions (run after tournament-tables.sql)
+│   └── quiz-sessions.sql          # Server-issued solo quiz sessions for leaderboard anti-cheat (+ RLS)
 ├── archive/        # One-off operational scripts run to archive past months
 │   ├── archive-january-2026.sql
 │   └── archive-march-2026.sql
@@ -34,6 +35,7 @@ Run the files in `schema/` in your Supabase SQL Editor, in this order:
 6. `schema/tournament-tables.sql`
 7. `schema/tournament-functions.sql` — atomic `tt_*` functions (run after tournament-tables.sql)
 8. *(optional)* `schema/tournament-cron.sql` — schedules `tt_cleanup_expired()` via pg_cron (run after tournament-functions.sql)
+9. `schema/quiz-sessions.sql` — `quiz_sessions` table used by `api/submit-score.ts` to verify leaderboard runs. **Apply before deploying** the session-based `submit-score` API.
 
 All `CREATE POLICY` statements are preceded by `DROP POLICY IF EXISTS`, and functions use `CREATE OR REPLACE`, so re-applying the schema files is safe and idempotent.
 
