@@ -12,15 +12,6 @@ const coerceNumber = (schema: z.ZodNumber = z.number().finite()) =>
 
 const coerceInt = (schema: z.ZodNumber = z.number().int()) => coerceNumber(schema);
 
-const booleanFromInput = z.preprocess((value) => {
-  if (typeof value === "string") {
-    const normalized = value.toLowerCase();
-    if (normalized === "true") return true;
-    if (normalized === "false") return false;
-  }
-  return value;
-}, z.boolean());
-
 const requiredString = z.string().trim().min(1);
 const id = requiredString;
 
@@ -33,22 +24,38 @@ const RoomSettingsSchema = z.object({
   gameMode: z.enum(["ffa", "teams"]).optional(),
 }).passthrough();
 
-export const SubmitScoreSchema = z.object({
-  playerName: z.string().trim().min(1).max(50),
-  score: coerceInt(z.number().int().min(0)),
+const ScoreSessionIdSchema = z.string().uuid();
+
+/**
+ * Solo leaderboard flow (api/submit-score.ts). The client never supplies a
+ * score: the server issues the quiz ("start"), re-grades and times the run
+ * itself ("finish"), then stores that verified score once ("submit").
+ */
+const StartQuizActionSchema = z.object({
+  action: z.literal("start"),
   operationType: OperationTypeSchema,
+  selectedNumbers: z.array(coerceInt()).max(50),
   questionCount: coerceInt(),
-  selectedNumbersCount: coerceInt(),
-  allNumbersSelected: booleanFromInput,
+});
+const FinishQuizActionSchema = z.object({
+  action: z.literal("finish"),
+  sessionId: ScoreSessionIdSchema,
+  answers: z.array(z.string().max(20)).max(50),
+  timeMs: coerceInt(z.number().int().min(0).max(24 * 60 * 60 * 1000)),
+});
+const SubmitQuizScoreActionSchema = z.object({
+  action: z.literal("submit"),
+  sessionId: ScoreSessionIdSchema,
+  playerName: z.string().trim().min(1).max(50),
 });
 
-export const CheckScoreSchema = z.object({
-  operationType: OperationTypeSchema,
-  score: coerceInt(z.number().int().min(0)),
-  questionCount: coerceInt(),
-  selectedNumbersCount: coerceInt(),
-  allNumbersSelected: booleanFromInput,
-});
+export const ScoreActionSchema = z.discriminatedUnion("action", [
+  StartQuizActionSchema,
+  FinishQuizActionSchema,
+  SubmitQuizScoreActionSchema,
+]);
+
+export type ScoreActionInput = z.infer<typeof ScoreActionSchema>;
 
 export const GetLeaderboardQuerySchema = z.object({
   operationType: OperationTypeSchema,

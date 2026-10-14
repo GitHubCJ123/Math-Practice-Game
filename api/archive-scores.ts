@@ -4,6 +4,7 @@ import { getSupabase } from "../lib/api/db-pool.js";
 import { apiError, handleApiError } from "../lib/api/errors.js";
 import { getCurrentEasternMonthBounds, getPreviousEasternMonthBounds } from "../lib/api/time-utils.js";
 import { logger } from "../lib/api/logger.js";
+import { purgeExpiredQuizSessions } from "../lib/api/quiz-session-store.js";
 
 
 function safeCompare(value: string, expected: string): boolean {
@@ -213,6 +214,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (deleteExcessError) {
         throw deleteExcessError;
       }
+    }
+
+    // Step 6: Purge expired solo quiz sessions (best-effort; never blocks archiving)
+    try {
+      await purgeExpiredQuizSessions();
+    } catch (purgeError) {
+      console.error('[api/archive-scores] Failed to purge expired quiz sessions', purgeError);
     }
 
     logger.log('Leaderboard maintenance completed successfully.');

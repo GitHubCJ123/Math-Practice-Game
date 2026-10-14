@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { isScoreEligible } from '../score-eligibility.js';
+import { getLeaderboardNumberPool, isLeaderboardRun, isScoreEligible } from '../score-eligibility.js';
 
 /**
- * Eligibility rules (mirrors lib/api/score-eligibility.ts):
+ * Eligibility rules (mirrors shared/score-eligibility.ts):
  *  - questionCount must be exactly 10, otherwise never eligible.
  *  - Arithmetic ops require ALL numbers selected:
  *      multiplication / division → 12
@@ -69,5 +69,46 @@ describe('isScoreEligible', () => {
       expect(isScoreEligible('fraction-to-percent', 10, 0, false)).toBe(true);
       expect(isScoreEligible('percent-to-fraction', 10, 0, false)).toBe(true);
     });
+  });
+});
+
+describe('getLeaderboardNumberPool', () => {
+  it('returns the full 1..N pool for arithmetic operations', () => {
+    expect(getLeaderboardNumberPool('multiplication')).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+    expect(getLeaderboardNumberPool('division')).toHaveLength(12);
+    expect(getLeaderboardNumberPool('squares')).toHaveLength(20);
+    expect(getLeaderboardNumberPool('square-roots')).toHaveLength(20);
+    expect(getLeaderboardNumberPool('negative-numbers')).toHaveLength(10);
+  });
+
+  it('returns an empty pool for conversion operations', () => {
+    expect(getLeaderboardNumberPool('fraction-to-decimal')).toEqual([]);
+    expect(getLeaderboardNumberPool('percent-to-fraction')).toEqual([]);
+  });
+});
+
+describe('isLeaderboardRun', () => {
+  const all12 = Array.from({ length: 12 }, (_, i) => i + 1);
+
+  it('accepts the full pool in any order', () => {
+    expect(isLeaderboardRun('multiplication', all12, 10)).toBe(true);
+    expect(isLeaderboardRun('multiplication', [...all12].reverse(), 10)).toBe(true);
+  });
+
+  it('rejects a partial pool or the wrong question count', () => {
+    expect(isLeaderboardRun('multiplication', all12.slice(1), 10)).toBe(false);
+    expect(isLeaderboardRun('multiplication', all12, 20)).toBe(false);
+  });
+
+  it('checks the actual numbers, not just how many there are', () => {
+    const twelveWrongNumbers = [1, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 99];
+    expect(isLeaderboardRun('multiplication', twelveWrongNumbers, 10)).toBe(false);
+    expect(isLeaderboardRun('multiplication', [...all12.slice(0, 11), 13], 10)).toBe(false);
+  });
+
+  it('ignores numbers for conversion operations', () => {
+    expect(isLeaderboardRun('fraction-to-decimal', [], 10)).toBe(true);
+    expect(isLeaderboardRun('decimal-to-fraction', [3], 10)).toBe(true);
+    expect(isLeaderboardRun('decimal-to-fraction', [], 9)).toBe(false);
   });
 });

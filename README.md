@@ -99,6 +99,7 @@ Pick exactly what you want to drill — the question engine handles the rest.
 - **Per-operation monthly leaderboards** — top 5 per mode, reset on Eastern-time month boundaries.
 - **Golf-style scoring** — faster is better; the lowest time-based score wins.
 - **Strict eligibility** — only a perfect run on exactly 10 questions with all numbers selected qualifies, so the board stays meaningful.
+- **Server-verified runs** — leaderboard quizzes are issued, re-graded, and timed by the server, and each run can be submitted once. The browser never reports its own score.
 - **Hall of Fame** — a monthly cron snapshots each month's champions; browse past winners by year and month.
 
 ### 🎨 Polish
@@ -198,8 +199,7 @@ flowchart TD
 │  ├─ hooks/                   # useQuizTimer, usePusherChannel, useTheme, …
 │  └─ lib/                     # operations, audio, ga, logger, feedbackMessages, multiplayer, tournament
 ├─ api/                        # Vercel serverless functions
-│  ├─ submit-score.ts          # Validate + store an eligible leaderboard score
-│  ├─ check-score.ts           # Is this run a top-5 score this month?
+│  ├─ submit-score.ts          # Server-verified leaderboard runs (start → finish → submit)
 │  ├─ get-leaderboard.ts       # Top 5 for an operation (current month)
 │  ├─ get-hall-of-fame.ts      # Champions for an operation/year/month (+ ?view=dates for which buckets have data)
 │  ├─ archive-scores.ts        # Monthly cron → Hall of Fame + pruning
@@ -218,7 +218,9 @@ flowchart TD
 │  ├─ bracket.ts               # Pure single-elimination bracket math (seeding, byes, advancement)
 │  ├─ game-results.ts          # Pure multiplayer ranking + team results
 │  ├─ ai-player.ts             # AI opponent profiles (easy → expert)
-│  ├─ score-eligibility.ts     # Leaderboard eligibility rules
+│  ├─ quiz-session.ts          # Pure timing rules for server-verified leaderboard runs
+│  ├─ quiz-session-store.ts    # Supabase-backed solo quiz sessions (single-use)
+│  ├─ leaderboard-store.ts     # Current-month leaderboard reads/writes
 │  ├─ validation.ts            # Zod schemas for every endpoint
 │  ├─ profanity.ts             # Player-name profanity filter
 │  ├─ time-utils.ts            # Luxon — Eastern-time month boundaries
@@ -230,6 +232,8 @@ flowchart TD
 ├─ shared/                     # Single source of truth shared by client + API
 │  ├─ types.ts                 # Shared TypeScript contracts (Operation, Room, …)
 │  ├─ questions.ts             # Shared question-generation logic
+│  ├─ grading.ts               # Shared answer grading (results screen + server re-grade)
+│  ├─ score-eligibility.ts     # Leaderboard eligibility rules
 │  └─ conversions.ts           # Shared fraction/decimal/percent conversion table
 ├─ migrations/                 # SQL — see migrations/README.md
 │  ├─ schema/                  # Current Supabase schema (apply these)
@@ -285,6 +289,7 @@ In your Supabase project's **SQL Editor**, run the schema files in order (they'r
 6. [`migrations/schema/tournament-tables.sql`](migrations/schema/tournament-tables.sql) — tournaments, participants, teams, matches, and live match states (with RLS)
 7. [`migrations/schema/tournament-functions.sql`](migrations/schema/tournament-functions.sql) — the atomic `tt_*` tournament functions (run after the tournament tables)
 8. *(optional)* [`migrations/schema/tournament-cron.sql`](migrations/schema/tournament-cron.sql) — schedule tournament cleanup via pg_cron (run after the tournament functions)
+9. [`migrations/schema/quiz-sessions.sql`](migrations/schema/quiz-sessions.sql) — server-issued solo quiz sessions used to verify leaderboard runs (with RLS)
 
 ### 4. Run it
 
@@ -381,6 +386,7 @@ Postgres tables, all with Row Level Security enabled. The leaderboard and feedba
 | Table | Purpose |
 |---|---|
 | `leaderboard_scores` | The current month's live scores, per operation. Lower score = faster = better. |
+| `quiz_sessions` | Server-issued solo leaderboard quizzes: questions, issue/finish times, and the verified score. Server-only; single-use; expire after 2 hours. |
 | `hall_of_fame` | Archived monthly champions — one winner per operation per month (enforced by a unique index). |
 | `feedback` | Beta feedback submissions (bug / feature). |
 | `multiplayer_rooms` (+ `multiplayer_players`, `multiplayer_player_states`) | Live multiplayer rooms and per-player game state, mutated by atomic `mp_*` functions. Expire after ~1 hour. |
@@ -416,9 +422,9 @@ The app is wired for **Vercel** out of the box. [`vercel.json`](vercel.json) dec
 A few details worth knowing if you're poking around the code:
 
 - **Fair timing.** Quizzes time with the wall clock (`performance.now()`), not an accumulating `setInterval` counter — so the clock stays accurate even when the browser throttles timers. This is locked in by [`src/__tests__/timer-fairness.test.ts`](src/__tests__/timer-fairness.test.ts), which even asserts the quiz screens don't reintroduce the old drifting pattern.
-- **Tested core.** A Vitest suite covers the logic-heavy pieces — question generation, conversions, score eligibility, Zod validation, Eastern-time month boundaries, the profanity filter, AI profiles, multiplayer results ranking, and the `useQuizTimer` hook (the last via Testing Library on `jsdom`). The room store itself is exercised by an opt-in integration suite that runs against a real Supabase instance when credentials are present. CI runs it with a V8 coverage floor so coverage can't slide backwards.
+- **Tested core.** A Vitest suite covers the logic-heavy pieces — question generation, conversions, score eligibility, answer grading, the server-verified leaderboard flow (start/finish/submit, replaying the Oct 2026 fake-score attack), Zod validation, Eastern-time month boundaries, the profanity filter, AI profiles, multiplayer results ranking, and the `useQuizTimer` hook (the last via Testing Library on `jsdom`). The room store itself is exercised by an opt-in integration suite that runs against a real Supabase instance when credentials are present. CI runs it with a V8 coverage floor so coverage can't slide backwards.
 - **Anti-cheat.** Hiding or switching away from the tab mid-quiz auto-submits your answers, in both solo and multiplayer.
-- **Leaderboard integrity.** A score only counts if it's a perfect run on exactly 10 questions with all numbers selected (enforced server-side in `score-eligibility.ts`). Player names are profanity-filtered.
+- **Leaderboard integrity.** A score only counts if it's a perfect run on exactly 10 questions with all numbers selected ([`shared/score-eligibility.ts`](shared/score-eligibility.ts)). Leaderboard runs are **server-verified** through [`api/submit-score.ts`](api/submit-score.ts): the server issues the questions (`start`), re-grades the answers and bounds the time with its own clock (`finish` — the client timer is trusted only within a 1s latency allowance, and anything under 200ms/question is rejected), then stores that verified score once (`submit`). The browser never sends a score. Player names are profanity-filtered.
 - **Eastern-time months.** Leaderboards roll over on `America/New_York` month boundaries (via Luxon), and the monthly cron archives the previous month's winners.
 - **Shared room state.** Multiplayer rooms, the quick-match queue, rate limits, and the live poll all live in Supabase Postgres, mutated through atomic `mp_*` functions so concurrent players — and serverless instances — never disagree (this is what makes large tournament rooms safe). Rooms expire after ~1 hour and a scheduled cleanup prunes stale rows.
 - **AI games don't touch the room store.** A match against the AI bot is scored entirely in the browser (the opponent is simulated client-side), so it never creates a multiplayer room, player, or state row in Supabase — there's nothing to persist or clean up. Only human-vs-human play uses the database.

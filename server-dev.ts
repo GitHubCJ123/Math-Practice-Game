@@ -15,7 +15,6 @@ import tournament from './api/tournament.js';
 import getLeaderboard from './api/get-leaderboard.js';
 import getHallOfFame from './api/get-hall-of-fame.js';
 import getExplanation from './api/get-explanation.js';
-import checkScore from './api/check-score.js';
 import archiveScores from './api/archive-scores.js';
 
 // Keep the dev API process alive even if a handler throws or a promise rejects.
@@ -60,7 +59,6 @@ const routes: Array<[string, Handler]> = [
     ['get-leaderboard', getLeaderboard as unknown as Handler],
     ['get-hall-of-fame', getHallOfFame as unknown as Handler],
     ['get-explanation', getExplanation as unknown as Handler],
-    ['check-score', checkScore as unknown as Handler],
     ['archive-scores', archiveScores as unknown as Handler],
 ];
 

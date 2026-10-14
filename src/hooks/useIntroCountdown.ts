@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { INTRO_COUNTDOWN_STAGE_MS } from '@shared/types';
 
 export type IntroStage = 'ready' | 'set' | 'go' | 'finished';
 
@@ -6,7 +7,7 @@ export type IntroStage = 'ready' | 'set' | 'go' | 'finished';
  * Runs the classic "Ready... Set... Go..." countdown state machine used
  * before a quiz begins. Each stage advances after `stageMs` (default 1000ms).
  */
-export function useIntroCountdown(stageMs: number = 1000): IntroStage {
+export function useIntroCountdown(stageMs: number = INTRO_COUNTDOWN_STAGE_MS): IntroStage {
   const [stage, setStage] = useState<IntroStage>('ready');
 
   useEffect(() => {

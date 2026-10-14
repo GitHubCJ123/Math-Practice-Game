@@ -1,26 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import type { Operation, Question, HighScores, AllQuizStats } from '@shared/types';
-import { DEFAULT_QUESTION_COUNT } from '@shared/types';
 import { CheckCircleIcon, XCircleIcon, StarIcon, TrophyIcon, SparklesIcon, RocketIcon } from '../ui/icons';
 import { Confetti } from '../ui/Confetti';
 import { ScoreRing } from '../ui/ScoreRing';
 import { ExplanationText } from '../ui/ExplanationText';
 import { playWinSound, playCorrectSound } from '../../lib/audio';
 import { feedbackMessages } from '../../lib/feedbackMessages';
-import { formatPercentString } from '@shared/conversions';
-import { logger } from '../../lib/logger';
-
-const LEADERBOARD_SUPPORTED_OPERATIONS = new Set<Operation>([
-  'multiplication',
-  'division',
-  'squares',
-  'square-roots',
-  'fraction-to-decimal',
-  'decimal-to-fraction',
-  'fraction-to-percent',
-  'percent-to-fraction',
-  'negative-numbers',
-]);
+import { isAnswerCorrect } from '@shared/grading';
+import { submitLeaderboardScore, type LeaderboardCheck } from '../../lib/leaderboard';
 
 const buildFallbackExplanation = (answer: string | number) =>
   `The correct answer is ${answer}. Keep trying!`;
@@ -98,30 +85,26 @@ interface ResultsScreenProps {
     timeLimit: number;
     questionCount: number;
   };
+  /** Server verdict for this run (verified time + whether it makes the top 5). */
+  leaderboardCheck: LeaderboardCheck;
 }
 
-export const ResultsScreen: React.FC<ResultsScreenProps> = ({ questions, userAnswers, timeTaken, onPlayAgain, onRestart, quizSettings }) => {
+export const ResultsScreen: React.FC<ResultsScreenProps> = ({ questions, userAnswers, timeTaken, onPlayAgain, onRestart, quizSettings, leaderboardCheck }) => {
   const [feedback, setFeedback] = useState('');
   const [isNewHighScore, setIsNewHighScore] = useState(false);
   const [celebrate, setCelebrate] = useState(false);
 
-  const [isTopScore, setIsTopScore] = useState<boolean | null>(null);
+  const [isSubmitFormDismissed, setIsSubmitFormDismissed] = useState(false);
   const [playerName, setPlayerName] = useState('');
   const [submissionStatus, setSubmissionStatus] = useState<'idle' | 'submitting' | 'submitted' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState('');
 
   const { operation, selectedNumbers } = quizSettings;
-  const isConversionMode =
-    operation === 'fraction-to-decimal' ||
-    operation === 'decimal-to-fraction' ||
-    operation === 'fraction-to-percent' ||
-    operation === 'percent-to-fraction';
-  const numbersForOperation = operation === 'squares' || operation === 'square-roots'
-    ? Array.from({ length: 20 }, (_, i) => i + 1)
-    : operation === 'negative-numbers'
-    ? Array.from({ length: 10 }, (_, i) => i + 1)
-    : Array.from({ length: 12 }, (_, i) => i + 1);
-  const allNumbersSelected = isConversionMode ? true : selectedNumbers.length === numbersForOperation.length;
+  const verifiedRun = leaderboardCheck.status === 'ready' ? leaderboardCheck : null;
+  const isTopScore = verifiedRun !== null && verifiedRun.isTopScore && !isSubmitFormDismissed;
+  // The server may record a slightly slower time than the on-screen clock when
+  // the network was slow; say so rather than silently posting a different time.
+  const showVerifiedTime = verifiedRun !== null && Math.abs(verifiedRun.scoreMs - timeTaken * 1000) >= 50;
 
   type ExplanationState = {
     [key: number]: {
@@ -130,95 +113,14 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({ questions, userAns
     }
   };
   const [explanations, setExplanations] = useState<ExplanationState>({});
-  
-  const normalizePercentAnswer = (value: string) => {
-    const trimmed = value.trim();
-    const numericPart = trimmed.replace(/[^0-9.]/g, '');
-    if (!numericPart) return trimmed;
-    const numericValue = parseFloat(numericPart);
-    if (Number.isNaN(numericValue)) return trimmed;
-    return formatPercentString(numericValue / 100);
-  };
 
-  const normalizeAnswerForComparison = (value: string | number, question: Question) => {
-    const strValue = String(value ?? '').trim();
-    if (!strValue) return '';
-
-    if (question.operation === 'fraction-to-decimal') {
-        return strValue.startsWith('.') ? `0${strValue}` : strValue;
-    }
-
-    if (question.operation === 'fraction-to-percent') {
-        return normalizePercentAnswer(strValue);
-    }
-
-    return strValue;
-  };
-
-  const results = questions.map((q, i) => {
-    const expectedAnswer = normalizeAnswerForComparison(q.answer, q);
-    const normalizedUserAnswer = normalizeAnswerForComparison(userAnswers[i] ?? '', q);
-    const isCorrect = normalizedUserAnswer === expectedAnswer;
-    return {
-        question: q,
-        userAnswer: userAnswers[i],
-        isCorrect: isCorrect
-    };
-  });
+  const results = questions.map((q, i) => ({
+    question: q,
+    userAnswer: userAnswers[i],
+    isCorrect: isAnswerCorrect(q, userAnswers[i]),
+  }));
 
   const correctCount = results.filter(r => r.isCorrect).length;
-
-  useEffect(() => {
-    // Check if score is a top score
-    const checkScore = async () => {
-      // Eligibility for leaderboard: perfect score, all numbers selected (for non-conversion modes), and exactly 10 questions
-      const hasDefaultQuestionCount = questions.length === DEFAULT_QUESTION_COUNT;
-      const isLeaderboardOperation = LEADERBOARD_SUPPORTED_OPERATIONS.has(operation);
-      const meetsScoreRequirements = correctCount === questions.length &&
-                         questions.length > 0 &&
-                         hasDefaultQuestionCount &&
-                         (isConversionMode || allNumbersSelected);
-      const isEligible = isLeaderboardOperation && meetsScoreRequirements;
-
-      logger.log('[ResultsScreen] Leaderboard eligibility check', {
-        operation,
-        correctCount,
-        totalQuestions: questions.length,
-        isConversionMode,
-        allNumbersSelected,
-        hasDefaultQuestionCount,
-        isLeaderboardOperation,
-        isEligible,
-      });
-
-      if (isEligible) {
-        const scoreInMs = Math.round(timeTaken * 1000);
-        try {
-          logger.log('[ResultsScreen] Submitting check-score request', {
-            operation,
-            scoreInMs,
-          });
-          const params = new URLSearchParams({
-            operationType: operation,
-            score: String(scoreInMs),
-            questionCount: String(questions.length),
-            selectedNumbersCount: String(selectedNumbers.length),
-            allNumbersSelected: String(allNumbersSelected),
-          });
-          const response = await fetch(`/api/check-score?${params.toString()}`);
-          const data = await response.json();
-          logger.log('[ResultsScreen] check-score response', data);
-          setIsTopScore(data.isTopScore);
-        } catch (error) {
-          console.error("Failed to check score:", error);
-          setIsTopScore(false);
-        }
-      } else {
-        setIsTopScore(false);
-      }
-    };
-    checkScore();
-  }, [correctCount, questions.length, timeTaken, operation, selectedNumbers]);
 
   useEffect(() => {
     const message = getFeedbackMessage(correctCount, questions.length, timeTaken);
@@ -308,32 +210,13 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({ questions, userAns
 
   const handleSubmitScore = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!playerName.trim() || submissionStatus === 'submitting') return;
+    if (!playerName.trim() || submissionStatus === 'submitting' || !verifiedRun) return;
 
     setSubmissionStatus('submitting');
     setErrorMessage('');
-    const scoreInMs = Math.round(timeTaken * 1000);
 
     try {
-      const response = await fetch('/api/submit-score', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          playerName: playerName.trim(),
-          score: scoreInMs,
-          operationType: operation,
-          questionCount: questions.length,
-          selectedNumbersCount: selectedNumbers.length,
-          allNumbersSelected,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'An error occurred.');
-      }
-
+      await submitLeaderboardScore(verifiedRun.sessionId, playerName.trim());
       setSubmissionStatus('submitted');
     } catch (error) {
       setSubmissionStatus('error');
@@ -403,7 +286,7 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({ questions, userAns
         {isTopScore && submissionStatus !== 'submitted' && (
           <div className="my-6 p-6 bg-gradient-to-br from-violet-50 to-fuchsia-50 dark:from-violet-900/20 dark:to-fuchsia-900/20 border-2 border-violet-300 dark:border-violet-500/40 rounded-3xl animate-bounce-in text-center relative">
             <button
-              onClick={() => setIsTopScore(false)}
+              onClick={() => setIsSubmitFormDismissed(true)}
               className="absolute top-3 right-3 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
               aria-label="Close submission form"
             >
@@ -414,6 +297,11 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({ questions, userAns
               <h2 className="font-display text-2xl font-bold text-violet-700 dark:text-violet-300">You're in the Top 5!</h2>
             </div>
             <p className="text-violet-700 dark:text-violet-300/90 mb-1 font-medium">Enter your name to join the global leaderboard.</p>
+            {showVerifiedTime && verifiedRun && (
+              <p className="text-sm text-violet-600 dark:text-violet-300/80 mb-1">
+                Leaderboard time: <span className="font-display font-bold tabular-nums">{(verifiedRun.scoreMs / 1000).toFixed(3)}s</span> (measured by the server)
+              </p>
+            )}
             <p className="text-sm text-violet-500 dark:text-violet-400 mb-4">(First name or nickname recommended)</p>
             <form onSubmit={handleSubmitScore} className="flex flex-col sm:flex-row items-center justify-center gap-3">
               <input
